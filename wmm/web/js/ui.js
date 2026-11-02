@@ -79,7 +79,8 @@
     gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.4" fill="currentColor"/>'
   };
   ICONS.power = '<path d="M12 3v9M6.4 6.6a8 8 0 1 0 11.2 0"/>';
-  ICONS.events = '<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5M8 17h3"/><circle cx="17" cy="16" r="2.5" fill="currentColor" stroke="none"/>';
+  ICONS.scripts = '<path d="M4 4h16v16H4z"/><path d="M8 9l3 3-3 3M13 15h3"/>';
+  ICONS.events ='<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5M8 17h3"/><circle cx="17" cy="16" r="2.5" fill="currentColor" stroke="none"/>';
   ICONS.processes = '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-4 3 3 4-5M8 21h8"/>';
   ICONS.registry = '<path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4z"/><path d="M7 11v4M17 11v3h-7"/>';
   ICONS.toolbox ='<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/>';

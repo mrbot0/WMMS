@@ -34,7 +34,8 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import actions, advisor, autostart, collectors, core, events, health, inventory, live, processes, registry, scheduler, shutdown
+from ..agent import (actions, advisor, autostart, collectors, core, events, health, inventory, live, processes, registry, scheduler, scripts,
+                     shutdown)
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 
@@ -91,6 +92,8 @@ class Agent:
         self.events = events.EventReader()
         self.procs = processes.ProcessMonitor()
         self.registry = registry.RegistryEditor(self.data_dir / "registry-backups")
+        self.scripts = scripts.ScriptLibrary(self.data_dir / "scripts")
+        self.timer = scripts.ShutdownTimer(self.data_dir / "shutdown_timer.json")
         self._protect_lock = threading.Lock()
         self._protect: dict = {"active": False, "status": "idle", "log": []}
 
@@ -285,7 +288,7 @@ class Agent:
             return {"ok": True, "preview": True}
         try:
             esito = cambia() or {}
-        except (processes.ControlError, registry.RegistryError) as errore:
+        except (processes.ControlError, registry.RegistryError, scripts.ScriptError) as errore:
             self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
             raise ApiError(409, str(errore)) from None
         except PermissionError:
@@ -363,6 +366,54 @@ class Agent:
             raise ApiError(404, "Unknown registry operation.")
         cambia, descrizione = operazioni[operazione]
         return self._logged_change("integrity.registry", descrizione, cambia)
+
+    # ---------- scripts and shutdown timer ----------
+
+    def scripts_overview(self) -> dict:
+        return {"scripts": self.scripts.list(), "templates": scripts.templates_public(), "timer": self.timer.status(),
+                "can_schedule": self.installation()["protected"], "can_change": self.admin or self.preview, "preview": self.preview}
+
+    def script_run(self, script_id: str) -> dict:
+        voce = self.scripts.get(script_id)
+        self._guard_changes()
+        run_id = self.store.open_run(self.machine_id, "scripts.run", "manual")
+        if self.preview:
+            self.store.close_run(run_id, "preview", f"Run script {voce['name']} (preview: nothing ran)", 0, "")
+            return {"ok": True, "preview": True}
+
+        def finito(esito: dict) -> None:
+            self.store.close_run(run_id, esito["status"], f"Script {voce['name']}: exit code {esito['exit']} in {esito['seconds']} s", 0, esito["output"])
+        try:
+            return dict(self.scripts.run(script_id, finito), ok=True)
+        except scripts.ScriptError as errore:
+            self.store.close_run(run_id, "error", str(errore), 0, "")
+            raise ApiError(409, str(errore)) from None
+
+    def script_schedule(self, script_id: str, corpo: dict) -> dict:
+        voce = self.scripts.get(script_id)
+        tipo, quando, giorni = str(corpo.get("kind") or ""), str(corpo.get("at") or ""), str(corpo.get("days") or "")
+        return self._logged_change("scripts.schedule", f"Schedule script {voce['name']} ({tipo} from {quando.replace('T', ' ')})",
+                                   lambda: {"script": self.scripts.schedule(script_id, tipo, quando, giorni)})
+
+    def script_unschedule(self, script_id: str) -> dict:
+        voce = self.scripts.get(script_id)
+        return self._logged_change("scripts.schedule", f"Remove the schedule of script {voce['name']}",
+                                   lambda: {"script": self.scripts.unschedule(script_id)})
+
+    def script_delete(self, script_id: str) -> dict:
+        voce = self.scripts.get(script_id)
+        if voce.get("schedule"):
+            self._guard_changes()  # removing its Windows task needs administrator rights
+        self.scripts.delete(script_id)
+        return {"ok": True}
+
+    def timer_start(self, corpo: dict) -> dict:
+        azione = str(corpo.get("action") or "shutdown")
+        return self._logged_change("scripts.shutdown_timer", f"{'Shut down' if azione == 'shutdown' else 'Restart'} in {corpo.get('minutes')} minute(s)",
+                                   lambda: {"timer": self.timer.start(corpo.get("minutes"), azione)})
+
+    def timer_cancel(self) -> dict:
+        return self._logged_change("scripts.shutdown_timer", "Cancel the planned shutdown", lambda: {"timer": self.timer.cancel()})
 
     def history(self, area: Optional[str], limit: int) -> dict:
         if area and area not in actions.AREAS:
@@ -1003,6 +1054,49 @@ class Handler(BaseHTTPRequestHandler):
         nome = re.sub(r"[^\w.-]", "_", query.get("path", "registry").rsplit("\\", 1)[-1] or "registry")[:60]
         self._send(200, dati, "text/plain; charset=utf-16", {"Content-Disposition": f'attachment; filename="{nome}.reg"'})
 
+    def script_list(self, query):
+        self._json(200, self.agent.scripts_overview())
+
+    def script_get(self, query, script_id):
+        try:
+            self._json(200, self.agent.scripts.get(script_id))
+        except scripts.ScriptError as errore:
+            raise ApiError(404, str(errore)) from None
+
+    def script_create(self, query):
+        corpo = self._body()
+        try:
+            if corpo.get("template"):
+                voce = self.agent.scripts.from_template(str(corpo["template"]), corpo.get("params") or {}, str(corpo.get("name") or ""))
+            else:
+                voce = self.agent.scripts.create(str(corpo.get("name") or ""), corpo.get("content"), str(corpo.get("filename") or "script.bat"))
+        except scripts.ScriptError as errore:
+            raise ApiError(400, str(errore)) from None
+        self._json(201, voce)
+
+    def script_operation(self, query, script_id, operazione):
+        corpo = self._body()
+        try:
+            if operazione == "save":
+                risposta = self.agent.scripts.update(script_id, str(corpo.get("name") or ""), corpo.get("content"))
+            elif operazione == "delete":
+                risposta = self.agent.script_delete(script_id)
+            elif operazione == "run":
+                risposta = self.agent.script_run(script_id)
+            elif operazione == "schedule":
+                risposta = self.agent.script_schedule(script_id, corpo)
+            else:
+                risposta = self.agent.script_unschedule(script_id)
+        except scripts.ScriptError as errore:
+            raise ApiError(400, str(errore)) from None
+        self._json(200, risposta)
+
+    def timer_start(self, query):
+        self._json(200, self.agent.timer_start(self._body()))
+
+    def timer_cancel(self, query):
+        self._json(200, self.agent.timer_cancel())
+
     def registry_backups(self, query):
         self._json(200, {"backups": self.agent.registry.backups()})
 
@@ -1064,6 +1158,12 @@ ROUTES: List[Route] = [
     _route("GET", "/registry/search", Handler.registry_search),
     _route("GET", "/registry/export", Handler.registry_export),
     _route("GET", "/registry/backups", Handler.registry_backups),
+    _route("GET", "/scripts", Handler.script_list),
+    _route("POST", "/scripts", Handler.script_create),
+    _route("GET", r"/scripts/([0-9a-f]{8})", Handler.script_get),
+    _route("POST", r"/scripts/([0-9a-f]{8})/(save|delete|run|schedule|unschedule)", Handler.script_operation),
+    _route("POST", "/shutdown-timer", Handler.timer_start),
+    _route("POST", "/shutdown-timer/cancel", Handler.timer_cancel),
     _route("POST", r"/registry/(set|delete-value|rename-value|create-key|delete-key|restore)", Handler.registry_change),
     _route("GET", "/dashboard", Handler.dashboard),
     _route("POST", "/scan", Handler.scan_all),

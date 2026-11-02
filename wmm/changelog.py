@@ -2,6 +2,28 @@
 
 CHANGELOG = [
     {
+        "version": "1.5.0",
+        "date": "2026-11-02",
+        "title": "Scripts, the shutdown timer and 40 more tools",
+        "highlights": [
+            "New Scripts page: upload .bat and .cmd files or write them, run them now or schedule them once, daily or weekly.",
+            "Automatic shutdown: shut down or restart in the minutes you choose, with a live countdown you can change or cancel.",
+            "13 ready-made scripts: power (shutdown or restart in N minutes, hibernate, sleep, sign out, cancel), maintenance and files.",
+            "40 more tools (234 in total): 22 reports and 18 fixes for cleanup, startup, updates, services, network, integrity and security.",
+        ],
+        "changes": [
+            "Startup and security checks: Run keys, Startup folders, sign-in shell, WMI persistence, program hijacks (IFEO), automatic sign-in.",
+            "Update tools: Windows Update services, pause status, resume updates, driver updates off or on, Windows version.",
+            "Service tools: clear stuck print jobs, restart Network Location and Cryptographic Services, disabled and delayed services.",
+            "Network tools: ARP, routing table, DNS cache, saved Wi-Fi networks, AdGuard DNS, Winsock reset.",
+            "Integrity tools: restore points, blue screen settings, application crashes, small crash dumps, memory test at the next restart.",
+            "Security tools: firewall rules on public networks, shared folders, password policy, WDigest off, PowerShell script logging.",
+            "Cleanup: font cache, Windows Installer size, Java, chat and music apps, game launchers and code editors.",
+            "Scripts keep the console code page, so accents in paths and messages work in cmd.exe.",
+            "Scheduled scripts run as SYSTEM only from the protected installation; every run, schedule and timer is recorded in History.",
+        ],
+    },
+    {
         "version": "1.4.0",
         "date": "2026-11-02",
         "title": "A livelier, more polished console",

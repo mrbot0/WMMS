@@ -11,7 +11,10 @@
     "performance.end_process": { id: "performance.end_process", title: "Process ended", area: "performance", risk: "moderate" },
     "performance.process_priority": { id: "performance.process_priority", title: "Process priority changed", area: "performance", risk: "moderate" },
     "performance.start_process": { id: "performance.start_process", title: "Process started", area: "performance", risk: "moderate" },
-    "services.control": { id: "services.control", title: "Service started, stopped or restarted", area: "services", risk: "moderate" }
+    "services.control": { id: "services.control", title: "Service started, stopped or restarted", area: "services", risk: "moderate" },
+    "scripts.run": { id: "scripts.run", title: "Script run", area: "scripts", risk: "moderate" },
+    "scripts.schedule": { id: "scripts.schedule", title: "Script schedule changed", area: "scripts", risk: "moderate" },
+    "scripts.shutdown_timer": { id: "scripts.shutdown_timer", title: "Shutdown timer", area: "scripts", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };

@@ -3,6 +3,24 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.5.0 — 2026-11-02
+
+**Scripts, the shutdown timer and 40 more tools** (234 tools in total).
+
+- **Scripts page** (Operations): upload `.bat` / `.cmd` files or write them in the editor; run now (output shown when
+  they finish) or schedule them once, daily or weekly in Task Scheduler. Scheduled scripts run as SYSTEM, so they need
+  the protected installation. Files are kept in the console (OEM) code page so cmd.exe reads accents correctly.
+- **Automatic shutdown**: shut down or restart in any number of minutes (presets 5 min – 4 h), live countdown, +15 min /
+  +1 h, change the time or the action, cancel. It uses `shutdown /t`, so it happens even if the console is closed.
+- **13 ready-made scripts**: shut down / restart in N minutes, shut down now, hibernate, sleep, sign out, cancel the
+  planned shutdown, clean temporary files, flush DNS, empty the Recycle Bin, synchronize the clock, back up a folder,
+  close a program. Their parameters are validated before they are written into the batch file.
+- **40 more tools**: 22 reports and 18 fixes across cleanup, startup, updates, services, network, integrity and security
+  (Run keys, Startup folders, Winlogon, WMI persistence and IFEO checks; update services, pause, driver updates; print
+  queue, NLA and CryptSvc; ARP, routes, DNS cache, Wi-Fi profiles, AdGuard DNS, Winsock reset; restore points, crash
+  settings, app crashes, small dumps, memory test; firewall rules, shares, password policy, automatic sign-in, WDigest,
+  PowerShell logging; font, Java, chat/music, game launcher and editor caches).
+
 ## 1.4.0 — 2026-11-02
 
 **A livelier, more polished console.** Every effect follows Settings › Appearance › Animations: full at *Fun*, plain
