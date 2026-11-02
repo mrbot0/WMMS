@@ -45,6 +45,7 @@
           ' title="' + esc(item[1]) + '">' + UI.icon(item[0]) + '<span class="nav-label">' + esc(item[1]) + "</span>" + chip + "</a>";
       }).join(""));
     }).join("");
+    FX.navPill();
   }
   document.getElementById("nav").addEventListener("click", function (e) {
     var fold = e.target.closest("[data-fold]");
@@ -137,8 +138,11 @@
     state.lastPage = name;
     Components.store("lastPage", name);
     content.innerHTML = Components.skeleton();
+    var loadingBar = document.getElementById("top-progress");
+    loadingBar.classList.add("page-loading");
     Promise.resolve().then(function () { return page.render(content, App); }).then(function () {
       if (token !== state.rendering) return;
+      loadingBar.classList.remove("page-loading");
       // First visit: a short "how this page works" tip; at the bottom, the neighbours in the same category.
       var tip = Guides.tip(name);
       if (tip) content.insertAdjacentHTML("afterbegin", tip);
@@ -150,9 +154,12 @@
         announce(page.title + " page");
       }
       scroller.scrollTop = restore;
+      FX.reveal(content);
       if (area >= 0) fixButton(content, name, token);
     }).catch(function (error) {
-      if (token === state.rendering) content.innerHTML = UI.errorBox(error);
+      if (token !== state.rendering) return;
+      loadingBar.classList.remove("page-loading");
+      content.innerHTML = UI.errorBox(error);
     });
   }
 
@@ -648,7 +655,7 @@
   });
   document.getElementById("btn-scan").addEventListener("click", scanAll);
   document.getElementById("btn-search").addEventListener("click", Components.palette.open);
-  document.getElementById("btn-theme").addEventListener("click", Components.theme.toggle);
+  document.getElementById("btn-theme").addEventListener("click", function (e) { FX.themeSwitch(Components.theme.toggle, e); });
   document.getElementById("btn-notif").addEventListener("click", Components.notifications.toggle);
   document.getElementById("btn-activity").addEventListener("click", function () {
     if (document.getElementById("drawer").hidden) openDrawer(); else closeDrawer();
@@ -683,8 +690,9 @@
       liveSince = s.t;
       // Amber from 75%, red from 90%: load is visible at a glance on every page.
       var level = function (v) { return v >= 90 ? "hot" : v >= 75 ? "warm" : ""; };
-      document.getElementById("live-mini").innerHTML = 'CPU <b class="' + level(s.cpu) + '">' + Math.round(s.cpu) + '%</b> RAM <b class="' + level(s.memory_pct) + '">' +
-        s.memory_pct + "%</b>";
+      var mini = document.getElementById("live-mini"), before = mini.textContent;
+      mini.innerHTML = 'CPU <b class="' + level(s.cpu) + '">' + Math.round(s.cpu) + '%</b> RAM <b class="' + level(s.memory_pct) + '">' + s.memory_pct + "%</b>";
+      if (before !== mini.textContent) { mini.classList.remove("tick"); void mini.offsetWidth; mini.classList.add("tick"); }
     }, function () { /* offline overlay handles it */ });
   }, 3000);
 

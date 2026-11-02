@@ -2,6 +2,31 @@
 
 CHANGELOG = [
     {
+        "version": "1.4.0",
+        "date": "2026-11-02",
+        "title": "A livelier, more polished console",
+        "highlights": [
+            "Cards and sections are revealed as you scroll; a soft glow follows the pointer and tiles tilt in 3D.",
+            "The sidebar indicator glides to the active page; tabs get an underline that grows into place.",
+            "The theme switch spreads the new theme in a circle from the button.",
+            "Charts draw themselves: bars grow, lines trace, the score gauge sweeps.",
+            "Settings › Appearance › Try them shows the effects; Subtle and Off still keep the console calm.",
+        ],
+        "changes": [
+            "Filter cards keep their distance from the figures below (Event Viewer, Toolbox, Task Manager).",
+            "Primary buttons lean toward the pointer; a card pulses when its action starts.",
+            "The overall score shows a rising +N when it improved since the last visit.",
+            "Toasts show the time left and pause while the pointer is over them.",
+            "Back to top shows how far the page is scrolled; the top bar gains a shadow when the page scrolls under it.",
+            "A loading line runs under the top bar while a page opens.",
+            "Live CPU and memory figures tick when they change.",
+            "The dashboard hero has a slow aurora behind the gauge.",
+            "Command palette results and dialog buttons arrive one after the other; dialogs blur the page behind.",
+            "Links get an underline that slides in; checkboxes pop when ticked; the sidebar animates in at start.",
+            "A small secret for the curious (↑ ↑ ↓ ↓ ← → ← → B A).",
+        ],
+    },
+    {
         "version": "1.3.0",
         "date": "2026-11-02",
         "title": "30 performance tools, category pages and built-in guides",

@@ -42,7 +42,9 @@
             return '<button type="button" class="btn btn-sm' + (theme === t ? " active" : "") + '" data-theme="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + "</button>";
           }).join("") + '</span></label><label>Animations<span class="btn-group" role="group">' + [["fun", "Fun"], ["subtle", "Subtle"], ["off", "Off"]].map(function (f) {
             return '<button type="button" class="btn btn-sm' + (FX.level() === f[0] ? " active" : "") + '" data-fx-level="' + f[0] + '">' + f[1] + "</button>";
-          }).join("") + '</span><span class="hint">Fun: page entrances, hover effects and confetti when work completes. Subtle: short fades only. ' +
+          }).join("") + '<button type="button" class="btn btn-sm btn-ghost" id="fx-try">' + UI.icon("sparkle") + "Try them</button></span>" +
+            '<span class="hint">Fun: page entrances, cards revealed on scroll, a glow that follows the pointer, tilting tiles, charts that draw themselves, ' +
+            "a sidebar indicator that glides, a circular theme switch and confetti when work completes. Subtle: short fades only. " +
             "Off: nothing moves except spinners and progress bars.</span></label>" +
           '<label>Accent color<span style="display:flex;gap:8px">' + [["blue", "#0F6CBD"], ["teal", "#0E8A7B"], ["violet", "#6D4AD6"], ["orange", "#C2570C"], ["graphite", "#3E4C5E"]].map(function (c) {
             return '<button type="button" class="swatch-pick' + ((Components.store("accent") || "blue") === c[0] ? " active" : "") + '" data-accent="' + c[0] + '" title="' + c[0] + '" style="background:' + c[1] + '"></button>';
@@ -114,6 +116,12 @@
             el.querySelectorAll("[data-fx-level]").forEach(function (b) { b.classList.toggle("active", b === btn); });
             UI.toast(value === "fun" ? "Animations: fun. Enjoy!" : value === "subtle" ? "Animations: subtle." : "Animations are off.", "ok");
           });
+        });
+        el.querySelector("#fx-try").addEventListener("click", function (e) {
+          if (!FX.moving()) { UI.toast("Animations are off: choose Fun or Subtle first.", "info"); return; }
+          FX.burst(e.currentTarget);
+          FX.floatText(e.currentTarget, "Wow!");
+          FX.confetti({ count: 80 });
         });
         el.querySelectorAll("[data-density]").forEach(function (btn) {
           btn.addEventListener("click", function () {

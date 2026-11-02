@@ -197,6 +197,18 @@
             '<div class="grid grid-3">' + UI.card("System", info, '<button class="btn btn-sm" type="button" id="copy-info">' + UI.icon("download") + "Copy</button>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
             UI.card("Recent activity", UI.runsTable(d.runs.slice(0, 6), title), '<a class="btn btn-sm" href="#/history">History</a>', "card-flush") + "</div>");
 
+        // The overall score went up since the last visit: celebrate it on the gauge.
+        var previous = Components.store("lastOverall"), overall = d.scores.overall;
+        if (overall != null) {
+          Components.store("lastOverall", overall);
+          if (previous != null && overall > previous) {
+            setTimeout(function () {
+              var gauge = el.querySelector(".hero .chart");
+              FX.floatText(gauge, "+" + (overall - previous));
+              FX.burst(gauge);
+            }, 700);
+          }
+        }
         el.querySelectorAll("[data-quick]").forEach(function (btn) {
           btn.addEventListener("click", function () {
             var id = btn.getAttribute("data-quick");
