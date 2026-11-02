@@ -34,7 +34,7 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import actions, advisor, autostart, collectors, core, health, inventory, live, scheduler, shutdown
+from ..agent import actions, advisor, autostart, collectors, core, events, health, inventory, live, processes, registry, scheduler, shutdown
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 
@@ -88,6 +88,9 @@ class Agent:
         self.monitor = live.LiveMonitor()
         self.tasks = TaskRegistry()
         self.started = time.time()
+        self.events = events.EventReader()
+        self.procs = processes.ProcessMonitor()
+        self.registry = registry.RegistryEditor(self.data_dir / "registry-backups")
         self._protect_lock = threading.Lock()
         self._protect: dict = {"active": False, "status": "idle", "log": []}
 
@@ -270,6 +273,96 @@ class Agent:
             raise ApiError(500, f"Could not change the startup entry: {errore}") from None
         self.store.close_run(run_id, "ok", f"{voce['name']}: {stato}", 0, f"{voce['location']} › {voce['name']} {stato}")
         return {"ok": True}
+
+    # ---------- system tools: events, processes, services, registry ----------
+
+    def _logged_change(self, action_id: str, descrizione: str, cambia: Callable[[], dict]) -> dict:
+        """Runs one manual change with the same rules as actions: administrator, never in preview, recorded in History."""
+        self._guard_changes()
+        run_id = self.store.open_run(self.machine_id, action_id, "manual")
+        if self.preview:
+            self.store.close_run(run_id, "preview", f"{descrizione} (preview: nothing changed)", 0, "")
+            return {"ok": True, "preview": True}
+        try:
+            esito = cambia() or {}
+        except (processes.ControlError, registry.RegistryError) as errore:
+            self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
+            raise ApiError(409, str(errore)) from None
+        except PermissionError:
+            self.store.close_run(run_id, "error", f"{descrizione}: access denied", 0, "")
+            raise ApiError(409, "Windows denies this change (access denied), even to administrators.") from None
+        except (OSError, subprocess.SubprocessError) as errore:
+            self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
+            raise ApiError(500, f"{descrizione} failed: {errore}") from None
+        dettaglio = esito.get("backup")
+        self.store.close_run(run_id, "ok", descrizione + (f" · backup {dettaglio}" if dettaglio else ""), 0,
+                             json.dumps(esito, ensure_ascii=False))
+        return dict(esito, ok=True)
+
+    def end_process(self, pid: int, corpo: dict) -> dict:
+        nome, albero = str(corpo.get("name") or ""), bool(corpo.get("tree"))
+        riga = processes.check_end_process(self.procs.processes()["processes"], pid, nome, [os.getpid(), os.getppid()])
+
+        def cambia():
+            return {"output": processes.end_process(pid, albero)}
+        return self._logged_change("performance.end_process", f"End {riga['name']} (PID {pid}{', with child processes' if albero else ''})", cambia)
+
+    def _process_row(self, pid: int, nome: str) -> dict:
+        riga = next((r for r in self.procs.processes()["processes"] if r["pid"] == pid), None)
+        if riga is None:
+            raise processes.ControlError("The process has already ended.")
+        if riga["name"].lower() != (nome or "").lower():
+            raise processes.ControlError("The process ID now belongs to another program. Refresh the list.")
+        return riga
+
+    def process_priority(self, pid: int, corpo: dict) -> dict:
+        riga = self._process_row(pid, str(corpo.get("name") or ""))
+        priorita = str(corpo.get("priority") or "")
+        if riga["critical"]:
+            raise processes.ControlError(f"The priority of {riga['name']} is managed by Windows.")
+        return self._logged_change("performance.process_priority", f"Priority of {riga['name']} (PID {pid}) set to {priorita.replace('_', ' ')}",
+                                   lambda: {"output": processes.set_priority(pid, priorita)})
+
+    def start_process(self, corpo: dict) -> dict:
+        programma, argomenti = str(corpo.get("program") or ""), str(corpo.get("arguments") or "")
+        elevato = bool(corpo.get("elevated"))
+        percorso = processes.resolve_program(programma)
+        return self._logged_change("performance.start_process",
+                                   f"Start {percorso}{' ' + argomenti if argomenti else ''} ({'administrator' if elevato else 'standard user'})",
+                                   lambda: processes.start_process(percorso, argomenti, str(corpo.get("folder") or ""), elevato))
+
+    def reveal_process(self, pid: int, corpo: dict) -> dict:
+        riga = self._process_row(pid, str(corpo.get("name") or ""))
+        if not riga.get("path"):
+            raise processes.ControlError("Windows does not share the location of this process.")
+        subprocess.Popen(["explorer.exe", "/select,", riga["path"]])
+        return {"ok": True}
+
+    def control_service(self, nome: str, operazione: str) -> dict:
+        servizio = processes.check_service(self.procs.services(fresh=True), nome, operazione)
+
+        def cambia():
+            stato = processes.control_service(servizio["name"], operazione)
+            self.procs.services(fresh=True)
+            return {"state": stato}
+        return self._logged_change("services.control", f"{operazione.capitalize()} service {servizio['display'] or servizio['name']}", cambia)
+
+    def registry_change(self, operazione: str, corpo: dict) -> dict:
+        percorso = str(corpo.get("path") or "")
+        operazioni = {
+            "set": (lambda: self.registry.set_value(percorso, corpo.get("name", ""), str(corpo.get("type") or ""), corpo.get("data")),
+                    f"Set {percorso}\\{corpo.get('name') or '(Default)'} ({corpo.get('type')})"),
+            "delete-value": (lambda: self.registry.delete_value(percorso, corpo.get("name", "")), f"Delete value {percorso}\\{corpo.get('name') or '(Default)'}"),
+            "rename-value": (lambda: self.registry.rename_value(percorso, corpo.get("name", ""), corpo.get("new_name", "")),
+                             f"Rename value {percorso}\\{corpo.get('name')} to {corpo.get('new_name')}"),
+            "create-key": (lambda: self.registry.create_key(percorso, corpo.get("name", "")), f"Create key {percorso}\\{corpo.get('name')}"),
+            "delete-key": (lambda: self.registry.delete_key(percorso), f"Delete key {percorso}"),
+            "restore": (lambda: {"restored": self.registry.restore(str(corpo.get("backup") or ""))}, f"Restore registry backup {corpo.get('backup')}"),
+        }
+        if operazione not in operazioni:
+            raise ApiError(404, "Unknown registry operation.")
+        cambia, descrizione = operazioni[operazione]
+        return self._logged_change("integrity.registry", descrizione, cambia)
 
     def history(self, area: Optional[str], limit: int) -> dict:
         if area and area not in actions.AREAS:
@@ -847,6 +940,75 @@ class Handler(BaseHTTPRequestHandler):
     def protect(self, query):
         self._json(202, self.agent.protect())
 
+    def event_list(self, query):
+        try:
+            self._json(200, self.agent.events.query(query, fresh=query.get("fresh") == "1"))
+        except events.EventQueryError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def event_meta(self, query):
+        self._json(200, events.meta())
+
+    def process_list(self, query):
+        try:
+            self._json(200, self.agent.procs.processes(full=query.get("full") == "1"))
+        except OSError as errore:
+            raise ApiError(500, f"Process counters are not available: {errore}") from None
+
+    def process_operation(self, query, pid, operazione):
+        corpo = self._body()
+        try:
+            if operazione == "end":
+                risposta = self.agent.end_process(int(pid), corpo)
+            elif operazione == "priority":
+                risposta = self.agent.process_priority(int(pid), corpo)
+            else:
+                risposta = self.agent.reveal_process(int(pid), corpo)
+        except processes.ControlError as errore:
+            raise ApiError(409, str(errore)) from None
+        self._json(200, risposta)
+
+    def process_start(self, query):
+        try:
+            self._json(200, self.agent.start_process(self._body()))
+        except processes.ControlError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def service_list(self, query):
+        self._json(200, {"services": self.agent.procs.services(fresh=query.get("fresh") == "1")})
+
+    def service_control(self, query, nome, operazione):
+        try:
+            self._json(200, self.agent.control_service(nome, operazione))
+        except processes.ControlError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def registry_key(self, query):
+        try:
+            self._json(200, registry.list_key(query.get("path", "")))
+        except registry.RegistryError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def registry_search(self, query):
+        try:
+            self._json(200, self.agent.registry.search(query.get("path", ""), query.get("q", ""), min(500, int(query.get("limit") or 200))))
+        except (registry.RegistryError, ValueError) as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def registry_export(self, query):
+        try:
+            dati = self.agent.registry.export(query.get("path", ""))
+        except registry.RegistryError as errore:
+            raise ApiError(400, str(errore)) from None
+        nome = re.sub(r"[^\w.-]", "_", query.get("path", "registry").rsplit("\\", 1)[-1] or "registry")[:60]
+        self._send(200, dati, "text/plain; charset=utf-16", {"Content-Disposition": f'attachment; filename="{nome}.reg"'})
+
+    def registry_backups(self, query):
+        self._json(200, {"backups": self.agent.registry.backups()})
+
+    def registry_change(self, query, operazione):
+        self._json(200, self.agent.registry_change(operazione, self._body()))
+
     def protection_status(self, query):
         self._json(200, self.agent.protection_status())
 
@@ -891,6 +1053,18 @@ ROUTES: List[Route] = [
     _route("POST", "/agent/shutdown", Handler.stop_all),
     _route("POST", "/agent/protect", Handler.protect),
     _route("GET", "/agent/protect", Handler.protection_status),
+    _route("GET", "/events", Handler.event_list),
+    _route("GET", "/events/meta", Handler.event_meta),
+    _route("GET", "/processes", Handler.process_list),
+    _route("POST", r"/processes/(\d{1,10})/(end|priority|reveal)", Handler.process_operation),
+    _route("POST", "/processes/start", Handler.process_start),
+    _route("GET", "/services/live", Handler.service_list),
+    _route("POST", r"/services/([\w.\-@$]{1,128})/(start|stop|restart)", Handler.service_control),
+    _route("GET", "/registry", Handler.registry_key),
+    _route("GET", "/registry/search", Handler.registry_search),
+    _route("GET", "/registry/export", Handler.registry_export),
+    _route("GET", "/registry/backups", Handler.registry_backups),
+    _route("POST", r"/registry/(set|delete-value|rename-value|create-key|delete-key|restore)", Handler.registry_change),
     _route("GET", "/dashboard", Handler.dashboard),
     _route("POST", "/scan", Handler.scan_all),
     _route("GET", f"/areas/{AREA}", Handler.area),

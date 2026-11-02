@@ -3,6 +3,26 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.2.0 — 2026-11-02
+
+**Event Viewer, Task Manager, Registry editor and one-click protected installation.** New *System* section in the menu.
+
+- **Event Viewer**: critical and error events, hardware (WHEA, Kernel-Power, disk, NTFS, GPU drivers…), applications (crashes,
+  hangs, .NET), services, security and Defender. Filters by time, log, level, source and event ID; instant search, column
+  filters, CSV, timeline and top sources; live refresh every 10 seconds.
+- **Task Manager**: every process with CPU, private memory, disk/network I/O, threads, handles, uptime, user, parent, session,
+  priority, company, description, version, hosted services, path and command line. Quick filters, user and priority filters,
+  selectable columns, multi-select; end process or process tree, change priority, open the file location, start new processes
+  as administrator or as a standard user. Live services tab with start, stop and restart.
+- **Registry editor**: key tree, address bar, favorites and bookmarks, edit / rename / delete values of every type, new and
+  delete keys, search with a time budget, `.reg` export. A `.reg` backup is made before every change and can be restored;
+  keys Windows needs to boot or sign in cannot be deleted.
+- Essential processes and services are protected; every change is recorded in History and only simulated in preview mode.
+- **Fix automatically** for schedules: the "Not protected" warning was real (the console ran with the per-user Microsoft
+  Store Python) but its advice did not fix it. The button now finds or installs a Python for all users (winget, or the
+  signed python.org installer), moves the program to Program Files if needed, records the Python in `python.path` so every
+  start uses it, registers the schedules again and restarts the console.
+
 ## 1.1.0 — 2026-11-02
 
 **Toolbox, report viewer and a faster console.**

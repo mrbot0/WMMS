@@ -108,6 +108,28 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(dati["version"], api.VERSION)
         self.assertEqual(dati["releases"][0]["version"], api.VERSION)
 
+    def test_event_meta_and_bad_filters(self):
+        _, dati, _ = self.request("GET", "/api/v1/events/meta")
+        self.assertIn("hardware", dati["presets"])
+        stato, _, _ = self.request("GET", "/api/v1/events?providers=x%27%20or%201%3D1")
+        self.assertEqual(stato, 400)
+
+    def test_registry_read_and_refused_delete(self):
+        stato, dati, _ = self.request("GET", "/api/v1/registry?path=HKCU%5CSoftware")
+        self.assertEqual(stato, 200)
+        self.assertTrue(dati["protected"])
+        stato, dati, _ = self.request("POST", "/api/v1/registry/delete-key", {"path": "HKCU\\Software"})
+        self.assertEqual(stato, 409)
+        self.assertIn("essential" if self.admin else "Administrator rights", dati["error"])
+
+    def test_start_process_refuses_unknown_programs(self):
+        stato, dati, _ = self.request("POST", "/api/v1/processes/start", {"program": "no-such-program-wmm"})
+        self.assertEqual(stato, 409)
+
+    def test_service_names_are_validated_by_the_route(self):
+        stato, _, _ = self.request("POST", "/api/v1/services/bad%27name/stop")
+        self.assertEqual(stato, 404)
+
     def test_errors_carry_the_status(self):
         stato, dati, _ = self.request("GET", "/api/v1/nope")
         self.assertEqual((stato, dati["status"]), (404, 404))

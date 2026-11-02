@@ -6,12 +6,18 @@
     ["Overview", [["dashboard", "Dashboard"], ["recommendations", "Recommendations"]]],
     ["Optimize", [["performance", "Performance"], ["cleanup", "Cleanup"], ["storage", "Storage"], ["startup", "Startup & Apps"], ["services", "Services"]]],
     ["Health", [["integrity", "System Integrity"], ["security", "Security"], ["updates", "Updates & Drivers"], ["network", "Network"]]],
+    ["System", [["events", "Event Viewer"], ["processes", "Task Manager"], ["registry", "Registry"]]],
     ["Operations", [["toolbox", "Toolbox"], ["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
     ["", [["support", "Support"], ["settings", "Settings"]]]
   ];
   var PSEUDO_ACTIONS = {
     "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" },
-    "integrity.protect_install": { id: "integrity.protect_install", title: "Installation protected for schedules", area: "integrity", risk: "moderate" }
+    "integrity.protect_install": { id: "integrity.protect_install", title: "Installation protected for schedules", area: "integrity", risk: "moderate" },
+    "integrity.registry": { id: "integrity.registry", title: "Registry changed", area: "integrity", risk: "high" },
+    "performance.end_process": { id: "performance.end_process", title: "Process ended", area: "performance", risk: "moderate" },
+    "performance.process_priority": { id: "performance.process_priority", title: "Process priority changed", area: "performance", risk: "moderate" },
+    "performance.start_process": { id: "performance.start_process", title: "Process started", area: "performance", risk: "moderate" },
+    "services.control": { id: "services.control", title: "Service started, stopped or restarted", area: "services", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };

@@ -2,6 +2,31 @@
 
 CHANGELOG = [
     {
+        "version": "1.2.0",
+        "date": "2026-11-02",
+        "title": "Event Viewer, Task Manager, Registry editor and one-click protected installation",
+        "highlights": [
+            "Event Viewer: critical Windows, hardware, application, service and security events in under a second, with live refresh.",
+            "Task Manager: every process with CPU, memory, I/O, user, parent, command line and more; end, end tree, priority and start new processes.",
+            "Live services: start, stop and restart, with essential services protected.",
+            "Registry editor: tree, favorites, search, edit, rename, new and delete, .reg export, with a backup before every change.",
+            "Fix automatically: schedules work on any PC, with Python installed for all users when it is missing.",
+        ],
+        "changes": [
+            "Event Viewer presets: critical and errors, hardware, applications, services, security and Defender, everything.",
+            "Event filters: time range, log, levels, source, event ID, limit, instant search and column filters, CSV export.",
+            "Event timeline coloured by the worst level and the top sources at a glance; full event details with copy.",
+            "Task Manager quick filters: apps, background, Windows, service hosts, high CPU, high memory, my processes; user and priority filters.",
+            "Task Manager: choose the columns, sort, multi-select and end several processes, pause or change the refresh interval.",
+            "Essential processes and services are marked and cannot be ended or stopped; a reused process ID is detected before ending.",
+            "Start a process as administrator or with standard user rights (programs, scripts and management consoles).",
+            "Registry: protected keys (boot, drivers, accounts, Windows) cannot be deleted; backups listed and restorable.",
+            "Every process, service and registry change is recorded in History; preview mode records without changing anything.",
+            "The installation warning now explains whether the program or Python is the problem.",
+            "New System section in the menu; shortcuts G then L (events), G then M (Task Manager), G then W (registry).",
+        ],
+    },
+    {
         "version": "1.1.0",
         "date": "2026-11-02",
         "title": "Toolbox, report viewer and a faster console",
