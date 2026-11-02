@@ -2,6 +2,24 @@
 
 CHANGELOG = [
     {
+        "version": "1.6.0",
+        "date": "2026-11-02",
+        "title": "Settings menu, 10 new preferences, scripts in Schedules and 10 more playbooks",
+        "highlights": [
+            "Settings has a side menu: General, Appearance, Behaviour, Dashboard, Start-up, Data and security, Guides and shortcuts, This agent.",
+            "10 new preferences: start page, dashboard refresh, rows per table, message duration, confirm safe actions, completion sound, "
+            "high contrast, live CPU/RAM in the top bar, disconnect after inactivity and history cleanup.",
+            "Scripts can be scheduled from the Schedules page too, which now lists every scheduled script.",
+            "15 playbooks in five groups: every visit, fix a problem, read-only checks, tune for a use, secure.",
+        ],
+        "changes": [
+            "New playbooks: full health check, security audit, deep cleanup, fix the internet connection, update everything, gaming, privacy, laptop, new PC setup, fix printing.",
+            "New schedule asks whether to run a maintenance action or a script.",
+            "Figures that are names (a power plan, an event source) wrap on two lines instead of being cut.",
+            "History cleanup keeps unfinished runs, scores and schedules and is recorded in History itself.",
+        ],
+    },
+    {
         "version": "1.5.0",
         "date": "2026-11-02",
         "title": "Scripts, the shutdown timer and 40 more tools",

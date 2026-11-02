@@ -415,6 +415,16 @@ class Agent:
     def timer_cancel(self) -> dict:
         return self._logged_change("scripts.shutdown_timer", "Cancel the planned shutdown", lambda: {"timer": self.timer.cancel()})
 
+    def prune_history(self, corpo: dict) -> dict:
+        try:
+            giorni = int(corpo.get("days"))
+        except (TypeError, ValueError):
+            raise ApiError(400, "Days must be a whole number.") from None
+        if not 7 <= giorni <= 3650:
+            raise ApiError(400, "Keep at least the last 7 days.")
+        return self._logged_change("integrity.history_cleanup", f"Delete history older than {giorni} days",
+                                   lambda: {"deleted": self.store.prune_runs(self.machine_id, giorni)})
+
     def history(self, area: Optional[str], limit: int) -> dict:
         if area and area not in actions.AREAS:
             raise ApiError(404, f"Unknown area: {area}")
@@ -1054,6 +1064,9 @@ class Handler(BaseHTTPRequestHandler):
         nome = re.sub(r"[^\w.-]", "_", query.get("path", "registry").rsplit("\\", 1)[-1] or "registry")[:60]
         self._send(200, dati, "text/plain; charset=utf-16", {"Content-Disposition": f'attachment; filename="{nome}.reg"'})
 
+    def prune_history(self, query):
+        self._json(200, self.agent.prune_history(self._body()))
+
     def script_list(self, query):
         self._json(200, self.agent.scripts_overview())
 
@@ -1176,6 +1189,7 @@ ROUTES: List[Route] = [
     _route("GET", "/runs/current", Handler.current_run),
     _route("GET", r"/runs/([0-9a-f]{32})", Handler.run_status),
     _route("GET", "/history", Handler.history),
+    _route("POST", "/history/prune", Handler.prune_history),
     _route("GET", r"/history/runs/(\d+)/log", Handler.run_log),
     _route("GET", r"/export/([a-z]+)\.(json|csv)", Handler.export),
     _route("GET", "/live", Handler.live),

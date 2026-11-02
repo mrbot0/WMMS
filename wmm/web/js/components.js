@@ -90,7 +90,7 @@
       }).join("") : '<tr><td colspan="' + options.columns.length + '"><p class="empty">' + esc(options.empty || "Nothing to show.") + "</p></td></tr>";
       var foot = list.length > 10 || options.alwaysFoot ? '<div class="dt-foot"><span>' + (list.length ? (state.page * size + 1) + "–" + Math.min(list.length, (state.page + 1) * size) + " of " : "") + list.length +
         (list.length !== options.rows.length ? " (filtered from " + options.rows.length + ")" : "") + '</span><span class="dt-pages">' +
-        '<label class="dt-size">Rows <select data-size aria-label="Rows per page">' + [10, 25, 50].map(function (n) {
+        '<label class="dt-size">Rows <select data-size aria-label="Rows per page">' + [10, 25, 50, 100].map(function (n) {
           return '<option value="' + n + '"' + (n === size ? " selected" : "") + ">" + n + "</option>";
         }).join("") + "</select></label>" +
         '<button class="btn btn-sm" type="button" data-page="-1"' + (state.page ? "" : " disabled") + ">Previous</button>" +

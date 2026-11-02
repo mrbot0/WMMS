@@ -776,3 +776,37 @@ def safe(area: Optional[str] = None) -> List[Action]:
 
 def reports(area: Optional[str] = None) -> List[Action]:
     return [action for action in CATALOG.values() if action.kind == "report" and (area is None or action.area == area)]
+
+
+PLAYBOOKS += (
+    {"id": "health_check", "title": "Full health check", "description": "Read-only: disks, crashes, reliability, protection, devices and pending restarts. Changes nothing.",
+     "actions": ["storage.disk_health", "storage.smart_prediction", "integrity.bsod_report", "integrity.reliability_report", "integrity.app_crashes_report",
+                 "security.defender_status", "security.tpm_status", "security.secure_boot_status", "updates.pending_reboot", "updates.problem_devices",
+                 "updates.wu_services_report"]},
+    {"id": "security_audit", "title": "Security audit", "description": "Read-only: administrators, shares, firewall, automatic sign-in and the places malware uses to start.",
+     "actions": ["security.local_admins_report", "security.shares_report", "security.firewall_rules_report", "security.autologon_report",
+                 "security.password_policy_report", "security.bitlocker_status", "startup.winlogon_report", "startup.wmi_persistence_report",
+                 "startup.ifeo_report", "startup.run_keys_report"]},
+    {"id": "deep_clean", "title": "Deep cleanup", "description": "Temporary files, logs, reports and the caches of browsers, apps, launchers and editors.",
+     "actions": ["cleanup.temp", "storage.browser_cache", "storage.windows_logs", "storage.wer", "storage.thumbnails", "storage.delivery_optimization",
+                 "cleanup.user_crash_dumps", "cleanup.dev_caches", "cleanup.chat_music_caches", "cleanup.game_launcher_caches", "cleanup.editor_caches"]},
+    {"id": "network_fix", "title": "Fix the internet connection", "description": "From the lightest repair to a new address, then a connectivity test.",
+     "actions": ["network.flush_dns", "network.purge_netbios", "network.reset_proxy", "services.restart_network_location", "network.renew_ip",
+                 "network.connectivity_report"]},
+    {"id": "update_all", "title": "Update everything", "description": "Windows, antivirus signatures, Store apps, desktop apps, Office and drivers.",
+     "actions": ["updates.scan", "security.update_signatures", "updates.store_apps", "updates.winget_upgrade", "updates.office_update", "updates.driver_scan",
+                 "updates.install"]},
+    {"id": "gaming", "title": "Gaming setup", "description": "Game Mode, GPU scheduling, game priority, no background recording and fresh shader caches.",
+     "actions": ["performance.game_mode_on", "performance.games_priority", "performance.hags_on", "performance.game_dvr_off",
+                 "performance.network_throttling_off", "cleanup.shader_cache", "performance.free_memory"]},
+    {"id": "privacy", "title": "Privacy", "description": "Less diagnostic data, no advertising ID, tips, Widgets, Copilot or search highlights.",
+     "actions": ["security.reduce_telemetry", "security.disable_advertising_id", "performance.tips_off", "performance.widgets_off",
+                 "performance.copilot_off", "performance.search_highlights_off", "security.clear_recent_items"]},
+    {"id": "laptop", "title": "Laptop: battery and speed", "description": "Balanced power, no background apps, lighter visuals, fewer startup programs and a battery report.",
+     "actions": ["performance.power_balanced", "performance.background_off", "performance.visual_best", "startup.optimize", "performance.battery_report"]},
+    {"id": "new_pc", "title": "New PC setup", "description": "Restore points, firewall, SmartScreen and Defender protections, fresh signatures and a lighter startup.",
+     "actions": ["security.enable_restore", "security.restore_point", "security.firewall_on", "security.smartscreen_on", "security.pua_protection",
+                 "security.network_protection", "security.update_signatures", "performance.tips_off", "startup.optimize"]},
+    {"id": "print_fix", "title": "Fix printing", "description": "Clears stuck print jobs and restarts the print spooler.",
+     "actions": ["services.clear_print_queue", "services.restart_spooler"]},
+)

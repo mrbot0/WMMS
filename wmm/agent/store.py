@@ -5,7 +5,7 @@ import json
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
@@ -115,6 +115,13 @@ class Store:
     def close_stale_runs(self, note: str) -> int:
         with self._db() as db:
             cursore = db.execute("UPDATE runs SET status = 'error', note = ?, finished = ? WHERE status = 'running'", (note, now()))
+            return cursore.rowcount
+
+    def prune_runs(self, machine_id: str, days: int) -> int:
+        """Deletes finished runs older than `days` days; returns how many were removed."""
+        limite = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+        with self._db() as db:
+            cursore = db.execute("DELETE FROM runs WHERE machine_id = ? AND finished IS NOT NULL AND started < ?", (machine_id, limite))
             return cursore.rowcount
 
     def runs(self, machine_id: str, area: Optional[str] = None, limit: int = 100) -> List[dict]:

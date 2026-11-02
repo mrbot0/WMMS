@@ -98,7 +98,10 @@
   function tone(score) { return score >= 80 ? "ok" : score >= 60 ? "warning" : "error"; }
 
   function kpi(title, value, sub, toneName, extra) {
-    return '<div class="kpi' + (toneName ? " kpi-" + toneName : "") + '"><div class="kpi-title">' + esc(title) + '</div><div class="kpi-value">' + value +
+    // A name instead of a number (a power plan, an event source): smaller type that may wrap, full text on hover.
+    var plain = String(value).replace(/<[^>]*>/g, "").trim(), long = plain.length > 12 && !/^[\d.,\s%]+/.test(plain);
+    return '<div class="kpi' + (toneName ? " kpi-" + toneName : "") + '"><div class="kpi-title">' + esc(title) + '</div><div class="kpi-value' + (long ? " kpi-value-text" : "") + '"' +
+      (long ? ' title="' + esc(plain) + '"' : "") + ">" + value +
       '</div><div class="kpi-sub">' + (sub || "") + "</div>" + (extra || "") + "</div>";
   }
   var CARD_ICONS = {
@@ -226,7 +229,8 @@
     // At most four toasts on screen: the oldest gives way to the newest.
     while (root.children.length >= 4) root.removeChild(root.firstChild);
     root.appendChild(el);
-    var visible = Math.max(4200, String(message).length * 60);  // long errors need time to be read
+    var speed = { short: 0.6, normal: 1, long: 1.8 }[window.Components ? Components.store("toastSpeed") || "normal" : "normal"] || 1;
+    var visible = Math.max(4200, String(message).length * 60) * speed;  // long errors need time to be read
     // A thin bar shows the time left; hovering pauses it so a long message can be read calmly.
     el.style.setProperty("--life", visible + "ms");
     var timers = [];
