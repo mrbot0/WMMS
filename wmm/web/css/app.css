@@ -579,6 +579,10 @@ details.log-details pre { max-height: 260px; min-height: 0; }
 /* Drawer log tools */
 .log-head { display: flex; align-items: center; gap: 6px; }
 
+/* Storage: disk management tools */
+.disk-tools .section-title:first-child { margin-top: 0; }
+.disk-tools .action-grid { margin-bottom: 8px; }
+
 /* Support page */
 details.faq { border: 1px solid var(--border); border-radius: 10px; padding: 0 14px; margin-bottom: 8px; background: var(--surface-2); }
 details.faq summary { cursor: pointer; font-weight: 600; padding: 12px 0; list-style: none; display: flex; align-items: center; gap: 8px; }

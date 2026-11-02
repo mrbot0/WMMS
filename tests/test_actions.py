@@ -50,6 +50,18 @@ class Catalog(unittest.TestCase):
             self.assertIn(nuova, actions.CATALOG)
         self.assertGreaterEqual(len(actions.CATALOG), 94)
 
+    def test_catalog_has_20_disk_tools(self):
+        nuove = ("storage.disk_health", "storage.smart_prediction", "storage.volume_report", "storage.partition_report",
+                 "storage.dirty_check", "storage.disk_speed", "storage.shadow_report", "storage.top_folders", "storage.rescan_disks",
+                 "storage.trim_ssd", "storage.defrag_hdd", "storage.disks_online", "storage.limit_restore_storage",
+                 "storage.reserved_storage_off", "storage.reserved_storage_on", "storage.hiberfile_reduced", "storage.pagefile_auto",
+                 "storage.last_access_off", "storage.disk_cleanup", "storage.delete_windows_old")
+        self.assertEqual(len(set(nuove)), 20)
+        for nuova in nuove:
+            self.assertEqual(actions.CATALOG[nuova].area, "storage")
+        self.assertEqual(len(actions.CATALOG), 114)
+        self.assertEqual(actions.CATALOG["storage.delete_windows_old"].risk, "high")
+
     def test_playbooks_reference_known_actions(self):
         for playbook in actions.PLAYBOOKS:
             for action_id in playbook["actions"]:

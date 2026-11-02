@@ -82,6 +82,15 @@ class SettingsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.save_settings({"company": "c" * 600})
 
+    def test_restore_on_start_is_on_by_default_and_a_flag(self):
+        with tempfile.TemporaryDirectory() as cartella:
+            store = Store(Path(cartella) / "wmm.db")
+            self.assertEqual(store.settings()["restore_on_start"], "1")
+            store.save_settings({"restore_on_start": "0"})
+            self.assertEqual(store.settings()["restore_on_start"], "0")
+            with self.assertRaises(ValueError):
+                store.save_settings({"restore_on_start": "yes"})
+
 
 if __name__ == "__main__":
     unittest.main()

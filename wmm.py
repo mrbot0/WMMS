@@ -139,6 +139,8 @@ def serve(port: int, preview: bool, open_browser: bool) -> int:
     print(f"Console: {indirizzo}")
     print("Keep this link private: it authorizes changes to this PC.")
     print("Mode: " + ("preview (no changes)" if preview else "administrator" if agent.admin else "read-only"))
+    if agent.restore_point_on_start():
+        print("Creating a restore point (Settings > Restore point at every start). Progress in Activity.")
     print("Close this window or press Ctrl+C to stop.")
     if open_browser:
         webbrowser.open(indirizzo)
