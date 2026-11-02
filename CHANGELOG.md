@@ -3,6 +3,20 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.6.0 — 2026-11-02
+
+**Settings menu, 10 new preferences, scripts in Schedules and 10 more playbooks.**
+
+- **Settings** now has a side menu with eight sections, one shown at a time and remembered.
+- **10 new preferences**: start page, dashboard refresh interval, rows per table, message duration, confirmation for safe
+  actions, completion sound, high contrast, live CPU/RAM in the top bar, disconnect after inactivity, history cleanup
+  (`POST /api/v1/history/prune`, administrator only, recorded in History, keeps unfinished runs).
+- **Schedules** lists the scheduled scripts (run now, change, remove) and *New schedule* offers an action or a script.
+- **Playbooks**: 10 new ones (full health check, security audit, deep cleanup, fix the internet connection, update
+  everything, gaming, privacy, laptop, new PC setup, fix printing), shown in five groups; read-only ones show *Report*.
+- **Layout**: audited every page at 1366 and 1024 px; figures that are names now wrap instead of being cut
+  (Event Viewer top source, Performance power plan).
+
 ## 1.5.0 — 2026-11-02
 
 **Scripts, the shutdown timer and 40 more tools** (234 tools in total).

@@ -273,7 +273,7 @@
         // App.render stops this page's timers and live loop before drawing it again.
         var timer = setTimeout(function () {
           if (App.isCurrent("dashboard") && Components.store("dashAuto") !== false) App.render();
-        }, REFRESH_MS);
+        }, (Components.store("dashInterval") || REFRESH_MS / 1000) * 1000);
         App.onLeave(function () { clearTimeout(timer); });
       });
     }

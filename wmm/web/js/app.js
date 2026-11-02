@@ -193,6 +193,25 @@
 
   function onLeave(fn) { state.leave.push(fn); }
 
+  /* Settings › Behaviour › Sound: two short tones when a run finishes (rising: success, falling: errors). */
+  function chime(ok) {
+    if (!Components.store("sound") || !window.AudioContext) return;
+    try {
+      var ctx = new AudioContext();
+      (ok ? [660, 880] : [440, 330]).forEach(function (f, i) {
+        var o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.16;
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.15, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+        o.connect(g).connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.16);
+      });
+      setTimeout(function () { ctx.close(); }, 600);
+    } catch (e) { /* audio not available */ }
+  }
+
   /* Polite announcement for screen readers (page changes, finished runs). */
   function announce(text) {
     var live = document.getElementById("announcer");
@@ -296,6 +315,7 @@
             Components.reportViewer(job.results.length === 1 ? action(job.results[0].action_id).title : job.results.length + " diagnostics", job.log.join("\n"),
               "Finished " + UI.formatDate(new Date().toISOString()) + (state.info ? " on " + state.info.hostname : ""));
           } else if (!errors) FX.confetti();
+          chime(!errors);
           refreshAreas(areas || areasOf(job.results.map(function (r) { return r.action_id; })));
         }
       }).catch(function (error) {
@@ -378,7 +398,7 @@
     var list = ids.map(action).filter(Boolean);
     var risky = list.filter(function (a) { return a.risk !== "safe"; });
     // Safe actions start at once; anything else, or a batch, is confirmed with its steps.
-    var ask = risky.length || list.length > 2 ? confirmRun(list, risky) : Promise.resolve(true);
+    var ask = risky.length || list.length > 2 || Components.store("confirmSafe") ? confirmRun(list, risky) : Promise.resolve(true);
     return ask.then(function (ok) {
       if (!ok) return null;
       return API.post("/runs", { actions: ids, confirmed: risky.length > 0 }).then(function (r) {
@@ -785,9 +805,22 @@
   /* Appearance saved in Settings. */
   (function () {
     var accent = Components.store("accent"), font = Components.store("fontSize");
+    document.body.classList.toggle("high-contrast", !!Components.store("contrast"));
+    document.getElementById("live-mini").hidden = !!Components.store("hideLiveMini");
     if (accent && accent !== "blue") document.documentElement.setAttribute("data-accent", accent);
     if (font && font !== "normal") document.body.classList.add("font-" + font);
   })();
+
+  /* Settings › Data and security: this window forgets its connection after a while without use. */
+  var lastUse = Date.now();
+  ["pointerdown", "keydown", "wheel"].forEach(function (ev) { document.addEventListener(ev, function () { lastUse = Date.now(); }, { passive: true }); });
+  setInterval(function () {
+    var minutes = Components.store("idleLock");
+    if (!minutes || !API.hasToken() || Date.now() - lastUse < minutes * 60000) return;
+    API.setToken("");
+    renderChrome();
+    UI.toast("This window was disconnected after " + minutes + " minutes without use. Use Request access to connect it again.", "warning");
+  }, 30000);
 
   function desktopNotify(title, text) {
     if (!Components.store("desktopNotify") || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
@@ -803,7 +836,7 @@
     results[1].actions.forEach(function (a) { state.actions[a.id] = a; });
     renderChrome();
     // Reopen the page used last, unless the address already names one.
-    var last = Components.store("lastPage");
+    var start = Components.store("startPage") || "last", last = start === "last" ? Components.store("lastPage") : start;
     if (!/^#\/\w/.test(location.hash) && last && window.Pages[last] && last !== "dashboard") history.replaceState(null, "", "#/" + last);
     render();
     // After the release notes (if any), new users are offered the guided tour once.
