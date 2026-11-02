@@ -4,18 +4,12 @@
   window.Pages = window.Pages || {};
   var esc = UI.esc;
   var PRESETS = [5, 15, 30, 60, 90, 120, 240];
-  var DAY = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
 
   function clock(seconds) {
     var h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
     return (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + s).slice(-2);
   }
-  function scheduleText(s) {
-    if (!s) return "Not scheduled";
-    var at = s.at.replace("T", " ");
-    return s.kind === "once" ? "Once on " + at : s.kind === "daily" ? "Every day at " + at.slice(11) + " (from " + at.slice(0, 10) + ")"
-      : "Every " + s.days.split(",").map(function (d) { return DAY[d] || d; }).join(", ") + " at " + at.slice(11);
-  }
+  var scheduleText = UI.scheduleText;
   /* Uploaded .bat files are usually ANSI (Windows-1252); newer ones UTF-8. Both become text here. */
   function decode(buffer) {
     try { return new TextDecoder("utf-8", { fatal: true }).decode(buffer).replace(/^\uFEFF/, ""); }

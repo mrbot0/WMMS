@@ -29,7 +29,8 @@
             '<ol class="playbook-steps">' + p.steps.map(function (s) {
               return '<li><span class="grow"><span class="cell-title">' + esc(s.title) + '</span> <span class="cell-sub">· ' + esc(UI.AREA_LABEL[s.area]) + "</span></span>" + UI.riskBadge(s.risk) + "</li>";
             }).join("") + "</ol>" +
-            '<div class="page-actions" style="margin-top:14px"><button class="btn btn-primary" data-playbook="' + esc(p.id) + '">' + UI.icon("play") + "Run playbook</button></div></div></section>";
+            '<div class="page-actions" style="margin-top:14px"><button class="btn btn-primary" data-playbook="' + esc(p.id) + '">' + UI.icon("play") + "Run playbook</button>" +
+            '<button class="btn" data-schedule-playbook="' + esc(p.id) + '" title="Run it as a routine: every day, week, month or at startup">' + UI.icon("clock") + "Schedule</button></div></div></section>";
         };
         var placed = [].concat.apply([], GROUPS.map(function (g) { return g[3]; }));
         var cards = GROUPS.concat([["More", "playbooks", "", books.map(function (b) { return b.id; }).filter(function (id) { return placed.indexOf(id) < 0; })]])
@@ -45,6 +46,13 @@
           btn.addEventListener("click", function () {
             var p = books.filter(function (b) { return b.id === btn.getAttribute("data-playbook"); })[0];
             App.runActions(p.actions);
+          });
+        });
+        el.querySelectorAll("[data-schedule-playbook]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var p = books.filter(function (b) { return b.id === btn.getAttribute("data-schedule-playbook"); })[0];
+            window.Pages.schedules.applyRoutine({ ref: "playbook:" + p.id, title: p.title, description: p.description, risk: p.risk,
+              minutes: p.minutes, actions: p.steps, suggested: null }, function () { location.hash = "#/schedules"; });
           });
         });
       });

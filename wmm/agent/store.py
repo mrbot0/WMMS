@@ -41,7 +41,7 @@ NOTES_MAX_LENGTH = 4000
 FLAG_SETTINGS = {"restore_on_start"}  # "1" on, "0" off
 
 RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed"
-SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run"}
+SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run", "delay"}
 
 
 def now() -> str:
@@ -55,6 +55,9 @@ class Store:
         self._lock = threading.Lock()
         with self._db() as db:
             db.executescript(SCHEMA)
+            colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(schedules)")}
+            if "delay" not in colonne:  # added in 1.7: minutes after startup or sign-in
+                db.execute("ALTER TABLE schedules ADD COLUMN delay INTEGER NOT NULL DEFAULT 0")
 
     @contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
@@ -164,11 +167,11 @@ class Store:
 
     # ---------- schedules ----------
 
-    def create_schedule(self, action_id: str, kind: str, at: str, days: str, confirmed: bool) -> int:
+    def create_schedule(self, action_id: str, kind: str, at: str, days: str, confirmed: bool, delay: int = 0) -> int:
         with self._db() as db:
             cursore = db.execute(
-                "INSERT INTO schedules (action_id, kind, at, days, confirmed, created) VALUES (?, ?, ?, ?, ?, ?)",
-                (action_id, kind, at, days, int(confirmed), now()),
+                "INSERT INTO schedules (action_id, kind, at, days, confirmed, created, delay) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (action_id, kind, at, days, int(confirmed), now(), int(delay)),
             )
             return int(cursore.lastrowid)
 

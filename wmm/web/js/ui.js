@@ -91,6 +91,14 @@
   ICONS.services = '<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/>';
   ICONS.integrity = '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L16 9.5"/>';
   ICONS.dashboard = '<rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/>';
+  ICONS.user = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
+  ICONS.calendar = '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>';
+  ICONS.plus = '<path d="M12 5v14M5 12h14"/>';
+  ICONS.thermometer = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>';
+  ICONS.fan = '<circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-7 4-7 2 0 3 2 2 4l-4 4M14 12c4 0 7 1 7 4 0 2-2 3-4 2l-4-4M12 14c0 4-1 7-4 7-2 0-3-2-2-4l4-4M10 12c-4 0-7-1-7-4 0-2 2-3 4-2l4 4"/>';
+  ICONS.hardware = '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>';
+  ICONS.copy = '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>';
+  ICONS.globe = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>';
   function icon(name) {
     return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || "") + "</svg>";
   }
@@ -286,37 +294,87 @@
   var DAYS = [["MON", "Mon"], ["TUE", "Tue"], ["WED", "Wed"], ["THU", "Thu"], ["FRI", "Fri"], ["SAT", "Sat"], ["SUN", "Sun"]];
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
+  var DAY_NAME = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+  var KINDS = [["once", "Once"], ["daily", "Every day"], ["weekly", "Every week"], ["monthly", "Every month"],
+    ["startup", "At every startup"], ["logon", "At every sign-in"]];
+  var EVENT_KINDS = { startup: 1, logon: 1 };
+
+  /* The frequency of a schedule (actions, routines and scripts) in plain words. */
+  function scheduleText(s) {
+    if (!s) return "Not scheduled";
+    var at = s.at.replace("T", " "), t = at.slice(11), delay = +s.delay || 0;
+    var after = delay ? ", after " + delay + " min" : "";
+    if (s.kind === "startup") return "At every startup" + after;
+    if (s.kind === "logon") return "At every sign-in" + after;
+    if (s.kind === "once") return "Once on " + at;
+    if (s.kind === "daily") return "Every day at " + t;
+    if (s.kind === "monthly") return "Every month on day " + (+at.slice(8, 10)) + " at " + t;
+    return "Every " + (s.days || "").split(",").map(function (d) { return DAY_NAME[d] || d; }).join(", ") + " at " + t;
+  }
+
+  /* action: {title, description, risk, warning, suggested: {kind, time, days, day, delay}, label} */
   function scheduleDialog(action) {
+    var sug = action.suggested || {};
     var d = new Date(Date.now() + 3600e3);
+    if (sug.kind === "monthly" && sug.day) {
+      var m = new Date(d.getFullYear(), d.getMonth(), sug.day);
+      if (m < new Date()) m = new Date(d.getFullYear(), d.getMonth() + 1, sug.day);
+      d = m;
+    }
     var date = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    var kind = sug.kind || "once", selDays = (sug.days || "MON").split(",");
     var warning = action.risk !== "safe"
       ? '<div class="callout callout-warning">' + icon("info") + "<div><strong>" + esc(RISK_LABEL[action.risk]) + " action.</strong> " + esc(action.warning) +
         ' A restore point is created before every run.<label class="check"><input type="checkbox" name="confirmed"> I understand and want to schedule this action</label></div></div>'
       : '<div class="callout">' + icon("shield") + "<div>Safe action: it runs unattended without confirmation.</div></div>";
     var body = '<p class="modal-text"><strong>' + esc(action.title) + "</strong><br><span class=\"muted\">" + esc(action.description) + "</span></p>" +
       '<form class="form" onsubmit="return false">' +
-      '<label>Frequency<select name="kind"><option value="once">Once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label>' +
-      '<div class="form-row"><label>Start date<input type="date" name="date" value="' + date + '" required></label>' +
-      '<label>Time<input type="time" name="time" value="03:00" required></label></div>' +
+      '<label>Frequency<select name="kind">' + KINDS.map(function (k) {
+        return '<option value="' + k[0] + '"' + (k[0] === kind ? " selected" : "") + ">" + k[1] + "</option>";
+      }).join("") + "</select></label>" +
+      '<div class="form-row"><label><span class="date-label">Start date</span><input type="date" name="date" value="' + date + '" required></label>' +
+      '<label class="time-field">Time<input type="time" name="time" value="' + esc(sug.time || "03:00") + '" required></label>' +
+      '<label class="delay-field" hidden>Wait after the event<select name="delay">' + [0, 1, 2, 5, 10, 15, 30, 60].map(function (n) {
+        return '<option value="' + n + '"' + (n === (+sug.delay || 0) ? " selected" : "") + ">" + (n ? n + " min" : "No wait") + "</option>";
+      }).join("") + "</select></label></div>" +
       '<fieldset class="days" hidden><legend>Days</legend>' + DAYS.map(function (day) {
-        return '<label class="chip"><input type="checkbox" name="day" value="' + day[0] + '"' + (day[0] === "MON" ? " checked" : "") + "><span>" + day[1] + "</span></label>";
-      }).join("") + "</fieldset>" + warning +
+        return '<label class="chip"><input type="checkbox" name="day" value="' + day[0] + '"' + (selDays.indexOf(day[0]) >= 0 ? " checked" : "") + "><span>" + day[1] + "</span></label>";
+      }).join("") + "</fieldset>" +
+      '<p class="muted small kind-note"></p>' + warning +
       '<p class="muted small">The schedule is registered in Windows Task Scheduler and runs even when this console is closed.</p></form>';
-    var promise = modal("Schedule action", body, [
+    var promise = modal(action.label || "Schedule action", body, [
       { label: "Cancel", cls: "btn-ghost" },
       { label: "Create schedule", cls: "btn-primary", value: function (wrap) {
         var form = wrap.querySelector("form");
         var days = Array.prototype.map.call(form.querySelectorAll('input[name="day"]:checked'), function (i) { return i.value; });
         var confirmed = form.querySelector('input[name="confirmed"]');
+        var k = form.kind.value, ev = !!EVENT_KINDS[k];
         return {
-          kind: form.kind.value, at: form.date.value + "T" + form.time.value, days: form.kind.value === "weekly" ? days.join(",") : "",
+          kind: k, at: form.date.value + "T" + (ev ? "00:00" : form.time.value), days: k === "weekly" ? days.join(",") : "",
+          delay: ev ? +form.delay.value : 0,
           confirmed: action.risk === "safe" ? false : !!(confirmed && confirmed.checked)
         };
       } }
     ]);
     var form = document.querySelector("#modal-root form");
     if (form) {
-      form.kind.addEventListener("change", function () { form.querySelector(".days").hidden = form.kind.value !== "weekly"; });
+      var NOTES = {
+        startup: "Runs a little after Windows starts, before anyone signs in. The wait lets the PC finish starting.",
+        logon: "Runs when any user signs in. A short wait keeps the desktop responsive.",
+        monthly: "Runs on the day of the start date every month (days 1 to 28, so no month is skipped)."
+      };
+      var now = new Date(), today = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+      var sync = function () {
+        var k = form.kind.value, ev = !!EVENT_KINDS[k];
+        if (ev && form.date.value > today) form.date.value = today;  // a startup routine is active from today unless chosen otherwise
+        form.querySelector(".days").hidden = k !== "weekly";
+        form.querySelector(".time-field").hidden = ev;
+        form.querySelector(".delay-field").hidden = !ev;
+        form.querySelector(".date-label").textContent = ev ? "Active from" : k === "monthly" ? "First run (sets the day)" : "Start date";
+        form.querySelector(".kind-note").textContent = NOTES[k] || "";
+      };
+      form.kind.addEventListener("change", sync);
+      sync();
     }
     return promise;
   }
@@ -424,7 +482,7 @@
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
     kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
-    recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
+    recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog, scheduleText: scheduleText,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL
   };

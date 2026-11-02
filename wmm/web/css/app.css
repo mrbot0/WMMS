@@ -1177,3 +1177,71 @@ body.sidebar-collapsed .nav-group { display: none; }
   .viewer-bar .btn { flex: 1; }
   .page-actions { flex-wrap: wrap; }
 }
+
+/* ========== 1.7: routines and hardware ========== */
+.routine-note { margin: 0 0 12px; }
+.routine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.routine-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2);
+  transition: border-color .2s, transform .2s, box-shadow .2s; }
+.routine-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, .08); }
+.routine-card.is-active { border-color: color-mix(in srgb, var(--ok, #2e9e5b) 55%, var(--border)); }
+.routine-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.routine-desc { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.45; flex: 1; }
+.routine-when { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent); }
+.routine-when .icon { width: 14px; height: 14px; }
+.routine-steps summary { cursor: pointer; font-size: 12px; color: var(--text-3); }
+.routine-steps ol { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
+.routine-steps li { margin: 2px 0; }
+.routine-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+[data-fx="fun"] .routine-card { animation: rise .35s ease both; }
+.hw-page .card-body { min-width: 0; }
+.hw-sensor-group + .hw-sensor-group { margin-top: 16px; }
+.hw-sensor-title { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; }
+.hw-sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.hw-sensor { position: relative; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+.hw-sensor-name { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hw-sensor-name .icon { width: 15px; height: 15px; flex: none; }
+.hw-sensor-value { font-size: 26px; font-weight: 700; line-height: 1.15; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+.hw-sensor-value small { font-size: 13px; font-weight: 600; color: var(--text-3); margin-left: 2px; }
+.hw-sensor-sub { font-size: 11.5px; color: var(--text-3); margin-top: 6px; min-height: 14px; }
+.hw-bar { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.hw-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .6s ease; }
+.hw-ok .hw-bar span { background: var(--ok, #2e9e5b); }
+.hw-warning .hw-bar span { background: var(--warning, #d29c1f); }
+.hw-error .hw-bar span { background: var(--error, #d64545); }
+.hw-error .hw-sensor-value { color: var(--error, #d64545); }
+.hw-fan .hw-sensor-name .icon { color: var(--accent); }
+[data-fx="fun"] .hw-fan:not(.is-stopped) .hw-sensor-name .icon { animation: spin 1.6s linear infinite; }
+.hw-fan.is-stopped .hw-bar span { background: var(--text-3); }
+.hw-source { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+.hw-source .icon { width: 14px; height: 14px; color: var(--ok, #2e9e5b); }
+.hw-tool { margin-bottom: 14px; }
+.hw-item + .hw-item { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.hw-item-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.hw-kv { display: grid; grid-template-columns: minmax(120px, max-content) minmax(0, 1fr); gap: 5px 14px; margin: 0; font-size: 13px; }
+.hw-kv dt { color: var(--text-3); }
+.hw-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.hw-id { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
+  color: var(--text); font: 12px var(--mono); cursor: copy; text-align: left; overflow-wrap: anywhere; }
+.hw-id .icon { width: 12px; height: 12px; flex: none; color: var(--text-3); }
+.hw-id:hover { border-color: var(--accent); }
+.hw-id:hover .icon { color: var(--accent); }
+.hw-links, .hw-links-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.hw-links-row { display: flex; margin-top: 10px; }
+.hw-link { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.hw-link .icon { width: 13px; height: 13px; }
+.hw-link:hover { background: var(--accent); color: #fff; }
+.hw-idlist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.hw-idlist .hw-sensor-title { flex-basis: 100%; margin: 0; }
+.hw-detail .hw-links-row { margin-top: 14px; }
+.hw-detail .callout { margin-top: 12px; }
+.hw-mem-note { margin: 0 0 10px; }
+/* Callout text and header buttons wrap instead of running off narrow screens (every page). */
+.callout > div { min-width: 0; flex: 1; }
+.page-head .page-actions { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 700px) {
+  .hw-kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .hw-kv dd { margin-bottom: 6px; }
+  .hw-sensors { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}

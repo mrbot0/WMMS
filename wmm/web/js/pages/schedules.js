@@ -1,24 +1,66 @@
-/* Schedules registered in Windows Task Scheduler. */
+/* Schedules registered in Windows Task Scheduler: actions, routines and scripts. */
 (function () {
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
-  var KIND = { once: "Once", daily: "Daily", weekly: "Weekly" };
+  var KIND = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly", startup: "At startup", logon: "At sign-in" };
   var SYNC = { ok: ["ok", "In sync"], missing: ["error", "Task missing"], path_changed: ["warning", "Program moved"] };
+  var GROUP_ICON = { "At startup": "power", "At sign-in": "user", "Every day": "clock", "Every week": "calendar", "Every month": "calendar", "Playbooks": "playbooks" };
+  var when = UI.scheduleText;
 
-  function when(s) {
-    var t = s.at.split("T")[1];
-    if (s.kind === "once") return UI.formatDate(s.at);
-    if (s.kind === "daily") return "Every day at " + t;
-    return s.days.split(",").map(function (d) { return d.charAt(0) + d.slice(1).toLowerCase(); }).join(", ") + " at " + t;
+  /* The suggested frequency of a routine as a schedule-like object, for UI.scheduleText. */
+  function suggestedSchedule(sug) {
+    sug = sug || { kind: "weekly", time: "12:00", days: "SAT" };
+    var day = ("0" + (sug.day || 1)).slice(-2);
+    return { kind: sug.kind, at: "2026-01-" + day + "T" + (sug.time || "00:00"), days: sug.days || "", delay: sug.delay || 0 };
   }
 
-  var DAYS = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
-  function when(s) {
-    var at = s.at.replace("T", " ");
-    return s.kind === "once" ? "Once on " + at : s.kind === "daily" ? "Every day at " + at.slice(11)
-      : "Every " + s.days.split(",").map(function (d) { return DAYS[d] || d; }).join(", ") + " at " + at.slice(11);
+  /* Opens the schedule dialog with the routine's suggested frequency, then registers it. */
+  function applyRoutine(r, done) {
+    var risky = r.actions.filter(function (a) { return a.risk !== "safe"; });
+    UI.scheduleDialog({
+      label: "Apply routine", title: r.title, risk: r.risk, suggested: r.suggested || { kind: "weekly", time: "12:00", days: "SAT" },
+      description: r.description + " (" + r.actions.length + " steps, about " + Math.max(1, Math.round(r.minutes)) + " min)",
+      warning: risky.length ? "It includes: " + risky.map(function (a) { return a.title; }).join(", ") + "." : ""
+    }).then(function (v) {
+      if (!v) return;
+      if (r.risk !== "safe" && !v.confirmed) { UI.toast("Tick the confirmation box to schedule a routine with steps that are not safe.", "warning"); return; }
+      if (v.kind === "weekly" && !v.days) { UI.toast("Choose at least one day.", "warning"); return; }
+      v.action_id = r.ref;
+      API.post("/schedules", v).then(function () {
+        UI.toast(r.title + ": " + when(v) + ".", "ok");
+        Components.notifications.add("Routine scheduled", r.title + " · " + when(v), "ok");
+        if (done) done();
+      }, function (er) { UI.toast(er.message, "error"); });
+    });
   }
+
+  function routineCard(r) {
+    var active = r.scheduled || [];
+    return '<article class="routine-card' + (active.length ? " is-active" : "") + '">' +
+      '<div class="routine-head"><span class="cell-title">' + esc(r.title) + "</span>" +
+      (r.reports_only ? UI.kindBadge("report") : UI.riskBadge(r.risk)) + "</div>" +
+      '<p class="routine-desc">' + esc(r.description) + "</p>" +
+      '<div class="routine-when">' + UI.icon("clock") + esc(r.suggested ? when(suggestedSchedule(r.suggested)) : "Any frequency you choose") + "</div>" +
+      '<details class="routine-steps"><summary>' + r.actions.length + " steps · ~" + Math.max(1, Math.round(r.minutes)) + " min</summary><ol>" +
+      r.actions.map(function (a) { return "<li>" + esc(a.title) + (a.risk !== "safe" ? " " + UI.riskBadge(a.risk) : "") + "</li>"; }).join("") + "</ol></details>" +
+      '<div class="routine-foot">' + (active.length ? '<span class="badge badge-status-ok">' + UI.icon("check") + (active.length > 1 ? active.length + " active" : "Active") + "</span>" : "<span></span>") +
+      '<button class="btn btn-sm' + (active.length ? "" : " btn-primary") + '" data-apply="' + esc(r.ref) + '">' + UI.icon(active.length ? "plus" : "play") +
+      (active.length ? "Add another" : "Apply") + "</button></div></article>";
+  }
+
+  function routinesBody(cat, tab) {
+    var groups = cat.groups.concat(["Playbooks"]);
+    var items = tab === "Playbooks" ? cat.playbooks : cat.routines.filter(function (r) { return r.group === tab; });
+    return '<div class="tabs routine-tabs" role="tablist">' + groups.map(function (g) {
+      var n = (g === "Playbooks" ? cat.playbooks : cat.routines.filter(function (r) { return r.group === g; })).length;
+      return '<button class="tab' + (g === tab ? " active" : "") + '" role="tab" aria-selected="' + (g === tab) + '" data-routine-tab="' + esc(g) + '">' +
+        UI.icon(GROUP_ICON[g] || "clock") + esc(g) + ' <span class="tab-count">' + n + "</span></button>";
+    }).join("") + "</div>" +
+      (tab === "Playbooks" ? '<p class="muted small routine-note">Any playbook can run as a routine: choose its frequency when you apply it.</p>' : "") +
+      '<div class="routine-grid">' + items.map(routineCard).join("") + "</div>";
+  }
+
   /* Scripts scheduled from here or from the Scripts page: same Task Scheduler folder, run as SYSTEM. */
   function scriptsTable(scripts) {
     var rows = scripts.filter(function (s) { return s.schedule; });
@@ -43,7 +85,7 @@
     } }]).then(function (id) { return scripts.filter(function (s) { return s.id === id; })[0] || null; });
   }
   function scheduleScript(s, done) {
-    UI.scheduleDialog({ title: s.name, description: "Batch script " + s.file, risk: "moderate",
+    UI.scheduleDialog({ title: s.name, description: "Batch script " + s.file, risk: "moderate", suggested: s.schedule || null,
       warning: "The script runs as SYSTEM with full rights, even when nobody is signed in." }).then(function (v) {
       if (!v) return;
       if (!v.confirmed) { UI.toast("Tick the confirmation box to schedule a script.", "warning"); return; }
@@ -68,60 +110,92 @@
 
   window.Pages.schedules = {
     title: "Schedules",
+    applyRoutine: applyRoutine,
     render: function (el, App) {
       var self = this;
       var rerender = function () { self.render(el, App); };
-      return Promise.all([API.get("/schedules"), API.get("/scripts").catch(function () { return { scripts: [] }; })]).then(function (both) {
-        var data = both[0], scriptList = both[1].scripts || [];
+      return Promise.all([API.get("/schedules"), API.get("/scripts").catch(function () { return { scripts: [] }; }),
+        API.get("/routines").catch(function () { return { routines: [], playbooks: [], groups: [] }; })]).then(function (all) {
+        var data = all[0], scriptList = all[1].scripts || [], cat = all[2];
         var list = data.schedules;
         var enabled = list.filter(function (s) { return s.enabled; });
         var next = enabled.map(function (s) { return s.next_run; }).filter(Boolean).sort()[0];
         var issues = list.filter(function (s) { return s.sync !== "ok"; }).length;
-        App.setSubtitle("Actions that run automatically, even when the console is closed");
+        var routineCount = list.filter(function (s) { return s.routine; }).length;
+        var onEvent = enabled.filter(function (s) { return s.kind === "startup" || s.kind === "logon"; }).length;
+        App.setSubtitle("Actions and routines that run automatically, even when the console is closed");
 
         var kpis = '<div class="grid grid-4">' +
-          UI.kpi("Schedules", String(list.length), enabled.length + " enabled", "info") +
-          UI.kpi("Next run", next ? esc(UI.formatDate(next)) : "—", next ? esc(UI.relative(next)).replace(" ago", "") : "Nothing planned", next ? "ok" : "") +
+          UI.kpi("Schedules", String(list.length), enabled.length + " enabled · " + routineCount + " routines", "info") +
+          UI.kpi("Next run", next ? esc(UI.formatDate(next)) : (onEvent ? "At startup" : "—"),
+            next ? esc(UI.relative(next)).replace(" ago", "") + (onEvent ? " · " + onEvent + " on startup/sign-in" : "") : (onEvent ? onEvent + " run on startup or sign-in" : "Nothing planned"), next || onEvent ? "ok" : "") +
           UI.kpi("Last failures", String(list.filter(function (s) { return s.last_status === "error"; }).length), "Schedules whose last run failed", list.some(function (s) { return s.last_status === "error"; }) ? "error" : "ok") +
           UI.kpi("Out of sync", String(issues), "Compared with Task Scheduler", issues ? "warning" : "ok") + "</div>";
 
         var byArea = UI.AREAS.map(function (a, i) {
           return { label: UI.AREA_LABEL[a], value: list.filter(function (s) { return s.area === a; }).length, color: Charts.PALETTE[i % Charts.PALETTE.length] };
-        }).filter(function (s) { return s.value; });
+        }).concat([{ label: "Routines", value: routineCount, color: "var(--accent)" }]).filter(function (s) { return s.value; });
         var table = UI.table(
-          [{ title: "Enabled" }, { title: "Action" }, { title: "Risk" }, { title: "When" }, { title: "Next run" }, { title: "Last run" }, { title: "Task Scheduler" }, { title: "", cls: "actions" }],
+          [{ title: "Enabled" }, { title: "Action or routine" }, { title: "Risk" }, { title: "When" }, { title: "Next run" }, { title: "Last run" }, { title: "Task Scheduler" }, { title: "", cls: "actions" }],
           list.map(function (s) {
             var sync = SYNC[s.sync] || ["skipped", s.sync];
+            var sub = s.routine ? (s.routine === "playbook" ? "Playbook" : "Routine") + " · " + s.steps + " steps" : (UI.AREA_LABEL[s.area] || s.area);
             return [
               '<label class="switch" title="Enable or disable"><input type="checkbox" data-toggle="' + s.id + '"' + (s.enabled ? " checked" : "") + "><span></span></label>",
-              '<div class="cell-title">' + esc(s.title) + '</div><div class="cell-sub">' + esc(UI.AREA_LABEL[s.area] || s.area) + " · " + esc(KIND[s.kind]) + "</div>",
-              UI.riskBadge(s.risk), esc(when(s)), s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">—</span>',
+              '<div class="cell-title">' + (s.routine ? UI.icon("playbooks") : "") + esc(s.title) + '</div><div class="cell-sub">' + esc(sub) + " · " + esc(KIND[s.kind] || s.kind) + "</div>",
+              UI.riskBadge(s.risk), esc(when(s)),
+              s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">' + (s.kind === "startup" ? "Next startup" : s.kind === "logon" ? "Next sign-in" : "—") + "</span>",
               s.last_run ? UI.statusBadge(s.last_status) + ' <span class="cell-sub">' + esc(UI.relative(s.last_run)) + "</span>" : '<span class="cell-sub">Not run yet</span>',
               '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>",
               (s.sync !== "ok" ? '<button class="btn btn-sm" data-resync="' + s.id + '">' + UI.icon("refresh") + "Resync</button>" : "") +
                 '<button class="btn btn-sm" data-delete="' + s.id + '">' + UI.icon("trash") + "Delete</button>"
             ];
-          }), "No schedules yet. Use Schedule on any action or recommendation, or create one here.");
+          }), "No schedules yet. Apply a suggested routine above, use Schedule on any action, or create one here.");
+
+        var tab = Components.store("routineTab") || "At startup";
+        if (tab !== "Playbooks" && cat.groups.indexOf(tab) < 0) tab = cat.groups[0] || "Playbooks";
 
         var inst = data.installation || { protected: true };
         var install = UI.installCallout(inst);
         el.innerHTML = UI.pageHeader("Schedules", "Registered in Windows Task Scheduler › WindowsMaintenanceManager",
           UI.hint("Schedules are Windows tasks that run as SYSTEM, even when nobody is signed in and the console is closed. " +
-            "Actions that are not safe create a restore point first.") +
+            "Routines run several actions in one go: at startup, at sign-in, every day, week or month. Actions that are not safe create a restore point first.") +
           UI.button("New schedule", 'id="new-schedule"', "btn-primary", "clock")) + install + kpis +
-          '<div class="grid grid-2-1">' + UI.card("Scheduled actions", table) +
+          '<div class="grid">' + UI.card("Suggested routines", routinesBody(cat, tab),
+            '<span class="muted small">' + cat.routines.length + " routines · " + cat.playbooks.length + " playbooks</span>", "routines-card") + "</div>" +
+          '<div class="grid grid-2-1">' + UI.card("Scheduled actions and routines", table) +
           UI.card("Schedules by area", '<div class="chart-row">' + Charts.donut(byArea, { center: list.length, sub: "schedules", empty: "No schedules" }) + Charts.legend(byArea) + "</div>" +
-            '<div class="callout">' + UI.icon("info") + "<div>Scheduled runs use the SYSTEM account, so they work when nobody is signed in. Actions that are not safe always create a restore point first.</div></div>") + "</div>" +
+            '<div class="callout">' + UI.icon("info") + "<div>Scheduled runs use the SYSTEM account, so they work when nobody is signed in. A startup routine runs before anyone signs in; a sign-in routine runs for every user.</div></div>") + "</div>" +
           '<div class="grid">' + UI.card("Scheduled scripts", scriptsTable(scriptList),
             '<span class="muted small">' + scriptList.filter(function (s) { return s.schedule; }).length + " of " + scriptList.length + " scripts</span>" +
             '<a class="btn btn-sm" href="#/scripts">' + UI.icon("scripts") + "Scripts</a>", "card-flush") + "</div>";
 
+        var routinesEl = el.querySelector('[data-card$="|Suggested routines"] .card-body') || el.querySelector('[data-card$="|Suggested routines"]');
+        routinesEl.addEventListener("click", function (e) {
+          var t = e.target.closest("[data-routine-tab]");
+          if (t) {
+            tab = t.getAttribute("data-routine-tab");
+            Components.store("routineTab", tab);
+            routinesEl.innerHTML = routinesBody(cat, tab);
+            return;
+          }
+          var b = e.target.closest("[data-apply]");
+          if (!b) return;
+          var ref = b.getAttribute("data-apply");
+          var r = cat.routines.concat(cat.playbooks).filter(function (x) { return x.ref === ref; })[0];
+          if (!r) return;
+          if (!inst.protected) { UI.toast("Protect the installation first (Fix automatically above): routines run as SYSTEM.", "warning"); return; }
+          applyRoutine(r, rerender);
+        });
+
         el.querySelector("#new-schedule").addEventListener("click", function () {
-          UI.modal("New schedule", '<p class="modal-text">What should run at the scheduled time?</p>',
+          UI.modal("New schedule", '<p class="modal-text">What should run automatically?</p>',
             [{ label: "Cancel", cls: "btn-ghost" }, { label: "A script", cls: "", value: function () { return "script"; } },
+              { label: "A routine", cls: "", value: function () { return "routine"; } },
               { label: "A maintenance action", cls: "btn-primary", value: function () { return "action"; } }]).then(function (what) {
             if (what === "action") pickAction(App).then(function (id) { if (id) App.schedule(id).then(rerender); });
             if (what === "script") pickScript(scriptList).then(function (s) { if (s) scheduleScript(s, rerender); });
+            if (what === "routine") el.querySelector('[data-card$="|Suggested routines"]').scrollIntoView({ behavior: "smooth", block: "start" });
           });
         });
         el.querySelector('[data-card$="|Scheduled scripts"]').addEventListener("click", function (e) {

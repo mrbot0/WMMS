@@ -3,6 +3,25 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.7.0 — 2026-11-02
+
+**Routines in Schedules and the Hardware page.**
+
+- **Routines**: a group of actions on one schedule. New frequencies for actions, routines and scripts: *at every startup*
+  and *at every sign-in* (Task Scheduler boot and logon triggers, with an optional 0–60 minute wait) and *every month*
+  (days 1–28). Schedules stores `routine:<id>` or `playbook:<id>` in `action_id`; a `delay` column is added to existing
+  databases on start.
+- **12 suggested routines** in five groups (at startup, at sign-in, every day, week, month), each with its frequency
+  ready, and every playbook can be applied as a routine (also from the Playbooks page). `GET /api/v1/routines`.
+- **Hardware page** (System › Hardware, `G` then `Y`): system and motherboard, BIOS, processor, memory modules, graphics,
+  disks, network, monitors, audio, battery and every PnP device with hardware IDs, driver version and status; links to
+  the web, the Microsoft Update Catalog and the PCI/USB ID database; copyable summary without serial numbers.
+  `GET /api/v1/hardware`.
+- **Temperatures and fans**, live every 5 s (`GET /api/v1/hardware/sensors`): Windows thermal zones, disk temperatures,
+  NVIDIA GPUs (nvidia-smi) and, when LibreHardwareMonitor or OpenHardwareMonitor runs, every CPU, motherboard and fan
+  sensor. `POST /api/v1/hardware/monitor-tool` installs LibreHardwareMonitor with winget and starts it (administrator,
+  recorded in History).
+
 ## 1.6.0 — 2026-11-02
 
 **Settings menu, 10 new preferences, scripts in Schedules and 10 more playbooks.**

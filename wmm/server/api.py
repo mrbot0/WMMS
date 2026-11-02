@@ -34,8 +34,8 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import (actions, advisor, autostart, collectors, core, events, health, inventory, live, processes, registry, scheduler, scripts,
-                     shutdown)
+from ..agent import (actions, advisor, autostart, collectors, core, events, hardware, health, inventory, live, processes, registry,
+                     routines, scheduler, scripts, shutdown)
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 
@@ -65,6 +65,17 @@ class ApiError(Exception):
         self.message = message
 
 
+def _delay(corpo: dict) -> int:
+    """Minutes to wait after startup or sign-in; scheduler.validate checks the range."""
+    valore = corpo.get("delay", 0)
+    if isinstance(valore, bool):
+        raise ApiError(400, "The delay must be a number of minutes.")
+    try:
+        return int(valore or 0)
+    except (TypeError, ValueError):
+        raise ApiError(400, "The delay must be a number of minutes.") from None
+
+
 class Agent:
     def __init__(self, data_dir: Path, preview: bool, admin: bool):
         self.data_dir = Path(data_dir)
@@ -90,6 +101,7 @@ class Agent:
         self.tasks = TaskRegistry()
         self.started = time.time()
         self.events = events.EventReader()
+        self.hardware = hardware.HardwareReader()
         self.procs = processes.ProcessMonitor()
         self.registry = registry.RegistryEditor(self.data_dir / "registry-backups")
         self.scripts = scripts.ScriptLibrary(self.data_dir / "scripts")
@@ -187,8 +199,8 @@ class Agent:
         for voce in self.store.schedules():
             quando = scheduler.next_run(voce, adesso)
             if quando:
-                azione = actions.CATALOG.get(voce["action_id"])
-                prossime.append({"id": voce["id"], "action_id": voce["action_id"], "title": azione.title if azione else voce["action_id"], "next_run": quando})
+                prossime.append({"id": voce["id"], "action_id": voce["action_id"],
+                                 "title": routines.describe(voce["action_id"])["title"], "next_run": quando})
         prossime.sort(key=lambda v: v["next_run"])
         return {"jobs": self.jobs.list(), "tasks": self.tasks.list(), "schedules": prossime[:6],
                 "run_active": self.jobs.busy, "now": time.time()}
@@ -288,7 +300,7 @@ class Agent:
             return {"ok": True, "preview": True}
         try:
             esito = cambia() or {}
-        except (processes.ControlError, registry.RegistryError, scripts.ScriptError) as errore:
+        except (processes.ControlError, registry.RegistryError, scripts.ScriptError, hardware.MonitorToolError) as errore:
             self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
             raise ApiError(409, str(errore)) from None
         except PermissionError:
@@ -301,6 +313,19 @@ class Agent:
         self.store.close_run(run_id, "ok", descrizione + (f" · backup {dettaglio}" if dettaglio else ""), 0,
                              json.dumps(esito, ensure_ascii=False))
         return dict(esito, ok=True)
+
+    def monitor_tool(self, corpo: dict) -> dict:
+        """Installs (with winget) and/or starts LibreHardwareMonitor, which publishes CPU, motherboard and fan sensors."""
+        operazione = corpo.get("action")
+        if operazione not in ("install", "start"):
+            raise ApiError(400, "Unknown operation: use install or start.")
+
+        def cambia():
+            uscita = hardware.install_monitor_tool() if operazione == "install" else ""
+            percorso = hardware.start_monitor_tool()
+            return {"path": percorso, "output": uscita[-2000:]}
+        testo = "Install and start LibreHardwareMonitor" if operazione == "install" else "Start LibreHardwareMonitor"
+        return self._logged_change("hardware.monitor_tool", testo, cambia)
 
     def end_process(self, pid: int, corpo: dict) -> dict:
         nome, albero = str(corpo.get("name") or ""), bool(corpo.get("tree"))
@@ -392,8 +417,9 @@ class Agent:
     def script_schedule(self, script_id: str, corpo: dict) -> dict:
         voce = self.scripts.get(script_id)
         tipo, quando, giorni = str(corpo.get("kind") or ""), str(corpo.get("at") or ""), str(corpo.get("days") or "")
+        ritardo = _delay(corpo)
         return self._logged_change("scripts.schedule", f"Schedule script {voce['name']} ({tipo} from {quando.replace('T', ' ')})",
-                                   lambda: {"script": self.scripts.schedule(script_id, tipo, quando, giorni)})
+                                   lambda: {"script": self.scripts.schedule(script_id, tipo, quando, giorni, ritardo)})
 
     def script_unschedule(self, script_id: str) -> dict:
         voce = self.scripts.get(script_id)
@@ -657,25 +683,41 @@ class Agent:
         stati = scheduler.sync_state(elenco, self.script) if elenco else {}
         risultato = []
         for voce in elenco:
-            azione = actions.CATALOG.get(voce["action_id"])
-            risultato.append(dict(voce, title=azione.title if azione else voce["action_id"],
-                                  risk=azione.risk if azione else "high", area=voce["action_id"].split(".")[0],
+            descritta = routines.describe(voce["action_id"])
+            risultato.append(dict(voce, title=descritta["title"], risk=descritta["risk"], area=descritta["area"],
+                                  routine=descritta["routine"], steps=len(descritta["actions"]),
                                   sync=stati.get(voce["id"], "ok"), next_run=scheduler.next_run(voce, datetime.now())))
         return risultato
+
+    def routines_catalog(self) -> dict:
+        dati = routines.catalog()
+        attive: Dict[str, List[dict]] = {}
+        for voce in self.store.schedules():
+            attive.setdefault(voce["action_id"], []).append({"id": voce["id"], "kind": voce["kind"], "enabled": voce["enabled"]})
+        for voce in dati["routines"] + dati["playbooks"]:
+            voce["scheduled"] = attive.get(voce["ref"], [])
+        return dict(dati, installation=self.installation())
 
     def create_schedule(self, corpo: dict) -> int:
         action_id = corpo.get("action_id")
         kind, at, days = corpo.get("kind"), corpo.get("at"), corpo.get("days") or ""
+        ritardo = _delay(corpo) if kind in scheduler.EVENT_KINDS else 0
         confermata = bool(corpo.get("confirmed"))
-        self._check_actions([action_id], confermata)
+        if not isinstance(action_id, str):
+            raise ApiError(400, "Select an action or a routine.")
         try:
-            scheduler.validate(kind, at, days)
+            passi = routines.expand(action_id)
+        except KeyError:
+            raise ApiError(400, f"Unknown action or routine: {action_id}") from None
+        self._check_actions(passi, confermata)
+        try:
+            scheduler.validate(kind, at, days, ritardo)
         except ValueError as errore:
             raise ApiError(400, str(errore)) from None
         self._guard_changes()
         if self.preview:
             raise ApiError(409, "Schedules cannot be created in preview mode.")
-        schedule_id = self.store.create_schedule(action_id, kind, at, days, confermata)
+        schedule_id = self.store.create_schedule(action_id, kind, at, days, confermata, ritardo)
         try:
             scheduler.register(self.store.schedule(schedule_id), self.python, self.script)
         except scheduler.UnprotectedProgram as errore:
@@ -1010,6 +1052,18 @@ class Handler(BaseHTTPRequestHandler):
     def event_meta(self, query):
         self._json(200, events.meta())
 
+    def hardware_inventory(self, query):
+        try:
+            self._json(200, self.agent.hardware.inventory(fresh=query.get("fresh") == "1"))
+        except RuntimeError as errore:
+            raise ApiError(500, str(errore)) from None
+
+    def hardware_sensors(self, query):
+        self._json(200, self.agent.hardware.sensors(fresh=query.get("fresh") == "1"))
+
+    def hardware_monitor_tool(self, query):
+        self._json(200, self.agent.monitor_tool(self._body()))
+
     def process_list(self, query):
         try:
             self._json(200, self.agent.procs.processes(full=query.get("full") == "1"))
@@ -1134,6 +1188,9 @@ class Handler(BaseHTTPRequestHandler):
     def create_schedule(self, query):
         self._json(201, {"id": self.agent.create_schedule(self._body())})
 
+    def list_routines(self, query):
+        self._json(200, self.agent.routines_catalog())
+
     def update_schedule(self, query, schedule_id):
         self.agent.update_schedule(int(schedule_id), self._body())
         self._json(200, {"ok": True})
@@ -1162,6 +1219,9 @@ ROUTES: List[Route] = [
     _route("GET", "/agent/protect", Handler.protection_status),
     _route("GET", "/events", Handler.event_list),
     _route("GET", "/events/meta", Handler.event_meta),
+    _route("GET", "/hardware", Handler.hardware_inventory),
+    _route("GET", "/hardware/sensors", Handler.hardware_sensors),
+    _route("POST", "/hardware/monitor-tool", Handler.hardware_monitor_tool),
     _route("GET", "/processes", Handler.process_list),
     _route("POST", r"/processes/(\d{1,10})/(end|priority|reveal)", Handler.process_operation),
     _route("POST", "/processes/start", Handler.process_start),
@@ -1203,6 +1263,7 @@ ROUTES: List[Route] = [
     _route("PUT", "/agent/autostart", Handler.put_autostart),
     _route("POST", r"/startup/([0-9a-f]{16})/toggle", Handler.toggle_startup),
     _route("GET", "/schedules", Handler.list_schedules),
+    _route("GET", "/routines", Handler.list_routines),
     _route("POST", "/schedules", Handler.create_schedule),
     _route("PATCH", r"/schedules/(\d+)", Handler.update_schedule),
     _route("DELETE", r"/schedules/(\d+)", Handler.delete_schedule),

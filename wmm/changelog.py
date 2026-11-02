@@ -2,6 +2,27 @@
 
 CHANGELOG = [
     {
+        "version": "1.7.0",
+        "date": "2026-11-02",
+        "title": "Routines in Schedules and the Hardware page",
+        "highlights": [
+            "Routines: several actions run together at every startup, at every sign-in, or every day, week or month.",
+            "12 suggested routines with their frequency ready (Fresh start, Daily protection, Weekly tune-up, Monthly Windows check…); every playbook can run as a routine too.",
+            "New Hardware page (System): every component with its hardware IDs and links to the driver catalog, live temperatures and fans.",
+            "One click installs and starts LibreHardwareMonitor, so processor, motherboard and fan sensors appear on desktops too.",
+        ],
+        "changes": [
+            "New frequencies for actions, routines and scripts: at startup or sign-in (with an optional wait), and monthly.",
+            "Schedules shows routines with their steps, which ones are active, and the next startup or sign-in run.",
+            "Playbooks: Schedule button next to Run playbook.",
+            "Hardware: system and motherboard, BIOS, processor, memory modules with part numbers, graphics, disks, network, monitors, audio and battery.",
+            "All devices: every device Windows sees with class, hardware ID, driver and status; filter by problems, open every ID, copy or export CSV.",
+            "Search links for each device: the web, the Microsoft Update Catalog and the PCI/USB ID database.",
+            "Copy summary: the PC specifications as text, without serial numbers, for a ticket or a forum.",
+            "Shortcut G then Y opens the Hardware page.",
+        ],
+    },
+    {
         "version": "1.6.0",
         "date": "2026-11-02",
         "title": "Settings menu, 10 new preferences, scripts in Schedules and 10 more playbooks",
