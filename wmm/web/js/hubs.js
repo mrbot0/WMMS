@@ -29,6 +29,7 @@
         ["activity", "Activity", "Runs and scans in progress, with their live log."],
         ["playbooks", "Playbooks", "Ready-made sequences: quick tune-up, full maintenance, repair, hardening."],
         ["schedules", "Schedules", "Maintenance that runs on its own through Windows Task Scheduler."],
+        ["scripts", "Scripts", "Your .bat scripts run now or at a set time, ready-made scripts and the shutdown timer."],
         ["history", "History", "Every run with its result, freed space and log."],
         ["reports", "Reports", "Branded reports for the customer, as PDF, HTML, CSV or JSON."]] },
     { id: "help", title: "Help & settings", icon: "support", text: "User guide, troubleshooting, appearance, installation and start-up options.",
