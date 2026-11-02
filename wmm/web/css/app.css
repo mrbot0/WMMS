@@ -847,6 +847,112 @@ body.font-small { zoom: .92; } body.font-large { zoom: 1.08; }
 .whatsnew-more ul { margin: 8px 0 0; padding-left: 18px; color: var(--text-2); max-height: 260px; overflow: auto; }
 .job-results li .btn { margin-left: auto; }
 
+/* ---------- 1.4: spacing, motion and polish ---------- */
+/* A card placed directly in the page (filters, toolbars) keeps its distance from what follows. */
+.content > .card, .content > .rg-address { margin-bottom: var(--gap); }
+
+/* Sidebar: an indicator glides to the active page. */
+#nav { position: relative; }
+.nav-pill { position: absolute; left: 10px; right: 10px; top: 0; border-radius: 8px; pointer-events: none; z-index: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(74, 163, 240, .26), rgba(74, 163, 240, .08)); box-shadow: inset 3px 0 0 #4AA3F0;
+  transition: transform .42s cubic-bezier(.3, 1.25, .5, 1), height .2s ease, opacity .2s ease; }
+.nav-item, .nav-group { position: relative; z-index: 1; }
+.nav-item.active { background: transparent; }
+.nav-item.active::before { display: none; }
+body.sidebar-collapsed .nav-pill { box-shadow: none; }
+body.fx-boot .nav-item, body.fx-boot .nav-group { animation: fx-slide-in .5s cubic-bezier(.2, .8, .2, 1) both; }
+body.fx-boot #nav > :nth-child(3n+1) { animation-delay: .04s; } body.fx-boot #nav > :nth-child(3n+2) { animation-delay: .09s; }
+body.fx-boot #nav > :nth-child(3n) { animation-delay: .14s; }
+@keyframes fx-slide-in { from { opacity: 0; transform: translateX(-14px); } }
+
+/* Top bar: a shadow when the page scrolls under it; a loading line while a page opens. */
+.topbar { transition: box-shadow .25s ease, background-color .25s ease; }
+.topbar.scrolled { box-shadow: 0 8px 24px -16px rgba(0, 0, 0, .55); }
+.top-progress.page-loading > div { width: 30% !important; animation: indeterminate 1s ease-in-out infinite; background-image: none; }
+[data-fx="off"] .top-progress.page-loading > div { animation: indeterminate 1s ease-in-out infinite !important; }
+.live-mini b { display: inline-block; transition: color .3s; }
+[data-fx="fun"] .live-mini.tick b { animation: fx-tick .5s ease; }
+@keyframes fx-tick { 30% { transform: translateY(-2px); color: var(--accent); } }
+
+/* Back to top: a ring shows how far the page is scrolled. */
+.to-top { background: conic-gradient(var(--accent) var(--p, 0%), var(--surface-3) 0) !important; padding: 3px !important; }
+.to-top > .icon { background: var(--surface); border-radius: 50%; width: 100%; height: 100%; padding: 8px; box-sizing: border-box; color: var(--accent); }
+
+/* Toasts: the time left as a thin bar; hovering pauses it. */
+.toast { position: relative; overflow: hidden; }
+.toast::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: rgba(255, 255, 255, .55); transform-origin: left;
+  animation: fx-life var(--life, 4200ms) linear forwards; }
+.toast.paused::after { animation-play-state: paused; }
+@keyframes fx-life { to { transform: scaleX(0); } }
+
+/* Scroll reveal. */
+.fx-reveal { opacity: 0; transform: translateY(22px) scale(.985); transition: opacity .6s ease var(--fx-delay, 0ms), transform .7s cubic-bezier(.2, .8, .2, 1) var(--fx-delay, 0ms); }
+[data-fx="subtle"] .fx-reveal { transform: none; transition-duration: .4s; }
+.fx-reveal.fx-in { opacity: 1; transform: none; }
+
+/* Spotlight that follows the pointer on cards (a background layer, so the cards' own ::before/::after stay free). */
+[data-fx="fun"] :is(.card:not(.hub-hero), .kpi, .hub-page, .action-card, .tile, .quick, .live-card):hover {
+  background-image: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--accent) 11%, transparent), transparent 60%); }
+[data-fx="fun"] :is(.hub-page, .kpi, .tile, .quick) { transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s ease, border-color .2s ease; will-change: transform; }
+[data-fx="fun"] :is(.btn-primary, #btn-scan) { transition: transform .2s cubic-bezier(.2, .8, .2, 1), background-color .15s, box-shadow .2s; }
+
+/* Charts: bars grow, lines draw themselves. */
+[data-fx="fun"] .chart rect[data-tip] { transform-box: fill-box; transform-origin: bottom; animation: fx-grow-bar .7s cubic-bezier(.2, .8, .2, 1) both; }
+[data-fx="fun"] .chart rect[data-tip]:nth-of-type(2n) { animation-delay: .05s; } [data-fx="fun"] .chart rect[data-tip]:nth-of-type(3n) { animation-delay: .1s; }
+@keyframes fx-grow-bar { from { transform: scaleY(0); } }
+:is([data-fx="fun"], [data-fx="subtle"]) .line-draw { stroke-dasharray: 1; animation: fx-draw 1.2s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes fx-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* Launch: a card pulses when its action starts. */
+.fx-launch { animation: fx-launch .9s cubic-bezier(.2, .8, .2, 1); }
+@keyframes fx-launch { 0% { box-shadow: 0 0 0 0 var(--accent-ring); } 30% { transform: scale(.985); } 100% { box-shadow: 0 0 0 16px transparent; } }
+
+/* Floating "+5" over a score that improved. */
+.fx-float-text { position: fixed; z-index: 130; transform: translate(-50%, 0); font: 700 22px var(--font-display); color: var(--ok); pointer-events: none;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .35); animation: fx-float-up 1.4s cubic-bezier(.2, .8, .2, 1) forwards; }
+@keyframes fx-float-up { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 20% { opacity: 1; transform: translate(-50%, -6px) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+
+/* Dashboard hero: a slow aurora behind the gauge. */
+.hero { position: relative; overflow: hidden; isolation: isolate; }
+[data-fx="fun"] .hero::after { content: ""; position: absolute; inset: -40%; z-index: -1; pointer-events: none; opacity: .5;
+  background: radial-gradient(closest-side at 30% 40%, color-mix(in srgb, var(--accent) 30%, transparent), transparent),
+              radial-gradient(closest-side at 70% 60%, rgba(46, 157, 143, .28), transparent),
+              radial-gradient(closest-side at 50% 20%, rgba(124, 58, 237, .18), transparent);
+  animation: fx-aurora 18s ease-in-out infinite alternate; }
+@keyframes fx-aurora { 0% { transform: translate(-6%, -4%) rotate(0deg); } 100% { transform: translate(6%, 4%) rotate(25deg); } }
+
+/* Tabs: the selected one gets an underline that grows from the centre. */
+.tab { position: relative; }
+.tab::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0);
+  transition: transform .3s cubic-bezier(.3, 1.3, .5, 1); }
+.tab[aria-selected="true"] { border-bottom-color: transparent; }
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+/* Palette and dialogs: results arrive one after the other. */
+[data-fx="fun"] .palette li { animation: fx-up .3s cubic-bezier(.2, .8, .2, 1) both; }
+[data-fx="fun"] .palette li:nth-of-type(2) { animation-delay: .02s; } [data-fx="fun"] .palette li:nth-of-type(3) { animation-delay: .04s; }
+[data-fx="fun"] .palette li:nth-of-type(4) { animation-delay: .06s; } [data-fx="fun"] .palette li:nth-of-type(n+5) { animation-delay: .08s; }
+.modal-backdrop { backdrop-filter: blur(4px) saturate(1.1); }
+[data-fx="fun"] .modal-foot .btn { animation: fx-up .35s .12s cubic-bezier(.2, .8, .2, 1) both; }
+
+/* Links in the content get an underline that slides in. */
+.content a:not(.btn):not(.card):not([class*="hub"]):not([class*="pager"]) { background: linear-gradient(currentColor, currentColor) no-repeat 0 100% / 0 1px;
+  transition: background-size .25s ease; }
+.content a:not(.btn):not(.card):not([class*="hub"]):not([class*="pager"]):hover { background-size: 100% 1px; text-decoration: none; }
+
+/* Checkboxes pop when ticked. */
+[data-fx="fun"] .check input:checked { animation: fx-pop .35s cubic-bezier(.3, 1.6, .5, 1); }
+
+/* Theme switch: the new theme spreads in a circle (View Transitions). */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+/* Party mode (secret). */
+.fx-party .brand svg, .fx-party .nav-pill { animation: fx-hue 1.2s linear infinite; }
+.fx-party .kpi, .fx-party .hub-card { animation: fx-bounce .6s ease infinite alternate; }
+@keyframes fx-hue { to { filter: hue-rotate(360deg); } }
+@keyframes fx-bounce { to { transform: translateY(-6px); } }
+
 /* ---------- 1.3: categories, guides and hints ---------- */
 .nav-group { display: flex; align-items: center; padding: 12px 4px 4px 12px; }
 .nav-group-link { flex: 1; color: var(--sidebar-muted); text-decoration: none !important; font: 700 10.5px var(--font); letter-spacing: .9px; text-transform: uppercase;

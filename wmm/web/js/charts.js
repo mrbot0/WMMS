@@ -162,7 +162,7 @@
       var c = s.color || color(i), pts = (s.points || []).map(function (p) { return [X(new Date(p.x).getTime()), Y(p.y), p]; });
       if (!pts.length) return;
       if (pts.length > 1) {
-        body += '<polyline fill="none" stroke="' + c + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' +
+        body += '<polyline class="line-draw" pathLength="1" fill="none" stroke="' + c + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' +
           pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") + '"/>';
       }
       if (options.area && pts.length > 1) {

@@ -226,8 +226,15 @@
     while (root.children.length >= 4) root.removeChild(root.firstChild);
     root.appendChild(el);
     var visible = Math.max(4200, String(message).length * 60);  // long errors need time to be read
-    setTimeout(function () { el.classList.add("leaving"); }, visible);
-    setTimeout(function () { el.remove(); }, visible + 400);
+    // A thin bar shows the time left; hovering pauses it so a long message can be read calmly.
+    el.style.setProperty("--life", visible + "ms");
+    var timers = [];
+    function arm(ms) {
+      timers = [setTimeout(function () { el.classList.add("leaving"); }, ms), setTimeout(function () { el.remove(); }, ms + 400)];
+    }
+    el.addEventListener("mouseenter", function () { timers.forEach(clearTimeout); el.classList.add("paused"); });
+    el.addEventListener("mouseleave", function () { el.classList.remove("paused"); arm(2500); });
+    arm(visible);
   }
 
   /* Opens a modal. `build(body)` fills the body element; resolves with the value passed to close(). */

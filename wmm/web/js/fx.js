@@ -126,11 +126,168 @@
     logo.classList.add("fx-spin");
   });
 
+  function moving() { return level() !== "off"; }
+
+  /* ---------- scroll reveal: what is below the fold arrives when it scrolls into view ---------- */
+  var REVEAL = ".card, .kpi, .section-title, .tile, .hub-page, .hub-card, .action-card, .rec, .page-pager, .guide-tip";
+  var observer = window.IntersectionObserver ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("fx-in");
+      observer.unobserve(e.target);
+    });
+  }, { root: document.getElementById("scroller"), rootMargin: "0px 0px -40px 0px", threshold: 0.08 }) : null;
+  function reveal(root) {
+    if (!observer || !moving() || !root) return;
+    var limit = window.innerHeight;
+    Array.prototype.forEach.call(root.querySelectorAll(REVEAL), function (el, i) {
+      if (el.closest(".modal") || (el.parentElement && el.parentElement.closest(".fx-reveal"))) return;  // nested items ride on their parent
+      if (el.getBoundingClientRect().top < limit) return;  // already visible: the page entrance handles it
+      el.classList.add("fx-reveal");
+      el.style.setProperty("--fx-delay", (i % 4) * 60 + "ms");
+      observer.observe(el);
+    });
+  }
+
+  /* ---------- pointer effects: spotlight on cards, tilt on tiles, magnetic primary buttons ---------- */
+  var SPOT = ".card, .kpi, .hub-page, .hub-card, .action-card, .tile, .quick, .live-card";
+  var TILT = ".hub-page, .kpi, .tile, .quick";
+  var pending = null, lastTilt = null, lastMagnet = null;
+  document.addEventListener("pointermove", function (e) {
+    if (pending || e.pointerType === "touch") return;
+    pending = requestAnimationFrame(function () {
+      pending = null;
+      if (!fun()) return;
+      var t = e.target && e.target.closest ? e.target : null;
+      var spot = t && t.closest(SPOT);
+      if (spot) {
+        var r = spot.getBoundingClientRect();
+        spot.style.setProperty("--mx", e.clientX - r.left + "px");
+        spot.style.setProperty("--my", e.clientY - r.top + "px");
+      }
+      var tilt = t && t.closest(TILT);
+      if (lastTilt && lastTilt !== tilt) lastTilt.style.transform = "";
+      if (tilt) {
+        var b = tilt.getBoundingClientRect(), px = (e.clientX - b.left) / b.width - 0.5, py = (e.clientY - b.top) / b.height - 0.5;
+        tilt.style.transform = "perspective(700px) rotateX(" + (-py * 5).toFixed(2) + "deg) rotateY(" + (px * 6).toFixed(2) + "deg) translateY(-3px)";
+      }
+      lastTilt = tilt;
+      var magnet = t && t.closest(".btn-primary:not(:disabled), #btn-scan");
+      if (lastMagnet && lastMagnet !== magnet) lastMagnet.style.transform = "";
+      if (magnet) {
+        var m = magnet.getBoundingClientRect();
+        magnet.style.transform = "translate(" + ((e.clientX - m.left - m.width / 2) * 0.12).toFixed(1) + "px," + ((e.clientY - m.top - m.height / 2) * 0.18).toFixed(1) + "px)";
+      }
+      lastMagnet = magnet;
+    });
+  }, { passive: true });
+  document.documentElement.addEventListener("pointerleave", function () {
+    if (lastTilt) lastTilt.style.transform = "";
+    if (lastMagnet) lastMagnet.style.transform = "";
+    lastTilt = lastMagnet = null;
+  });
+
+  /* ---------- sidebar: an indicator glides to the active page ---------- */
+  var pillTop = null;
+  function navPill() {
+    var nav = document.getElementById("nav");
+    if (!nav) return;
+    var active = nav.querySelector(".nav-item.active");
+    var pill = nav.querySelector(".nav-pill") || nav.insertBefore(document.createElement("span"), nav.firstChild);
+    pill.className = "nav-pill";
+    pill.setAttribute("aria-hidden", "true");
+    if (!active) { pill.style.opacity = "0"; return; }
+    var top = active.offsetTop, height = active.offsetHeight;
+    pill.style.height = height + "px";
+    pill.style.opacity = "1";
+    pill.style.transition = "none";
+    pill.style.transform = "translateY(" + (pillTop == null || !moving() ? top : pillTop) + "px)";
+    if (pillTop != null && moving() && pillTop !== top) {
+      void pill.offsetWidth;
+      pill.style.transition = "";
+      pill.style.transform = "translateY(" + top + "px)";
+    }
+    pillTop = top;
+  }
+
+  /* ---------- theme switch: the new theme spreads in a circle from the click ---------- */
+  function themeSwitch(change, event) {
+    if (!document.startViewTransition || !fun()) { change(); return; }
+    var x = event && event.clientX ? event.clientX : window.innerWidth - 80, y = event && event.clientY ? event.clientY : 40;
+    var radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    var transition = document.startViewTransition(change);
+    transition.ready.then(function () {
+      document.documentElement.animate({ clipPath: ["circle(0px at " + x + "px " + y + "px)", "circle(" + radius + "px at " + x + "px " + y + "px)"] },
+        { duration: 520, easing: "cubic-bezier(.2,.8,.2,1)", pseudoElement: "::view-transition-new(root)" });
+    }).catch(function () { /* the theme still changed */ });
+  }
+
+  /* ---------- floating text: "+5" rising from an element ---------- */
+  function floatText(el, text, tone) {
+    if (!fun() || !el) return;
+    var r = el.getBoundingClientRect(), f = document.createElement("span");
+    f.className = "fx-float-text" + (tone ? " " + tone : "");
+    f.textContent = text;
+    f.style.left = r.left + r.width / 2 + "px";
+    f.style.top = r.top + "px";
+    document.body.appendChild(f);
+    setTimeout(f.remove.bind(f), 1400);
+  }
+
+  /* ---------- scroll: top bar shadow, back-to-top progress ring ---------- */
+  var scroller = document.getElementById("scroller");
+  if (scroller) {
+    var ticking = false;
+    scroller.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        var max = scroller.scrollHeight - scroller.clientHeight, p = max > 0 ? scroller.scrollTop / max : 0;
+        var bar = document.querySelector(".topbar");
+        if (bar) bar.classList.toggle("scrolled", scroller.scrollTop > 6);
+        var top = document.getElementById("to-top");
+        if (top) top.style.setProperty("--p", Math.round(p * 100) + "%");
+      });
+    }, { passive: true });
+  }
+
+  /* ---------- "Run" launches the card it belongs to ---------- */
+  document.addEventListener("click", function (e) {
+    var run = e.target.closest && e.target.closest("[data-run], [data-run-reports], #tb-run, #pick-run");
+    if (!run || !fun()) return;
+    var card = run.closest(".action-card, .rec, .quick") || run;
+    card.classList.remove("fx-launch");
+    void card.offsetWidth;
+    card.classList.add("fx-launch");
+    setTimeout(function () { card.classList.remove("fx-launch"); }, 900);
+  });
+
+  /* ---------- a secret: ↑ ↑ ↓ ↓ ← → ← → B A starts a party ---------- */
+  var SECRET = ["arrowup", "arrowup", "arrowdown", "arrowdown", "arrowleft", "arrowright", "arrowleft", "arrowright", "b", "a"], typed = 0;
+  document.addEventListener("keydown", function (e) {
+    var key = (e.key || "").toLowerCase();
+    typed = key === SECRET[typed] ? typed + 1 : (key === SECRET[0] ? 1 : 0);
+    if (typed < SECRET.length) return;
+    typed = 0;
+    if (!moving()) return;
+    document.documentElement.classList.add("fx-party");
+    [0, 500, 1000].forEach(function (d) { setTimeout(function () { confetti({ count: 120 }); }, d); });
+    setTimeout(function () { document.documentElement.classList.remove("fx-party"); }, 4200);
+  });
+
+  /* First paint: the sidebar items arrive one after the other. */
+  if (fun()) {
+    document.body.classList.add("fx-boot");
+    setTimeout(function () { document.body.classList.remove("fx-boot"); }, 1600);
+  }
+
   if (window.matchMedia) {
     var media = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (media.addEventListener) media.addEventListener("change", apply);
   }
   apply();
 
-  window.FX = { level: level, set: set, fun: fun, confetti: confetti, burst: burst, pageEnter: pageEnter, LEVELS: LEVELS };
+  window.FX = { level: level, set: set, fun: fun, moving: moving, confetti: confetti, burst: burst, pageEnter: pageEnter, reveal: reveal, navPill: navPill,
+    themeSwitch: themeSwitch, floatText: floatText, LEVELS: LEVELS };
 })();
