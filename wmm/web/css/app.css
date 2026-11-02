@@ -579,6 +579,12 @@ details.log-details pre { max-height: 260px; min-height: 0; }
 /* Drawer log tools */
 .log-head { display: flex; align-items: center; gap: 6px; }
 
+/* Power button (administrator consoles only) */
+.icon-btn-danger:hover { color: var(--error); background: var(--error-soft, rgba(196, 43, 28, .12)); border-color: transparent; }
+.stopped-card { text-align: center; max-width: 440px; }
+.stopped-icon { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--surface-2); color: var(--error); }
+.stopped-icon .icon { width: 28px; height: 28px; }
+
 /* Storage: disk management tools */
 .disk-tools .section-title:first-child { margin-top: 0; }
 .disk-tools .action-grid { margin-bottom: 8px; }

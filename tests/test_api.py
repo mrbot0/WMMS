@@ -366,8 +366,35 @@ class ApiTests(unittest.TestCase):
         self.assertIn("Writable", dati["error"])
 
 
+    def test_shutdown_stops_others_then_itself(self):
+        with mock.patch.object(api.shutdown, "stop_others", return_value=[4321]) as altri, \
+                mock.patch.object(self.agent, "_stop_self") as se_stesso, mock.patch.object(api.threading, "Timer") as timer:
+            self.assertEqual(self.request("POST", "/api/v1/agent/shutdown", token=False)[0], 403)
+            altri.assert_not_called()
+            stato, dati, _ = self.request("POST", "/api/v1/agent/shutdown")
+        self.assertEqual((stato, dati["stopped_processes"], dati["run_interrupted"]), (200, 1, False))
+        timer.assert_called_once_with(1.0, se_stesso)
+        timer.return_value.start.assert_called_once()
+
+    def test_shutdown_refused_in_preview(self):
+        agente = api.Agent(Path(self.tmp.name), preview=True, admin=True)
+        with mock.patch.object(api.shutdown, "stop_others") as altri:
+            with self.assertRaises(api.ApiError) as errore:
+                agente.shutdown()
+        self.assertEqual(errore.exception.status, 409)
+        altri.assert_not_called()
+
+
 class NotAdmin(ApiTests):
     admin = False
+
+    def test_shutdown_stops_others_then_itself(self):
+        with mock.patch.object(api.shutdown, "stop_others") as altri, mock.patch.object(api.threading, "Timer") as timer:
+            stato, dati, _ = self.request("POST", "/api/v1/agent/shutdown")
+        self.assertEqual(stato, 409)
+        self.assertIn("administrator", dati["error"])
+        altri.assert_not_called()
+        timer.assert_not_called()
 
     def test_restore_point_on_start(self):
         with mock.patch.object(self.agent.jobs, "start") as avvia:
