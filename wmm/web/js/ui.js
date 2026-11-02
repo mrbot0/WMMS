@@ -144,6 +144,14 @@
   var RISK_LABEL = { safe: "Safe", moderate: "Moderate", high: "High risk" };
   var STATUS_LABEL = { ok: "Success", warning: "Warning", error: "Error", skipped: "Skipped", preview: "Preview", running: "Running" };
   function riskBadge(risk) { return '<span class="badge badge-' + esc(risk) + '">' + esc(RISK_LABEL[risk] || risk) + "</span>"; }
+  /* A small "i" next to a control: the explanation shows on hover and focus, and as a toast on click (touch screens). */
+  function hint(text) {
+    return '<button type="button" class="hint-dot" data-tip="' + esc(text) + '" data-hint="' + esc(text) + '" aria-label="' + esc(text) + '">i</button>';
+  }
+  document.addEventListener("click", function (e) {
+    var h = e.target.closest && e.target.closest("[data-hint]");
+    if (h) { e.preventDefault(); e.stopPropagation(); toast(h.getAttribute("data-hint"), "info"); }
+  }, true);
   /* Reports only read the PC; fixes change it. */
   function kindBadge(kind) {
     return kind === "report" ? '<span class="badge badge-report" title="Read-only: changes nothing">' + icon("reports") + "Report</span>"
@@ -358,13 +366,13 @@
     var reportIds = view.actions.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
     var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created),
       button("Scan", 'data-scan-area="' + area + '"', "", "refresh") +
-      (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '"', "", "bolt") : "") +
+      (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '" title="Runs every safe fix of this area at once; reports and risky actions are left out"', "", "bolt") : "") +
       button("Export report", 'data-export-area="' + area + '"', "btn-primary", "download"));
     var group = function (label, iconName, hint, list) {
       return list.length ? '<div class="section-title">' + icon(iconName) + esc(label) + '<span class="extra">' + esc(hint) + "</span></div>" +
         '<div class="action-grid">' + list.map(function (a) { return toolCard(a, a.last_run); }).join("") + "</div>" : "";
     };
-    var actionsTable = group("Fixes", "bolt", "Change settings or delete files; non-safe ones create a restore point first.",
+    var actionsTable = group("Fixes", "bolt", "Change settings or delete files; non-safe ones ask first and create a restore point.",
       view.actions.filter(function (a) { return a.kind !== "report"; })) +
       group("Diagnostics", "reports", "Read-only reports: nothing on the PC changes.", view.actions.filter(function (a) { return a.kind === "report"; }));
     var trend = Charts.line([{ name: AREA_LABEL[area] + " score", points: view.trend.map(function (p) { return { x: p.created, y: p.score }; }) }], { min: 0, max: 100 });
@@ -403,7 +411,7 @@
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
-    kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout,
+    kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL

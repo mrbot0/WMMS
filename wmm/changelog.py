@@ -2,6 +2,30 @@
 
 CHANGELOG = [
     {
+        "version": "1.3.0",
+        "date": "2026-11-02",
+        "title": "30 performance tools, category pages and built-in guides",
+        "highlights": [
+            "30 new performance tools: 10 reports (CPU, memory, GPU, power, temperatures, disk latency, leaks…) and 20 tweaks (194 tools in total).",
+            "Every category is a page: Overview, Optimize, Health, System, Operations and Help, each with its child pages, score and safe fixes.",
+            "The dashboard shows all the categories with every page and its score.",
+            "Guides: a short tip the first time each page opens, the full guide with ? or F1, and a guided tour.",
+            "Hints next to the delicate controls: risks, reports and fixes, process priority, registry backups, schedules.",
+        ],
+        "changes": [
+            "Performance tweaks for CPU (core parking, minimum state, turbo boost), power (PCI Express, disks, sleep), GPU scheduling and network throttling.",
+            "Game and foreground priority, animations, tips, Widgets, Copilot and search highlights, frozen app timeouts, prefetch, NTFS cache, adapter power saving.",
+            "Sidebar categories open their page; the chevron folds their pages away and is remembered.",
+            "Breadcrumbs link back to the dashboard and to the category.",
+            "Previous, next and All of… links at the bottom of every page.",
+            "Category pages: score, open improvements, tools, scan the whole category and apply its safe fixes.",
+            "Command palette: categories, Guide for this page, Take the guided tour, Show all page tips again.",
+            "Settings › Guides and help: tips on or off, show them again, take the tour.",
+            "The first scan screen shows every category and a link to the guide.",
+            "Keyboard focus moves to the new page and screen readers announce it.",
+        ],
+    },
+    {
         "version": "1.2.0",
         "date": "2026-11-02",
         "title": "Event Viewer, Task Manager, Registry editor and one-click protected installation",

@@ -61,6 +61,11 @@
           ]) + UI.installCallout(inst)) +
           UI.card("Keyboard shortcuts", '<p class="muted" style="margin-top:0">Press <span class="kbd">?</span> anywhere to see all shortcuts, or <span class="kbd">Ctrl K</span> to search pages and actions.</p>' +
             UI.button("Show shortcuts", 'id="show-keys"', "", "keyboard")) +
+          UI.card("Guides and help", '<div class="form"><label class="check"><input type="checkbox" id="guides-tips"' + (Guides.enabled() ? " checked" : "") + "> " +
+            "Show a short “How this page works” tip the first time each page opens</label>" +
+            '<span class="hint">The full guide of any page opens with the ? button in the top bar or with F1.</span></div>' +
+            '<div class="page-actions" style="justify-content:flex-start;margin-top:10px">' + UI.button("Show all tips again", 'id="guides-reset"', "", "refresh") +
+            UI.button("Take the guided tour", 'id="guides-tour"', "btn-primary", "sparkle") + UI.button("Guide for Settings", 'data-guide-open="settings"', "btn-ghost", "support") + "</div>") +
           UI.card("Dashboard sections", '<p class="muted" style="margin-top:0">Choose what the dashboard shows. The overall health and quick actions are always visible.</p><div class="form">' +
             window.Pages.dashboard.sections.map(function (sct) {
               return '<label class="check"><input type="checkbox" data-section="' + sct[0] + '"' + (dashHidden.indexOf(sct[0]) >= 0 ? "" : " checked") + "> " + esc(sct[1]) + "</label>";
@@ -87,6 +92,16 @@
           Components.store("sidebar", e.target.checked);
         });
         el.querySelector("#show-keys").addEventListener("click", Components.shortcutsHelp);
+        el.querySelector("#guides-tips").addEventListener("change", function (e) {
+          Components.store("guidesOff", !e.target.checked);
+          UI.toast(e.target.checked ? "Page tips on." : "Page tips off. The ? button still opens every guide.", "info");
+        });
+        el.querySelector("#guides-reset").addEventListener("click", function () {
+          Guides.reset();
+          UI.toast("Every page shows its tip again the next time it opens.", "ok");
+          App.render();
+        });
+        el.querySelector("#guides-tour").addEventListener("click", function () { Guides.tour(0); });
         el.querySelector("#health-again").addEventListener("click", function (e) {
           e.currentTarget.disabled = true;
           e.currentTarget.classList.add("busy");

@@ -175,6 +175,8 @@
             return "<option" + (view.user === u ? " selected" : "") + ">" + esc(u) + "</option>"; }).join("") + "</select></label>" +
           '<label class="tb-sort">Priority<select id="tm-prio"><option value="">Any</option>' + Object.keys(prios).sort().map(function (u) {
             return "<option" + (view.prio === u ? " selected" : "") + ">" + esc(u) + "</option>"; }).join("") + "</select></label>" +
+          UI.hint("Shield: essential to Windows, cannot be ended. End stops one process; Shift-click or End with child processes stops what it started too. " +
+            "Priority decides who gets the CPU first: High can starve other programs, use it only for a while.") +
           '<details class="tm-cols"><summary class="btn btn-sm">' + UI.icon("settings") + "Columns</summary><div>" + COLUMNS.filter(function (c) { return c[0] !== "name"; }).map(function (c) {
             return '<label class="check"><input type="checkbox" data-col="' + c[0] + '"' + (view.columns.indexOf(c[0]) >= 0 ? " checked" : "") + "> " + esc(c[1]) + "</label>";
           }).join("") + "</div></details></div>" +

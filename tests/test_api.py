@@ -89,7 +89,7 @@ class ApiTests(unittest.TestCase):
 
     def test_info_reports_counts_and_uptime(self):
         _, dati, risposta = self.request("GET", "/api/v1/agent/info")
-        self.assertEqual(dati["actions"], 164)
+        self.assertEqual(dati["actions"], len(api.actions.CATALOG))
         self.assertGreater(dati["reports"], 30)
         self.assertGreaterEqual(dati["uptime_seconds"], 0)
         self.assertIn("app;dur=", risposta.getheader("Server-Timing"))
@@ -99,7 +99,7 @@ class ApiTests(unittest.TestCase):
         _, dati, _ = self.request("GET", "/api/v1/actions?kind=report&area=security")
         self.assertTrue(dati["actions"])
         self.assertTrue(all(a["kind"] == "report" and a["area"] == "security" for a in dati["actions"]))
-        self.assertEqual(dati["total"], 164)
+        self.assertEqual(dati["total"], len(api.actions.CATALOG))
         _, dati, _ = self.request("GET", "/api/v1/actions?q=bitlocker")
         self.assertEqual([a["id"] for a in dati["actions"]], ["security.bitlocker_status"])
 

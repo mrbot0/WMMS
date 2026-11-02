@@ -2,14 +2,8 @@
 (function () {
   "use strict";
   var esc = UI.esc;
-  var NAV = [
-    ["Overview", [["dashboard", "Dashboard"], ["recommendations", "Recommendations"]]],
-    ["Optimize", [["performance", "Performance"], ["cleanup", "Cleanup"], ["storage", "Storage"], ["startup", "Startup & Apps"], ["services", "Services"]]],
-    ["Health", [["integrity", "System Integrity"], ["security", "Security"], ["updates", "Updates & Drivers"], ["network", "Network"]]],
-    ["System", [["events", "Event Viewer"], ["processes", "Task Manager"], ["registry", "Registry"]]],
-    ["Operations", [["toolbox", "Toolbox"], ["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
-    ["", [["support", "Support"], ["settings", "Settings"]]]
-  ];
+  // The sidebar is built from the categories (hubs.js): [title, [[page, label]…], category id, icon].
+  var NAV = Hubs.CATEGORIES.map(function (c) { return [c.title, c.pages.map(function (p) { return [p[0], p[1]]; }), c.id, c.icon]; });
   var PSEUDO_ACTIONS = {
     "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" },
     "integrity.protect_install": { id: "integrity.protect_install", title: "Installation protected for schedules", area: "integrity", risk: "moderate" },
@@ -34,9 +28,14 @@
   }
 
   function renderNav() {
-    var page = current();
+    var page = current(), folded = Components.store("navFolded") || [];
     document.getElementById("nav").innerHTML = NAV.map(function (group) {
-      return (group[0] ? '<div class="nav-group">' + esc(group[0]) + "</div>" : '<div class="nav-group" aria-hidden="true">&nbsp;</div>') + group[1].map(function (item) {
+      // The category title opens its hub page; the chevron folds its pages away (remembered).
+      var hub = "cat-" + group[2], isFolded = folded.indexOf(group[2]) >= 0 && group[1].every(function (i) { return i[0] !== page; });
+      return '<div class="nav-group' + (page === hub ? " active" : "") + '"><a href="#/' + hub + '" class="nav-group-link"' + (page === hub ? ' aria-current="page"' : "") +
+        ' title="Open ' + esc(group[0]) + '">' + esc(group[0]) + '</a><button type="button" class="nav-fold" data-fold="' + group[2] + '" aria-expanded="' + !isFolded +
+        '" aria-label="' + (isFolded ? "Show" : "Hide") + " the pages of " + esc(group[0]) + '">' + UI.icon("chevron") + "</button></div>" +
+        (isFolded ? "" : group[1].map(function (item) {
         var score = state.scores[item[0]];
         var chip = item[0] in state.scores
           ? '<span class="nav-score ' + (score == null ? "none" : UI.tone(score)) + '" title="Score">' + (score == null ? "–" : score) + "</span>" : "";
@@ -44,9 +43,17 @@
         if (item[0] === "toolbox" && Object.keys(state.actions).length) chip = '<span class="nav-score none" title="Tools">' + Object.keys(state.actions).length + "</span>";
         return '<a href="#/' + item[0] + '" class="nav-item' + (item[0] === page ? " active" : "") + '"' + (item[0] === page ? ' aria-current="page"' : "") +
           ' title="' + esc(item[1]) + '">' + UI.icon(item[0]) + '<span class="nav-label">' + esc(item[1]) + "</span>" + chip + "</a>";
-      }).join("");
+      }).join(""));
     }).join("");
   }
+  document.getElementById("nav").addEventListener("click", function (e) {
+    var fold = e.target.closest("[data-fold]");
+    if (!fold) return;
+    var id = fold.getAttribute("data-fold"), list = Components.store("navFolded") || [], i = list.indexOf(id);
+    if (i >= 0) list.splice(i, 1); else list.push(id);
+    Components.store("navFolded", list);
+    renderNav();
+  });
 
   function renderChrome() {
     var info = state.info;
@@ -113,11 +120,12 @@
     state.leave.splice(0).forEach(function (fn) { try { fn(); } catch (e) { /* page already gone */ } });
     state.page = name;
     renderNav();
-    var group = groupOf(name);
-    document.getElementById("crumbs").innerHTML = "<span>Windows Maintenance Manager</span>" + (group ? "<span>" + esc(group) + "</span>" : "");
+    var cat = Hubs.categoryOf(name);
+    document.getElementById("crumbs").innerHTML = '<a href="#/dashboard">Windows Maintenance Manager</a>' +
+      (cat && !page.hub ? '<a href="#/cat-' + cat.id + '">' + esc(cat.title) + "</a>" : "");
     var area = UI.AREAS.indexOf(name);
     document.getElementById("page-title").innerHTML = '<span class="title-icon"' + (area >= 0 ? ' style="color:' + Charts.PALETTE[area % Charts.PALETTE.length] + '"' : "") + ">" +
-      UI.icon(name) + "</span>" + esc(page.title);
+      UI.icon(page.hub && cat ? cat.icon : name) + "</span>" + esc(page.title);
     document.getElementById("page-sub").textContent = "";
     updateTitle();
     var content = document.getElementById("content");
@@ -131,8 +139,16 @@
     content.innerHTML = Components.skeleton();
     Promise.resolve().then(function () { return page.render(content, App); }).then(function () {
       if (token !== state.rendering) return;
+      // First visit: a short "how this page works" tip; at the bottom, the neighbours in the same category.
+      var tip = Guides.tip(name);
+      if (tip) content.insertAdjacentHTML("afterbegin", tip);
+      content.insertAdjacentHTML("beforeend", Hubs.pager(name));
       Components.countUp(content);
-      if (arriving) FX.pageEnter(content);
+      if (arriving) {
+        FX.pageEnter(content);
+        content.focus({ preventScroll: true });  // screen readers and keyboard users start from the new page
+        announce(page.title + " page");
+      }
       scroller.scrollTop = restore;
       if (area >= 0) fixButton(content, name, token);
     }).catch(function (error) {
@@ -166,6 +182,14 @@
   }
 
   function onLeave(fn) { state.leave.push(fn); }
+
+  /* Polite announcement for screen readers (page changes, finished runs). */
+  function announce(text) {
+    var live = document.getElementById("announcer");
+    if (!live) return;
+    live.textContent = "";
+    setTimeout(function () { live.textContent = text; }, 50);
+  }
 
   /* Thin progress line under the top bar, visible on every page. */
   function updateProgress() {
@@ -330,7 +354,9 @@
         return "<li><span class=\"grow\"><span class=\"cell-title\">" + esc(a.title) + "</span>" + (a.risk !== "safe" && a.warning ? '<br><span class="cell-sub">' + esc(a.warning) + "</span>" : "") +
           "</span>" + UI.riskBadge(a.risk) + '<span class="badge">' + esc(UI.duration(a.minutes)) + "</span></li>";
       }).join("") + "</ol>" +
-      '<p class="muted small">Estimated time: ' + esc(UI.duration(total)) + ". You can follow every step in Activity.</p>";
+      '<p class="muted small">Estimated time: ' + esc(UI.duration(total)) + ". You can follow every step in Activity. " +
+      UI.hint("Safe actions run without asking. Moderate and high-risk actions are confirmed here and a System Restore point is created before them, " +
+        "so Windows can go back if something goes wrong.") + "</p>";
     var danger = risky.some(function (a) { return a.risk === "high"; });
     return UI.modal(list.length === 1 ? list[0].title : "Run " + list.length + " actions", body, [
       { label: "Cancel", cls: "btn-ghost" },
@@ -535,10 +561,18 @@
       if (a) list.push({ group: "Favorite actions", title: a.title, sub: UI.AREA_LABEL[a.area], icon: "play", badge: UI.riskBadge(a.risk), run: function () { runActions([id]); } });
     });
     NAV.forEach(function (g) {
+      list.push({ group: "Categories", title: g[0], icon: g[3], keywords: "category hub " + g[1].map(function (i) { return i[1]; }).join(" "),
+        run: function () { location.hash = "#/cat-" + g[2]; } });
+    });
+    NAV.forEach(function (g) {
       g[1].forEach(function (item) {
         list.push({ group: "Pages", title: item[1], icon: item[0], keywords: g[0], run: function () { location.hash = "#/" + item[0]; } });
       });
     });
+    list.push({ group: "Help", title: "Guide for this page", icon: "support", keywords: "help how F1", run: function () { Guides.open(current()); } });
+    list.push({ group: "Help", title: "Take the guided tour", icon: "sparkle", keywords: "help tour start onboarding", run: function () { Guides.tour(0); } });
+    list.push({ group: "Help", title: "Show all page tips again", icon: "support", keywords: "help guides reset", run: function () {
+      Guides.reset(); UI.toast("Page tips are back: each page shows its tip once.", "ok"); render(); } });
     list.push({ group: "Commands", title: "Scan all areas", icon: "refresh", run: scanAll });
     list.push({ group: "Commands", title: "Open the Toolbox", icon: "explorer", keywords: "tools diagnostics reports fixes", run: function () { location.hash = "#/toolbox"; } });
     list.push({ group: "Commands", title: "Run every diagnostic report", icon: "reports", keywords: "reports read-only check audit",
@@ -683,6 +717,11 @@
   });
 
   document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
+  // The ? button and F1 open the guide of the current page (the user guide stays one click away inside it).
+  document.getElementById("btn-help").addEventListener("click", function (e) { e.preventDefault(); Guides.open(current()); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "F1") { e.preventDefault(); if (!document.querySelector(".modal-backdrop")) Guides.open(current()); }
+  });
   document.addEventListener("keydown", function (e) {
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !e.shiftKey || document.querySelector(".modal-backdrop")) return;
@@ -756,7 +795,14 @@
     var last = Components.store("lastPage");
     if (!/^#\/\w/.test(location.hash) && last && window.Pages[last] && last !== "dashboard") history.replaceState(null, "", "#/" + last);
     render();
-    Components.whatsNew(false);
+    // After the release notes (if any), new users are offered the guided tour once.
+    Components.whatsNew(false).then(function () {
+      if (!Guides.shouldTour() || document.querySelector(".modal-backdrop")) return;
+      UI.modal("Welcome to Windows Maintenance Manager", '<p class="modal-text">A one-minute tour shows how to scan this PC, fix what matters, explore the categories and automate the maintenance.</p>' +
+        '<p class="muted small">You can take it later from the ? button or the command palette (Ctrl K).</p>',
+        [{ label: "Not now", cls: "btn-ghost", value: function () { return "no"; } }, { label: "Start the tour", cls: "btn-primary", value: function () { return "yes"; } }]
+      ).then(function (v) { if (v === "yes") Guides.tour(0); else Components.store("tourDone", true); });
+    });
     API.get("/playbooks").then(function (p) { state.playbooks = p.playbooks; }, function () { /* palette works without them */ });
     refreshScores();
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });

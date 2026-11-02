@@ -1134,3 +1134,143 @@ def pending_reboot(ctx) -> Esito:
     if motivi:
         return Esito(Stato.AVVISO, "a restart is pending: " + ", ".join(motivi))
     return Esito(Stato.OK, "no restart pending")
+
+
+# ---------- performance pack (iteration 8) ----------
+
+HKLM, HKCU = "HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER"
+MULTIMEDIA = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+CONTENT_DELIVERY = r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+PREFETCH = r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters"
+
+
+def power_settings(ctx, impostazioni: Sequence[Tuple[str, str, int]], dc: bool = True) -> Esito:
+    """Sets power plan values on the active plan (AC, and battery unless dc=False), then reapplies the plan."""
+    comandi = []
+    for sottogruppo, impostazione, valore in impostazioni:
+        comandi.append(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, str(valore)])
+        if dc:
+            comandi.append(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, str(valore)])
+    comandi.append(["powercfg", "/setactive", "SCHEME_CURRENT"])
+    return op.comandi_in_serie(ctx, comandi)
+
+
+def registry_values(ctx, scritture: Sequence[Tuple[str, str, str, object]], nota: str) -> Esito:
+    """Writes several registry values as one change; integers are DWORDs, text is REG_SZ."""
+    descrizione = "; ".join(f"{'HKLM' if r == HKLM else 'HKCU'}\\{k}\\{n} = {v}" for r, k, n, v in scritture)
+    if not ctx.modifica("Registry " + descrizione):
+        return Esito(Stato.ANTEPRIMA)
+    for radice, chiave, nome, valore in scritture:
+        if isinstance(valore, int):
+            write_dword(radice, chiave, nome, valore)
+        else:
+            write_string(radice, chiave, nome, str(valore))
+    return Esito(Stato.OK, nota)
+
+
+def with_restart(ctx, esito: Esito) -> Esito:
+    if esito.stato is Stato.OK:
+        ctx.riavvio_necessario = True
+    return esito
+
+
+SCRIPT_CPU = r"""
+Get-CimInstance Win32_Processor | ForEach-Object {
+  "$($_.Name.Trim())"
+  "Cores: $($_.NumberOfCores) - logical processors: $($_.NumberOfLogicalProcessors)"
+  "Base clock: $($_.MaxClockSpeed) MHz - current: $($_.CurrentClockSpeed) MHz - load: $($_.LoadPercentage) %"
+  "L2: $($_.L2CacheSize) KB - L3: $($_.L3CacheSize) KB - virtualization in firmware: $($_.VirtualizationFirmwareEnabled)"
+}
+$c = Get-Counter '\Processor(*)\% Processor Time' -SampleInterval 1 -MaxSamples 2 -ErrorAction SilentlyContinue
+if ($c) { '== Load per logical processor =='; $last = $c.CounterSamples | Select-Object -Last 1
+  $c.CounterSamples | Where-Object Timestamp -eq $last.Timestamp | Sort-Object InstanceName | ForEach-Object { '{0,-8} {1,6:N1} %' -f $_.InstanceName, $_.CookedValue } }
+"""
+
+SCRIPT_MEMORY = r"""
+$os = Get-CimInstance Win32_OperatingSystem
+'Installed: {0:N1} GB - free: {1:N1} GB - committed: {2:N1} of {3:N1} GB' -f ($os.TotalVisibleMemorySize / 1MB), ($os.FreePhysicalMemory / 1MB),
+  (($os.TotalVirtualMemorySize - $os.FreeVirtualMemory) / 1MB), ($os.TotalVirtualMemorySize / 1MB)
+'== Modules =='
+Get-CimInstance Win32_PhysicalMemory | ForEach-Object { '{0,-14} {1,6:N0} GB  {2,5} MT/s (configured {3})  {4} {5}' -f $_.DeviceLocator, ($_.Capacity / 1GB),
+  $_.Speed, $_.ConfiguredClockSpeed, $_.Manufacturer, "$($_.PartNumber)".Trim() }
+$a = Get-CimInstance Win32_PhysicalMemoryArray
+"Slots: $(@(Get-CimInstance Win32_PhysicalMemory).Count) used of $($a.MemoryDevices) - maximum $([math]::Round($a.MaxCapacityEx / 1MB)) GB"
+"""
+
+SCRIPT_GPU = r"""
+Get-CimInstance Win32_VideoController | ForEach-Object {
+  "== $($_.Name) =="
+  "Driver: $($_.DriverVersion) ($(if ($_.DriverDate) { $_.DriverDate.ToString('yyyy-MM-dd') }))"
+  "Resolution: $($_.CurrentHorizontalResolution) x $($_.CurrentVerticalResolution) at $($_.CurrentRefreshRate) Hz"
+  "Status: $($_.Status)"
+}
+$hags = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -ErrorAction SilentlyContinue).HwSchMode
+"Hardware-accelerated GPU scheduling: $(switch ($hags) { 2 { 'on' } 1 { 'off' } default { 'Windows default' } })"
+"""
+
+SCRIPT_THERMAL = r"""
+$t = @(Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue)
+if (-not $t) { 'The firmware does not expose thermal zones (common on desktops): use the disk health report for disk temperatures.'; exit 0 }
+$hot = $false
+$t | ForEach-Object { $c = [math]::Round($_.CurrentTemperature / 10 - 273.15, 1); if ($c -ge 90) { $hot = $true }; '{0,-40} {1,6} C' -f $_.InstanceName, $c }
+if ($hot) { exit 1 }
+"""
+
+SCRIPT_DISK_LATENCY = r"""
+$s = (Get-Counter '\PhysicalDisk(*)\Avg. Disk sec/Read','\PhysicalDisk(*)\Avg. Disk sec/Write','\PhysicalDisk(*)\Current Disk Queue Length','\PhysicalDisk(*)\% Idle Time' -SampleInterval 2 -MaxSamples 3 -ErrorAction SilentlyContinue).CounterSamples
+$slow = $false
+$s | Where-Object InstanceName -ne '_total' | Group-Object InstanceName | ForEach-Object {
+  $v = @{}; $_.Group | Group-Object { ($_.Path -split '\\')[-1] } | ForEach-Object { $v[$_.Name] = ($_.Group | Measure-Object CookedValue -Average).Average }
+  $r = 1000 * $v['avg. disk sec/read']; $w = 1000 * $v['avg. disk sec/write']; if ($r -gt 50 -or $w -gt 50) { $slow = $true }
+  'Disk {0,-10} read {1,6:N1} ms  write {2,6:N1} ms  queue {3,4:N1}  busy {4,5:N1} %' -f $_.Name, $r, $w, $v['current disk queue length'], (100 - $v['% idle time'])
+}
+if ($slow) { exit 1 }
+"""
+
+SCRIPT_HANDLES = r"""
+'== Most handles (possible leaks) =='
+Get-Process | Sort-Object HandleCount -Descending | Select-Object -First 12 | ForEach-Object { '{0,8:N0} handles  {1,6:N0} threads  {2}' -f $_.HandleCount, $_.Threads.Count, $_.ProcessName }
+'== Most private memory =='
+Get-Process | Sort-Object PrivateMemorySize64 -Descending | Select-Object -First 12 | ForEach-Object { '{0,8:N0} MB  {1}' -f ($_.PrivateMemorySize64 / 1MB), $_.ProcessName }
+"""
+
+SCRIPT_WINSAT = r"""
+$w = Get-CimInstance Win32_WinSAT -ErrorAction SilentlyContinue
+if (-not $w -or $w.WinSATAssessmentState -ne 1) { 'No valid assessment: run Measure the speed of C: first, or winsat formal.'; exit 0 }
+"Processor:  $($w.CPUScore)"; "Memory:     $($w.MemoryScore)"; "Graphics:   $($w.GraphicsScore)"; "Gaming:     $($w.D3DScore)"; "Disk:       $($w.DiskScore)"
+"Lowest (base) score: $($w.WinSPRLevel)"
+"""
+
+SCRIPT_PAGEFILE = r"""
+$u = @(Get-CimInstance Win32_PageFileUsage)
+"Managed by Windows: $((Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile)"
+if (-not $u) { 'No page file in use.' }
+$u | ForEach-Object { '{0}  allocated {1:N0} MB  in use {2:N0} MB  peak {3:N0} MB' -f $_.Name, $_.AllocatedBaseSize, $_.CurrentUsage, $_.PeakUsage }
+"""
+
+SCRIPT_NIC_POWER = r"""
+Get-NetAdapter -Physical | ForEach-Object {
+  $p = Get-NetAdapterPowerManagement -Name $_.Name -ErrorAction SilentlyContinue
+  '{0,-28} {1,-6} {2,-12} turn off to save power: {3}' -f $_.Name, $_.Status, $_.LinkSpeed, $(if ($p) { $p.AllowComputerToTurnOffDevice } else { 'n/a' })
+}
+"""
+
+SCRIPT_NIC_POWER_OFF = r"""
+$n = 0
+Get-NetAdapter -Physical | ForEach-Object {
+  $p = Get-NetAdapterPowerManagement -Name $_.Name -ErrorAction SilentlyContinue
+  if ($p -and "$($p.AllowComputerToTurnOffDevice)" -ne 'Disabled') { $p.AllowComputerToTurnOffDevice = 'Disabled'; $p | Set-NetAdapterPowerManagement; "$($_.Name): power saving off"; $n++ }
+}
+"$n adapter(s) changed."
+"""
+
+
+def power_plans_report(ctx) -> Esito:
+    return op.comandi_in_serie(ctx, (["powercfg", "/list"], ["powercfg", "/query", "SCHEME_CURRENT", "SUB_PROCESSOR"]))
+
+
+def ntfs_memory_usage(ctx) -> Esito:
+    esito = with_restart(ctx, ctx.comando(["fsutil", "behavior", "set", "memoryusage", "2"]))
+    if esito.stato is Stato.OK:
+        esito.nota = "larger NTFS cache; restart to apply"
+    return esito

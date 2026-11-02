@@ -3,6 +3,24 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.3.0 — 2026-11-02
+
+**30 performance tools, category pages and built-in guides** (194 tools in total).
+
+- **Performance reports**: processor, memory modules, graphics, power plans, temperatures, disk latency, handle and memory
+  leaks, Windows experience scores, page file usage, network adapters and power saving.
+- **Performance tweaks**: keep every core awake, CPU at full clock on AC, CPU minimum back to default, aggressive turbo
+  boost, PCI Express power saving off, disks never spin down, never sleep on AC, hardware-accelerated GPU scheduling,
+  network throttling off, game priority, foreground boost, animations off, tips and suggestions off, Widgets off, Copilot
+  off, search highlights off, faster close of frozen apps, prefetching restored, larger NTFS cache, adapters kept awake.
+- **Category pages** (`#/cat-…`): Overview, Optimize, Health, System, Operations, Help & settings, each with its child pages,
+  category score, open improvements, tools, scan of the whole category and its safe fixes. Sidebar categories open them and
+  fold away; breadcrumbs link to them; every page ends with previous / next / All of… links.
+- **Dashboard**: an *All categories* section with every page and its score (also on the first-scan screen).
+- **Guides**: a short "How this page works" tip the first time each page opens, the full guide with the ? button or F1,
+  a guided tour, hints next to delicate controls, and Settings › Guides and help.
+- Usability: one-line top bar title, focus and screen-reader announcement on page change, new palette commands.
+
 ## 1.2.0 — 2026-11-02
 
 **Event Viewer, Task Manager, Registry editor and one-click protected installation.** New *System* section in the menu.

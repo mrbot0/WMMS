@@ -28,6 +28,7 @@
       App.setSubtitle("Browse, edit and back up the Windows registry");
 
       el.innerHTML = UI.pageHeader("Registry", "Every change is backed up first; essential keys cannot be deleted",
+        UI.hint("Before every change the key is exported to a .reg file. Open Backups to restore it: the key gets back the values it had.") +
         UI.button("Backups", 'id="rg-backups"', "", "history") + UI.button("Export .reg", 'id="rg-export"', "", "download")) +
         (canWrite ? "" : '<div class="callout callout-warning">' + UI.icon("shield") + "<div>Read-only: restart the console as administrator to change the registry.</div></div>") +
         (info.preview ? '<div class="callout callout-info">' + UI.icon("info") + "<div>Preview mode: changes are recorded in History but not written.</div></div>" : "") +

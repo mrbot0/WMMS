@@ -62,7 +62,8 @@
           '<section class="card"><div class="card-body"><div class="filters ev-filters">' +
           '<label>Time<select id="ev-hours">' + RANGES.map(function (r) { return '<option value="' + r[0] + '"' + (Number(view.hours) === r[0] ? " selected" : "") + ">" + r[1] + "</option>"; }).join("") + "</select></label>" +
           '<label>Logs<select id="ev-logs"><option value="">Category logs</option>' + meta.logs.map(function (l) { return '<option value="' + l + '"' + (view.logs === l ? " selected" : "") + ">" + l + "</option>"; }).join("") + "</select></label>" +
-          '<fieldset class="ev-levels"><legend>Levels</legend>' + [1, 2, 3, 4].map(function (n) {
+          '<fieldset class="ev-levels"><legend>Levels ' + UI.hint("Critical: crashes, power loss, hardware faults. Error: something failed. " +
+            "Warning: a problem that may need attention. Information: normal activity.") + "</legend>" + [1, 2, 3, 4].map(function (n) {
             return '<label class="chip"><input type="checkbox" value="' + n + '"' + ((view.levels || "").split(",").indexOf(String(n)) >= 0 ? " checked" : "") + "><span>" + LEVEL[n][1] + "</span></label>";
           }).join("") + "</fieldset>" +
           '<label>Source<input type="text" id="ev-source" placeholder="e.g. disk, Ntfs" value="' + esc(view.providers || "") + '"></label>' +

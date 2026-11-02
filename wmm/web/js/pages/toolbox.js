@@ -43,7 +43,8 @@
           '<span class="muted small" id="tb-info">Nothing selected</span>' + UI.button("Run diagnostics", 'id="tb-reports"', "", "reports") +
           UI.button("Clear", 'id="tb-clear" disabled', "", "x") + UI.button("Run selected", 'id="tb-run" disabled', "btn-primary", "play")) + kpis +
           '<section class="card toolbox"><div class="card-body">' + tabs +
-          '<div class="tb-bar">' + segmented + '<label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search tools</span>' +
+          '<div class="tb-bar">' + segmented + UI.hint("Fixes change a setting or delete files. Reports only read the PC and open their output when they finish.") +
+          '<label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search tools</span>' +
           '<input type="search" id="tb-q" placeholder="Search tools… (press / )" value="' + esc(view.query) + '"></label>' +
           '<label class="tb-sort">Sort<select id="tb-sort">' + [["name", "Name"], ["duration", "Shortest first"], ["recent", "Recently run"]].map(function (o) {
             return '<option value="' + o[0] + '"' + (view.sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>";

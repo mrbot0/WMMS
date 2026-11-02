@@ -24,7 +24,8 @@
     return ["This PC needs maintenance", "Several areas have significant problems."];
   }
   /* Dashboard sections the technician can hide in Settings. */
-  var SECTIONS = [["visit", "Today, visit checklist and notes"], ["favorites", "Favorite actions"], ["tiles", "Health by area"], ["live", "Live system"],
+  var SECTIONS = [["categories", "All categories and their pages"], ["visit", "Today, visit checklist and notes"], ["favorites", "Favorite actions"],
+    ["tiles", "Health by area"], ["live", "Live system"],
     ["figures", "Key figures"], ["insights", "Insights"], ["operations", "System & operations"]];
   var VISIT = [["scan", "Run a full scan"], ["review", "Review high-impact improvements"], ["restore", "Create a restore point"], ["tuneup", "Run the quick tune-up"],
     ["updates", "Check pending updates and drivers"], ["report", "Export the report for the customer"]];
@@ -56,7 +57,9 @@
           el.innerHTML = '<section class="card"><div class="empty-state">' + UI.icon("dashboard") +
             "<h2>Welcome to Windows Maintenance Manager</h2><p>Run the first full scan to assess performance, storage, security, updates, network and more. " +
             "It takes one to three minutes and changes nothing on this PC.</p>" +
-            '<button class="btn btn-primary btn-lg" id="first-scan" type="button">' + UI.icon("refresh") + "Run the first full scan</button></div></section>";
+            '<button class="btn btn-primary btn-lg" id="first-scan" type="button">' + UI.icon("refresh") + "Run the first full scan</button>" +
+            '<p style="margin-top:14px"><button class="btn btn-ghost" type="button" data-guide-open="dashboard">' + UI.icon("support") + "How the console works</button></p></div></section>" +
+            '<div class="section-title">' + UI.icon("dashboard") + 'All categories<span class="extra">Every page is already available</span></div>' + Hubs.overview({});
           el.querySelector("#first-scan").addEventListener("click", App.scanAll);
           return;
         }
@@ -174,7 +177,11 @@
           esc(settings.notes || "") + '</textarea><div class="notes-foot"><span class="muted small" id="notes-state">Saved on this device</span>' +
           '<button class="btn btn-sm btn-primary" type="button" id="notes-save">' + UI.icon("check") + "Save notes</button></div>";
         var hidden = hiddenSections(), show = function (key, html) { return hidden.indexOf(key) >= 0 ? "" : html; };
+        var catScores = {};
+        UI.AREAS.forEach(function (a) { catScores[a] = d.scores[a]; });
         el.innerHTML = toolbar + hero +
+          show("categories", section("dashboard", "All categories", 'Click a category for its page, or go straight to a page · <a href="#" data-guide-open="dashboard">How to use the console</a>') +
+            Hubs.overview(catScores)) +
           show("visit", section("check", "This visit", '<a href="#/settings">Customize the dashboard</a>') + '<div class="grid grid-3">' + UI.card("Today on this PC", todayCard) +
             UI.card("Visit checklist", checklist, '<button class="btn btn-sm btn-ghost" type="button" id="visit-reset">Reset</button>') + UI.card("Technician notes", notes) + "</div>") +
           show("favorites", pinned) +

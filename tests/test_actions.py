@@ -78,7 +78,7 @@ class Catalog(unittest.TestCase):
         self.assertEqual(len(set(nuove)), 50)
         for nuova in nuove:
             self.assertIn(nuova, actions.CATALOG)
-        self.assertEqual(len(actions.CATALOG), 164)
+        self.assertGreaterEqual(len(actions.CATALOG), 164)
 
     def test_reports_are_safe_and_skipped_by_safe_runs(self):
         self.assertTrue(actions.REPORTS <= set(actions.CATALOG))

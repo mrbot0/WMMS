@@ -63,6 +63,8 @@
         var inst = data.installation || { protected: true };
         var install = UI.installCallout(inst);
         el.innerHTML = UI.pageHeader("Schedules", "Registered in Windows Task Scheduler › WindowsMaintenanceManager",
+          UI.hint("Schedules are Windows tasks that run as SYSTEM, even when nobody is signed in and the console is closed. " +
+            "Actions that are not safe create a restore point first.") +
           UI.button("New schedule", 'id="new-schedule"', "btn-primary", "clock")) + install + kpis +
           '<div class="grid grid-2-1">' + UI.card("Scheduled actions", table) +
           UI.card("Schedules by area", '<div class="chart-row">' + Charts.donut(byArea, { center: list.length, sub: "schedules", empty: "No schedules" }) + Charts.legend(byArea) + "</div>" +
