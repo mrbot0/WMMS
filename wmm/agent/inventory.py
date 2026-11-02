@@ -493,6 +493,14 @@ def _read_hosts() -> List[str]:
 
 
 INTERNET_SETTINGS = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+OFFICE_C2R = os.path.expandvars(r"%CommonProgramFiles%\microsoft shared\ClickToRun\OfficeC2RClient.exe")
+
+
+def _count_files(folder: str) -> int:
+    try:
+        return sum(1 for voce in os.scandir(folder) if voce.is_file())
+    except OSError:
+        return 0
 AUTORUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 
 
@@ -508,16 +516,29 @@ def extras_for(area: str) -> dict:
         except OSError:
             dimensione = None
         spente = _reg("HKCU", r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications", "GlobalUserDisabled")
+        trasparenza = _reg("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency")
+        velocita_mouse = _reg("HKCU", r"Control Panel\Mouse", "MouseSpeed")
         # Without the registry value, an existing hiberfil.sys means hibernation is on.
         attiva = bool(acceso) if acceso is not None else (True if dimensione else None)
-        return {"hibernation": {"enabled": attiva, "size_gb": dimensione}, "background_apps": spente != 1}
+        return {"hibernation": {"enabled": attiva, "size_gb": dimensione}, "background_apps": spente != 1,
+                "transparency": trasparenza != 0, "mouse_acceleration": None if velocita_mouse is None else str(velocita_mouse) != "0"}
     if area == "security":
         autorun = [_reg(h, AUTORUN_KEY, "NoDriveTypeAutoRun") for h in ("HKLM", "HKCU")]
         intervallo = _reg("HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore", "RPSessionInterval")
-        return {"autorun_disabled": any(v == 255 for v in autorun), "restore_enabled": None if intervallo is None else intervallo != 0}
+        ppl = _reg("HKLM", r"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL")
+        pubblicita = _reg("HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled")
+        return {"autorun_disabled": any(v == 255 for v in autorun), "restore_enabled": None if intervallo is None else intervallo != 0,
+                "smb_insecure_guest": _reg("HKLM", r"SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters", "AllowInsecureGuestAuth") == 1,
+                "lsa_protection": ppl in (1, 2),
+                "llmnr_disabled": _reg("HKLM", r"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient", "EnableMulticast") == 0,
+                "telemetry_level": _reg("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"),
+                "advertising_id": pubblicita != 0,
+                "recent_items": _count_files(os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Recent"))}
     if area == "updates":
         import shutil
-        return {"winget": bool(shutil.which("winget"))}
+        return {"winget": bool(shutil.which("winget")), "office_c2r": os.path.isfile(OFFICE_C2R)}
+    if area == "services":
+        return {"search_indexing": op.leggi_avvio_servizio(op.Contesto.leggi(["sc", "qc", "WSearch"]))}
     if area == "integrity":
         stato = op.Contesto.leggi(["sc", "query", "W32Time"])
         return {"time_service": {"running": op.servizio_attivo(stato),

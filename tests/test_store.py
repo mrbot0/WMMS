@@ -77,6 +77,10 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(store.settings()["technician"], "Alex")
             with self.assertRaises(ValueError):
                 store.save_settings({"unknown": "x"})
+            store.save_settings({"notes": "n" * 3000})
+            self.assertEqual(len(store.settings()["notes"]), 3000)
+            with self.assertRaises(ValueError):
+                store.save_settings({"company": "c" * 600})
 
 
 if __name__ == "__main__":

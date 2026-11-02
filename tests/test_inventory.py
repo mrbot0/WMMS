@@ -156,6 +156,21 @@ class Extras(unittest.TestCase):
         self.assertEqual(dati["hosts_entries"], ["10.0.0.5 intranet"])
         self.assertEqual(inventory.extras_for("cleanup"), {})
 
+    def test_security_privacy_extras(self):
+        valori = {
+            ("HKLM", r"SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters", "AllowInsecureGuestAuth"): 1,
+            ("HKLM", r"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL"): 1,
+            ("HKLM", r"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient", "EnableMulticast"): 0,
+            ("HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"): 1,
+        }
+        with mock.patch.object(inventory, "_reg", side_effect=lambda h, k, n: valori.get((h, k, n))), \
+                mock.patch.object(inventory, "_count_files", return_value=42):
+            dati = inventory.extras_for("security")
+        self.assertEqual((dati["smb_insecure_guest"], dati["lsa_protection"], dati["llmnr_disabled"]), (True, True, True))
+        self.assertTrue(dati["advertising_id"])
+        self.assertIsNone(dati["telemetry_level"])
+        self.assertEqual(dati["recent_items"], 42)
+
 
 class Battery(unittest.TestCase):
     def test_battery_health(self):

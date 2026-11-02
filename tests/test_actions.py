@@ -38,6 +38,18 @@ class Catalog(unittest.TestCase):
             self.assertIn(nuova, actions.CATALOG)
         self.assertGreaterEqual(len(actions.CATALOG), 72)
 
+    def test_catalog_has_94_actions(self):
+        nuove = ("performance.transparency_off", "performance.transparency_on", "performance.mouse_precision_off", "services.search_manual",
+                 "storage.delete_oldest_restore_point", "storage.clear_ie_cache", "network.reset_hosts", "network.purge_netbios",
+                 "security.offline_scan", "security.block_smb_guest", "security.lsa_protection", "security.disable_llmnr",
+                 "security.clear_recent_items", "security.reduce_telemetry", "security.disable_advertising_id",
+                 "updates.driver_scan", "updates.office_update", "integrity.chkdsk_all", "integrity.repair_wmi", "integrity.sfc_verify",
+                 "services.restart_wu", "services.restart_bluetooth")
+        self.assertEqual(len(nuove), 22)
+        for nuova in nuove:
+            self.assertIn(nuova, actions.CATALOG)
+        self.assertGreaterEqual(len(actions.CATALOG), 94)
+
     def test_playbooks_reference_known_actions(self):
         for playbook in actions.PLAYBOOKS:
             for action_id in playbook["actions"]:

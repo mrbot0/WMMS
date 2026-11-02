@@ -14,7 +14,7 @@
           '<span class="badge badge-status-' + (hc.summary.error ? "error" : hc.summary.warning ? "warning" : "ok") + '">' + hc.summary.ok + " OK · " + hc.summary.warning + " warnings · " + hc.summary.error + " failed</span>" +
           '<button class="btn btn-sm" type="button" id="health-again">' + UI.icon("refresh") + "Run again</button>");
         App.setSubtitle("Report branding, appearance and installation");
-        var theme = Components.theme.get();
+        var theme = Components.theme.get(), dashHidden = Components.store("dashHidden") || [];
         var field = function (key, label, hint, area) {
           return "<label>" + esc(label) + (area ? '<textarea name="' + key + '" maxlength="500" rows="3">' + esc(s[key]) + "</textarea>"
             : '<input name="' + key + '" maxlength="200" value="' + esc(s[key]) + '">') + '<span class="hint">' + esc(hint) + "</span></label>";
@@ -46,7 +46,16 @@
           ]) + (inst.protected ? "" : '<div class="callout callout-warning">' + UI.icon("shield") + "<div>Schedules need a protected installation. Run once as administrator:" +
             '<pre class="log" style="min-height:0;margin-top:8px">' + esc(inst.command || "") + "</pre></div></div>")) +
           UI.card("Keyboard shortcuts", '<p class="muted" style="margin-top:0">Press <span class="kbd">?</span> anywhere to see all shortcuts, or <span class="kbd">Ctrl K</span> to search pages and actions.</p>' +
-            UI.button("Show shortcuts", 'id="show-keys"', "", "keyboard")) + "</div></div>";
+            UI.button("Show shortcuts", 'id="show-keys"', "", "keyboard")) +
+          UI.card("Dashboard sections", '<p class="muted" style="margin-top:0">Choose what the dashboard shows. The overall health and quick actions are always visible.</p><div class="form">' +
+            window.Pages.dashboard.sections.map(function (sct) {
+              return '<label class="check"><input type="checkbox" data-section="' + sct[0] + '"' + (dashHidden.indexOf(sct[0]) >= 0 ? "" : " checked") + "> " + esc(sct[1]) + "</label>";
+            }).join("") + "</div>") +
+          UI.card("Console preferences", '<p class="muted" style="margin-top:0">Theme, favorites, dashboard layout, dismissed improvements and the other choices of this browser. ' +
+            "Export them to use the same console setup on another PC.</p>" +
+            '<div class="page-actions" style="justify-content:flex-start">' + UI.button("Export", 'id="prefs-export"', "", "download") +
+            UI.button("Import", 'id="prefs-import"', "", "upload") + UI.button("Reset", 'id="prefs-reset"', "btn-danger", "x") +
+            '<input type="file" id="prefs-file" accept="application/json,.json" hidden></div>') + "</div></div>";
 
         el.querySelector("#settings-form").addEventListener("submit", function (e) {
           var form = e.target, body = {};
@@ -95,6 +104,49 @@
         el.querySelector("#desktop-notify").addEventListener("change", function (e) {
           Components.store("desktopNotify", e.target.checked);
           if (e.target.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
+        });
+        el.querySelectorAll("[data-section]").forEach(function (box) {
+          box.addEventListener("change", function () {
+            var key = box.getAttribute("data-section"), list = (Components.store("dashHidden") || []).filter(function (k) { return k !== key; });
+            if (!box.checked) list.push(key);
+            Components.store("dashHidden", list);
+            UI.toast("Dashboard updated.", "ok");
+          });
+        });
+        el.querySelector("#prefs-export").addEventListener("click", function () {
+          var prefs = {};
+          try {
+            for (var i = 0; i < localStorage.length; i++) {
+              var k = localStorage.key(i);
+              if (k.indexOf("wmm.") === 0) prefs[k] = localStorage.getItem(k);
+            }
+          } catch (e) { /* storage unavailable */ }
+          App.saveText(JSON.stringify({ kind: "wmm-preferences", version: info.version, exported: new Date().toISOString(), values: prefs }, null, 2), "wmm-preferences.json");
+        });
+        var file = el.querySelector("#prefs-file");
+        el.querySelector("#prefs-import").addEventListener("click", function () { file.click(); });
+        file.addEventListener("change", function () {
+          if (!file.files.length) return;
+          file.files[0].text().then(function (text) {
+            var data = JSON.parse(text);
+            if (!data || data.kind !== "wmm-preferences" || typeof data.values !== "object") throw new Error("This file is not a preferences export of Windows Maintenance Manager.");
+            Object.keys(data.values).forEach(function (k) {
+              // Only console preferences: anything else in the file is ignored.
+              if (k.indexOf("wmm.") === 0 && typeof data.values[k] === "string") localStorage.setItem(k, data.values[k]);
+            });
+            UI.toast("Preferences imported. Reloading…", "ok");
+            setTimeout(function () { location.reload(); }, 800);
+          }).catch(function (err) { UI.toast(err instanceof SyntaxError ? "The file is not valid JSON." : err.message, "error"); });
+        });
+        el.querySelector("#prefs-reset").addEventListener("click", function () {
+          UI.confirm("Reset console preferences", "Theme, favorites, dashboard layout, dismissed improvements and the visit checklist go back to their defaults. Data on this PC is not touched.",
+            { ok: "Reset", danger: true }).then(function (ok) {
+            if (!ok) return;
+            try {
+              Object.keys(localStorage).filter(function (k) { return k.indexOf("wmm.") === 0; }).forEach(function (k) { localStorage.removeItem(k); });
+            } catch (e) { /* storage unavailable */ }
+            location.reload();
+          });
         });
         el.querySelector("#expand-cards").addEventListener("click", function () {
           try { localStorage.removeItem("wmm.collapsed"); } catch (e) { /* storage unavailable */ }

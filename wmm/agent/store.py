@@ -34,8 +34,9 @@ CREATE TABLE IF NOT EXISTS schedules (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
-SETTINGS_DEFAULTS = {"technician": "", "company": "", "report_header": "", "report_footer": ""}
+SETTINGS_DEFAULTS = {"technician": "", "company": "", "report_header": "", "report_footer": "", "notes": ""}
 SETTINGS_MAX_LENGTH = 500
+NOTES_MAX_LENGTH = 4000
 
 RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed"
 SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run"}
@@ -201,8 +202,9 @@ class Store:
         if sconosciute:
             raise ValueError(f"Unknown settings: {', '.join(sorted(sconosciute))}")
         for chiave, valore in values.items():
-            if not isinstance(valore, str) or len(valore) > SETTINGS_MAX_LENGTH:
-                raise ValueError(f"{chiave} must be text of at most {SETTINGS_MAX_LENGTH} characters")
+            massimo = NOTES_MAX_LENGTH if chiave == "notes" else SETTINGS_MAX_LENGTH
+            if not isinstance(valore, str) or len(valore) > massimo:
+                raise ValueError(f"{chiave} must be text of at most {massimo} characters")
         with self._db() as db:
             db.executemany("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                            [(k, v.strip()) for k, v in values.items()])
