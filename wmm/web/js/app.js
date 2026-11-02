@@ -6,7 +6,7 @@
     ["Overview", [["dashboard", "Dashboard"], ["recommendations", "Recommendations"]]],
     ["Optimize", [["performance", "Performance"], ["cleanup", "Cleanup"], ["storage", "Storage"], ["startup", "Startup & Apps"], ["services", "Services"]]],
     ["Health", [["integrity", "System Integrity"], ["security", "Security"], ["updates", "Updates & Drivers"], ["network", "Network"]]],
-    ["Operations", [["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
+    ["Operations", [["toolbox", "Toolbox"], ["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
     ["", [["support", "Support"], ["settings", "Settings"]]]
   ];
   var PSEUDO_ACTIONS = { "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" } };
@@ -32,6 +32,7 @@
         var chip = item[0] in state.scores
           ? '<span class="nav-score ' + (score == null ? "none" : UI.tone(score)) + '" title="Score">' + (score == null ? "–" : score) + "</span>" : "";
         if (item[0] === "activity" && state.activeCount) chip = '<span class="nav-live" title="Operations in progress">' + state.activeCount + "</span>";
+        if (item[0] === "toolbox" && Object.keys(state.actions).length) chip = '<span class="nav-score none" title="Tools">' + Object.keys(state.actions).length + "</span>";
         return '<a href="#/' + item[0] + '" class="nav-item' + (item[0] === page ? " active" : "") + '"' + (item[0] === page ? ' aria-current="page"' : "") +
           ' title="' + esc(item[1]) + '">' + UI.icon(item[0]) + '<span class="nav-label">' + esc(item[1]) + "</span>" + chip + "</a>";
       }).join("");
@@ -45,7 +46,8 @@
       '<span class="meta-item" title="Machine ID: ' + esc(info.machine_id) + '"><span class="meta-label">Device</span>' + esc(info.hostname) + "</span>" +
       '<span class="pill ' + (info.preview ? "pill-info" : info.admin ? "pill-ok" : "pill-warning") + '">' +
       (info.preview ? "Preview mode" : info.admin ? "Administrator" : "Read-only") + "</span>";
-    document.getElementById("sidebar-meta").innerHTML = "Version " + esc(info.version) + "<br>Local agent · 127.0.0.1";
+    document.getElementById("sidebar-meta").innerHTML = '<button type="button" class="version-link" data-whatsnew title="What\'s new">Version ' + esc(info.version) +
+      "</button><br>Local agent · 127.0.0.1";
     var banner = "";
     var bannerBtn = function (attr, label) { return '<button class="btn btn-sm" type="button" ' + attr + ' style="margin-left:auto">' + label + "</button>"; };
     if (!API.hasToken()) {
@@ -77,7 +79,9 @@
       '<span class="st">Oldest area scan: ' + esc(times.length ? UI.relative(times[0]) : "never") + "</span>" +
       (state.scanning ? '<span class="st"><span class="led busy"></span>Scanning all areas…</span>' : "") +
       (running ? '<a class="st" href="#/activity"><span class="led busy"></span>Run in progress · ' + Math.round(state.job.percent || 0) + "% (" + state.job.done + "/" + state.job.total + ")</a>" : "") +
-      '<span class="grow"></span><span class="st"><span class="kbd">Ctrl K</span> commands</span><span class="st"><span class="kbd">?</span> shortcuts</span>' +
+      '<span class="grow"></span>' + (info.version ? '<button type="button" class="st st-copy" data-whatsnew title="What\'s new">v' + esc(info.version) + " · " +
+        Object.keys(state.actions).length + " tools</button>" : "") +
+      '<span class="st"><span class="kbd">Ctrl K</span> commands</span><span class="st"><span class="kbd">?</span> shortcuts</span>' +
       '<button type="button" class="st st-copy" data-copy-id title="Copy the machine ID">' + esc(info.machine_id || "") + "</button>";
   }
 
@@ -144,11 +148,12 @@
     return ids.slice().sort(function (a, b) { return rank(a) - rank(b); });
   }
 
-  /* The browser tab shows the run percentage, so progress is visible from other tabs too. */
+  /* The browser tab shows the run percentage (title and icon), so progress is visible from other tabs too. */
   function updateTitle() {
     var page = window.Pages[state.page], job = state.job && state.job.active ? state.job : null;
     var pct = job ? (job.percent != null ? job.percent : 100 * job.done / Math.max(1, job.total)) : null;
     document.title = (pct != null ? Math.round(pct) + "% · " : "") + (page ? page.title : "") + " · Windows Maintenance Manager";
+    Components.faviconProgress(pct);
   }
 
   function onLeave(fn) { state.leave.push(fn); }
@@ -162,6 +167,7 @@
   }
 
   function pollActivity() {
+    if (document.hidden) return;  // resumed by visibilitychange
     API.get("/activity").then(function (a) {
       var tasks = a.tasks.filter(function (t) { return t.active; }).length;
       var jobs = a.jobs.filter(function (j) { return j.active; }).length;
@@ -210,7 +216,9 @@
       '<ul class="job-results">' + job.results.map(function (r) {
         var a = action(r.action_id);
         return "<li>" + UI.statusBadge(r.status) + "<span>" + esc(a ? a.title : r.action_id) + '</span><span class="muted small">' +
-          esc(r.note || "") + (r.bytes_freed ? " · freed " + UI.formatBytes(r.bytes_freed) : "") + "</span></li>";
+          esc(r.note || "") + (r.bytes_freed ? " · freed " + UI.formatBytes(r.bytes_freed) : "") + "</span>" +
+          (r.run_id ? '<button type="button" class="btn btn-sm btn-ghost" data-output="' + esc(r.run_id) + '" data-title="' + esc(a ? a.title : r.action_id) +
+            '" title="Output of this tool">' + UI.icon("reports") + "</button>" : "") + "</li>";
       }).join("") + "</ul>" +
       '<div class="log-head">Live log<span class="grow"></span><button class="btn btn-sm btn-ghost" type="button" data-log="copy">' + UI.icon("download") + "Copy</button>" +
       '<button class="btn btn-sm btn-ghost" type="button" data-log="save">' + UI.icon("download") + "Download</button></div>" +
@@ -239,7 +247,12 @@
           UI.toast((errors ? errors + " action(s) failed." : "Run completed: " + text + ".") + " Details in Activity.", errors ? "error" : "ok");
           Components.notifications.add(errors ? "Run finished with errors" : "Run completed", text, errors ? "error" : "ok");
           desktopNotify(errors ? "Run finished with errors" : "Run completed", text);
-          if (!errors) FX.confetti();
+          // A run made only of reports exists to be read: its output opens at once.
+          var onlyReports = job.results.length && job.results.every(function (r) { var a = action(r.action_id); return a && a.kind === "report"; });
+          if (onlyReports) {
+            Components.reportViewer(job.results.length === 1 ? action(job.results[0].action_id).title : job.results.length + " diagnostics", job.log.join("\n"),
+              "Finished " + UI.formatDate(new Date().toISOString()) + (state.info ? " on " + state.info.hostname : ""));
+          } else if (!errors) FX.confetti();
           refreshAreas(areas || areasOf(job.results.map(function (r) { return r.action_id; })));
         }
       }).catch(function (error) {
@@ -265,6 +278,40 @@
   /* ---------- shared actions ---------- */
 
   function action(id) { return state.actions[id] || PSEUDO_ACTIONS[id]; }
+
+  function favorites() { return Components.store("favorites") || []; }
+  function toggleFavorite(id) {
+    var list = favorites(), i = list.indexOf(id);
+    if (i >= 0) list.splice(i, 1); else list.push(id);
+    Components.store("favorites", list);
+    return i < 0;
+  }
+
+  /* Everything known about one tool, with run, schedule, favorite and its last output in one place. */
+  function actionDetail(id) {
+    var a = state.actions[id];
+    if (!a) return Promise.resolve();
+    return API.get("/history?area=" + a.area + "&limit=500").then(function (h) {
+      return h.runs.filter(function (r) { return r.action_id === id; })[0] || null;
+    }, function () { return null; }).then(function (r) {
+      var fav = favorites().indexOf(id) >= 0;
+      return UI.modal(a.title, '<p class="modal-text">' + esc(a.description) + "</p>" +
+        (a.risk !== "safe" && a.warning ? '<div class="callout callout-warning">' + UI.icon("shield") + "<div>" + esc(a.warning) + " A restore point is created first.</div></div>" : "") +
+        (a.kind === "report" ? '<div class="callout callout-info">' + UI.icon("reports") + "<div>Read-only report: it changes nothing on this PC. Its output opens when it finishes.</div></div>" : "") +
+        UI.definition([["Area", esc(UI.AREA_LABEL[a.area])], ["Kind", UI.kindBadge(a.kind)], ["Risk", UI.riskBadge(a.risk)], ["Estimated time", esc(UI.duration(a.minutes))],
+          ["Last run", r ? UI.statusBadge(r.status) + " " + esc(UI.relative(r.finished || r.started)) + (r.note ? " · " + esc(r.note) : "") : "Never"],
+          ["Identifier", '<span class="cell-mono">' + esc(a.id) + "</span>"]]),
+        [{ label: fav ? "Remove favorite" : "Add to favorites", cls: "btn-ghost", value: function () { return "fav"; } }]
+          .concat(r ? [{ label: "Last output", cls: "", value: function () { return "output"; } }] : [])
+          .concat([{ label: "Schedule", cls: "", value: function () { return "schedule"; } }, { label: "Run now", cls: "btn-primary", value: function () { return "run"; } }])
+      ).then(function (v) {
+        if (v === "run") runActions([id]);
+        if (v === "schedule") schedule(id);
+        if (v === "output") Components.showRunOutput(r.id, a.title);
+        if (v === "fav") { var on = toggleFavorite(id); UI.toast(on ? "Added to favorites." : "Removed from favorites.", "ok"); render(); }
+      });
+    });
+  }
 
   /* Confirmation listing every step in run order, its risk and the estimated total time. */
   function confirmRun(list, risky) {
@@ -447,6 +494,10 @@
       });
     });
     list.push({ group: "Commands", title: "Scan all areas", icon: "refresh", run: scanAll });
+    list.push({ group: "Commands", title: "Open the Toolbox", icon: "explorer", keywords: "tools diagnostics reports fixes", run: function () { location.hash = "#/toolbox"; } });
+    list.push({ group: "Commands", title: "Run every diagnostic report", icon: "reports", keywords: "reports read-only check audit",
+      run: function () { runActions(Object.keys(state.actions).filter(function (id) { return state.actions[id].kind === "report"; })); } });
+    list.push({ group: "Commands", title: "What's new in this version", icon: "sparkle", keywords: "changelog release notes version", run: function () { Components.whatsNew(true); } });
     list.push({ group: "Commands", title: "Apply all safe actions", icon: "bolt", run: function () { runSafe(null); } });
     list.push({ group: "Commands", title: "Toggle light / dark theme", icon: "moon", run: Components.theme.toggle });
     list.push({ group: "Commands", title: "Export full report", icon: "download", run: function () { Report.download("full"); } });
@@ -490,7 +541,8 @@
     } });
     Object.keys(state.actions).forEach(function (id) {
       var a = state.actions[id];
-      list.push({ group: "Run an action", title: a.title, sub: UI.AREA_LABEL[a.area], icon: "play", keywords: a.description + " " + id,
+      list.push({ group: "Run an action", title: a.title, sub: UI.AREA_LABEL[a.area] + (a.kind === "report" ? " · report" : ""), icon: a.kind === "report" ? "reports" : "play",
+        keywords: a.description + " " + id,
         badge: UI.riskBadge(a.risk), run: function () { runActions([id]); } });
     });
     Object.keys(state.actions).forEach(function (id) {
@@ -506,6 +558,11 @@
   document.addEventListener("click", function (e) {
     var run = e.target.closest("[data-run]");
     if (run) { e.preventDefault(); runActions([run.getAttribute("data-run")]); return; }
+    var reports = e.target.closest("[data-run-reports]");
+    if (reports) { e.preventDefault(); runActions(reports.getAttribute("data-run-reports").split(",")); return; }
+    if (e.target.closest("[data-whatsnew]")) { Components.whatsNew(true); return; }
+    var detail = e.target.closest(".tool-card [data-detail]");
+    if (detail && !App.isCurrent("toolbox") && !App.isCurrent("actions")) { actionDetail(detail.closest("[data-id]").getAttribute("data-id")); return; }
     var sch = e.target.closest("[data-schedule]");
     if (sch) { e.preventDefault(); schedule(sch.getAttribute("data-schedule")); }
   });
@@ -530,7 +587,8 @@
     openDrawer: openDrawer, follow: follow, pollActivity: pollActivity, requestAccess: requestAccess, restartAsAdmin: restartAsAdmin,
     state: state, render: render, isCurrent: isCurrent, onLeave: onLeave, runActions: runActions, runSafe: runSafe, schedule: schedule,
     scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores,
-    order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards
+    order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards, actionDetail: actionDetail,
+    favorites: favorites, toggleFavorite: toggleFavorite
   };
 
   setInterval(pollActivity, 4000);
@@ -543,7 +601,10 @@
       if (!r.samples.length) return;
       var s = r.samples[r.samples.length - 1];
       liveSince = s.t;
-      document.getElementById("live-mini").innerHTML = "CPU <b>" + Math.round(s.cpu) + "%</b> RAM <b>" + s.memory_pct + "%</b>";
+      // Amber from 75%, red from 90%: load is visible at a glance on every page.
+      var level = function (v) { return v >= 90 ? "hot" : v >= 75 ? "warm" : ""; };
+      document.getElementById("live-mini").innerHTML = 'CPU <b class="' + level(s.cpu) + '">' + Math.round(s.cpu) + '%</b> RAM <b class="' + level(s.memory_pct) + '">' +
+        s.memory_pct + "%</b>";
     }, function () { /* offline overlay handles it */ });
   }, 3000);
 
@@ -566,8 +627,14 @@
       }
     });
   }
-  setInterval(checkConnection, offline ? 3000 : 10000);
+  setInterval(function () { if (!document.hidden) checkConnection(); }, 10000);
   setInterval(function () { if (offline) checkConnection(); }, 3000);
+  // Polling sleeps while the tab is hidden; coming back refreshes the state at once.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    pollActivity();
+    checkConnection();
+  });
 
   document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
   document.addEventListener("keydown", function (e) {
@@ -643,6 +710,7 @@
     var last = Components.store("lastPage");
     if (!/^#\/\w/.test(location.hash) && last && window.Pages[last] && last !== "dashboard") history.replaceState(null, "", "#/" + last);
     render();
+    Components.whatsNew(false);
     API.get("/playbooks").then(function (p) { state.playbooks = p.playbooks; }, function () { /* palette works without them */ });
     refreshScores();
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });

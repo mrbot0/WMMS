@@ -87,6 +87,44 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(dati["name"], "Windows Maintenance Manager")
         self.assertEqual(dati["machine_id"], self.agent.machine_id)
 
+    def test_info_reports_counts_and_uptime(self):
+        _, dati, risposta = self.request("GET", "/api/v1/agent/info")
+        self.assertEqual(dati["actions"], 164)
+        self.assertGreater(dati["reports"], 30)
+        self.assertGreaterEqual(dati["uptime_seconds"], 0)
+        self.assertIn("app;dur=", risposta.getheader("Server-Timing"))
+        self.assertEqual(risposta.getheader("Referrer-Policy"), "no-referrer")
+
+    def test_actions_filters(self):
+        _, dati, _ = self.request("GET", "/api/v1/actions?kind=report&area=security")
+        self.assertTrue(dati["actions"])
+        self.assertTrue(all(a["kind"] == "report" and a["area"] == "security" for a in dati["actions"]))
+        self.assertEqual(dati["total"], 164)
+        _, dati, _ = self.request("GET", "/api/v1/actions?q=bitlocker")
+        self.assertEqual([a["id"] for a in dati["actions"]], ["security.bitlocker_status"])
+
+    def test_changelog_matches_the_version(self):
+        _, dati, _ = self.request("GET", "/api/v1/changelog")
+        self.assertEqual(dati["version"], api.VERSION)
+        self.assertEqual(dati["releases"][0]["version"], api.VERSION)
+
+    def test_errors_carry_the_status(self):
+        stato, dati, _ = self.request("GET", "/api/v1/nope")
+        self.assertEqual((stato, dati["status"]), (404, 404))
+
+    def test_gzip_and_etag_for_static_files(self):
+        stato, _, risposta = self.request("GET", "/static/js/app.js", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(stato, 200)
+        self.assertEqual(risposta.getheader("Content-Encoding"), "gzip")
+        etag = risposta.getheader("ETag")
+        stato, _, _ = self.request("GET", "/static/js/app.js", headers={"If-None-Match": etag})
+        self.assertEqual(stato, 304)
+
+    def test_index_busts_the_cache_with_the_version(self):
+        _, html, _ = self.request("GET", "/")
+        self.assertIn("/static/js/app.js?v=" + api.VERSION, html)
+        self.assertIn("/static/css/app.css?v=" + api.VERSION, html)
+
     def test_post_without_token_403(self):
         stato, _, _ = self.request("POST", "/api/v1/runs", {"actions": ["cleanup.temp"]}, token=False)
         self.assertEqual(stato, 403)

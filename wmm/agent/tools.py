@@ -835,3 +835,302 @@ def delete_windows_old(ctx) -> Esito:
     if os.path.isdir(percorso):
         return Esito(Stato.AVVISO, "some files in Windows.old could not be deleted")
     return Esito(Stato.OK, "Windows.old deleted")
+
+
+# ---------- toolbox (iteration 7) ----------
+
+def report(ctx, script: str, nota_avviso: str = "") -> Esito:
+    """Read-only PowerShell report; a non-zero exit is a warning with a clear note."""
+    esito = ctx.comando(powershell_command(script))
+    return _note_on_warning(esito, nota_avviso) if nota_avviso else esito
+
+
+def measured(ctx, titolo: str, cartelle: Sequence[str]) -> Esito:
+    """Read-only: size of each folder (works in preview too)."""
+    totale = 0
+    for cartella in expand(cartelle):
+        peso = folder_size(cartella)
+        totale += peso
+        ctx.scrivi(f"  {op.dimensione(peso):>10}  {cartella}")
+    return Esito(Stato.OK, f"{titolo}: {op.dimensione(totale)}")
+
+
+# cleanup
+SHADER_CACHES = [r"%LOCALAPPDATA%\D3DSCache", r"%LOCALAPPDATA%\NVIDIA\DXCache", r"%LOCALAPPDATA%\NVIDIA\GLCache",
+                 r"%LOCALAPPDATA%\AMD\DxCache", r"%LOCALAPPDATA%\AMD\DxcCache", r"%LOCALAPPDATA%\Intel\ShaderCache"]
+TEAMS_CACHES = [rf"%APPDATA%\Microsoft\Teams\{c}" for c in ("Cache", "Code Cache", "GPUCache", "blob_storage", "databases", "IndexedDB", "Local Storage", "tmp")] + \
+               [r"%LOCALAPPDATA%\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams"]
+USER_CRASH_DUMPS = [r"%LOCALAPPDATA%\CrashDumps"]
+OFFICE_CACHES = [r"%LOCALAPPDATA%\Microsoft\Office\16.0\OfficeFileCache", r"%LOCALAPPDATA%\Microsoft\Office\16.0\Wef"]
+DEV_CACHES = [r"%LOCALAPPDATA%\pip\Cache", r"%LOCALAPPDATA%\npm-cache", r"%APPDATA%\npm-cache", r"%LOCALAPPDATA%\Yarn\Cache",
+              r"%LOCALAPPDATA%\NuGet\v3-cache", r"%LOCALAPPDATA%\go-build"]
+TEMP_FOLDERS = [r"%TEMP%", r"%SystemRoot%\Temp", r"%SystemRoot%\SoftwareDistribution\Download"]
+
+
+def clean_folders(ctx, descrizione: str, cartelle: Sequence[str]) -> Esito:
+    return _wipe_action(ctx, descrizione, [(p, None) for p in expand(cartelle)])
+
+
+# integrity
+SCRIPT_RELIABILITY = r"""
+$r = @(Get-CimInstance Win32_ReliabilityRecords -ErrorAction SilentlyContinue | Where-Object { $_.TimeGenerated -gt (Get-Date).AddDays(-30) } |
+  Sort-Object TimeGenerated -Descending | Select-Object -First 25)
+if (-not $r) { 'No reliability events in the last 30 days.'; exit 0 }
+$r | ForEach-Object { '{0:yyyy-MM-dd HH:mm}  {1,-28} {2}' -f $_.TimeGenerated, $_.SourceName, (($_.Message -split "`n")[0]) }
+"""
+
+SCRIPT_BSOD = r"""
+$e = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 1001; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting' } -MaxEvents 10 -ErrorAction SilentlyContinue)
+$d = @(Get-ChildItem "$env:SystemRoot\Minidump" -Filter *.dmp -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+"Blue screens recorded: $($e.Count) - minidumps on disk: $($d.Count)"
+$e | ForEach-Object { '{0:yyyy-MM-dd HH:mm}  {1}' -f $_.TimeCreated, (($_.Message -split "`n")[0]) }
+$d | Select-Object -First 10 | ForEach-Object { '  {0}  {1:yyyy-MM-dd HH:mm}  {2:N0} KB' -f $_.Name, $_.LastWriteTime, ($_.Length / 1KB) }
+if ($e.Count) { exit 1 }
+"""
+
+SCRIPT_UNSIGNED = r"""
+$u = @(driverquery /si /fo csv | ConvertFrom-Csv | Where-Object { $_.IsSigned -eq 'FALSE' })
+if (-not $u) { 'Every loaded driver is signed.'; exit 0 }
+$u | ForEach-Object { "Unsigned: $($_.DeviceName) ($($_.InfName))" }
+exit 1
+"""
+
+
+# services
+SCRIPT_STOPPED_AUTO = r"""
+$s = @(Get-CimInstance Win32_Service | Where-Object { $_.StartMode -eq 'Auto' -and $_.State -ne 'Running' -and $_.Name -notmatch '^(sppsvc|RemoteRegistry|gupdate|edgeupdate|MapsBroker|wuauserv|TrustedInstaller|BITS|gpsvc)$' })
+if (-not $s) { 'Every automatic service is running.'; exit 0 }
+$s | Sort-Object Name | ForEach-Object { '{0,-32} {1,-10} {2}' -f $_.Name, $_.State, $_.DisplayName }
+exit 1
+"""
+
+
+# performance
+SCRIPT_TOP_PROCESSES = r"""
+'== Memory (working set) =='
+Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 12 | ForEach-Object { '{0,10:N0} MB  {1}' -f ($_.WorkingSet64 / 1MB), $_.ProcessName }
+'== CPU time since start =='
+Get-Process | Where-Object CPU | Sort-Object CPU -Descending | Select-Object -First 12 | ForEach-Object { '{0,10:N0} s   {1}' -f $_.CPU, $_.ProcessName }
+"""
+USB_SUSPEND = ("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226")
+
+
+def battery_report(ctx) -> Esito:
+    percorso = os.path.join(os.path.expandvars("%PUBLIC%"), "Documents", "wmm-battery-report.html")
+    esito = ctx.comando(["powercfg", "/batteryreport", "/output", percorso])
+    if esito.stato is Stato.OK:
+        esito.nota = f"report saved to {percorso}"
+    elif esito.stato is not Stato.ANTEPRIMA:
+        esito.nota = "no battery found (desktop PC) or the report failed"
+    return esito
+
+
+def usb_suspend_off(ctx) -> Esito:
+    sottogruppo, impostazione = USB_SUSPEND
+    return op.comandi_in_serie(ctx, (["powercfg", "/setacvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, "0"],
+                                     ["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, "0"],
+                                     ["powercfg", "/setactive", "SCHEME_CURRENT"]))
+
+
+def menu_delay(ctx) -> Esito:
+    return _registry_action(ctx, "Registry HKCU\\Control Panel\\Desktop\\MenuShowDelay = 100",
+                            lambda: write_string("HKEY_CURRENT_USER", r"Control Panel\Desktop", "MenuShowDelay", "100"),
+                            "menus open faster; applies at the next sign-in")
+
+
+def startup_delay_off(ctx) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize"
+    return _registry_action(ctx, f"Registry HKCU\\{chiave}\\StartupDelayInMSec = 0",
+                            lambda: write_dword("HKEY_CURRENT_USER", chiave, "StartupDelayInMSec", 0), "startup programs no longer wait after sign-in")
+
+
+def game_mode_on(ctx) -> Esito:
+    chiave = r"Software\Microsoft\GameBar"
+    return _registry_action(ctx, f"Registry HKCU\\{chiave}\\AutoGameModeEnabled = 1",
+                            lambda: write_dword("HKEY_CURRENT_USER", chiave, "AutoGameModeEnabled", 1), "Game Mode on")
+
+
+# storage
+SYSTEM_FILES = ("pagefile.sys", "swapfile.sys", "hiberfil.sys")
+
+
+def system_files_report(ctx) -> Esito:
+    radice = os.environ.get("SystemDrive", "C:") + "\\"
+    totale = 0
+    for nome in SYSTEM_FILES:
+        try:
+            peso = os.stat(os.path.join(radice, nome)).st_size
+        except OSError:
+            ctx.scrivi(f"  {'absent':>10}  {nome}")
+            continue
+        totale += peso
+        ctx.scrivi(f"  {op.dimensione(peso):>10}  {nome}")
+    return Esito(Stato.OK, f"page, swap and hibernation files: {op.dimensione(totale)}")
+
+
+def downloads_report(ctx, giorni: int = 90, cartella: Optional[str] = None) -> Esito:
+    """Read-only: size of Downloads and the largest files nobody touched for `giorni` days."""
+    import time
+    cartella = cartella or os.path.join(os.path.expanduser("~"), "Downloads")
+    if not os.path.isdir(cartella):
+        return Esito(Stato.OK, "there is no Downloads folder")
+    limite = time.time() - giorni * 86400
+    tutti = list(_files(cartella, None))
+    vecchi = list(_files(cartella, None, limite))
+    for percorso, peso in sorted(vecchi, key=lambda x: -x[1])[:20]:
+        ctx.scrivi(f"  {op.dimensione(peso):>10}  {os.path.relpath(percorso, cartella)}")
+    return Esito(Stato.OK, f"{op.dimensione(sum(p for _, p in tutti))} in Downloads, "
+                           f"{op.dimensione(sum(p for _, p in vecchi))} older than {giorni} days")
+
+
+def recycle_report(ctx) -> Esito:
+    return report(ctx, "$b = (New-Object -ComObject Shell.Application).Namespace(10); $n = @($b.Items()).Count; "
+                       "$t = ($b.Items() | Measure-Object -Property Size -Sum).Sum; '{0} items, {1:N1} MB in the Recycle Bin' -f $n, ($t / 1MB)")
+
+
+# network
+SCRIPT_CONNECTIVITY = r"""
+$bad = 0
+foreach ($t in @(@('1.1.1.1', 53), @('8.8.8.8', 53), @('www.microsoft.com', 443), @('login.microsoftonline.com', 443))) {
+  $r = Test-NetConnection -ComputerName $t[0] -Port $t[1] -WarningAction SilentlyContinue
+  if (-not $r.TcpTestSucceeded) { $bad++ }
+  '{0,-28} port {1,-4} {2}' -f $t[0], $t[1], $(if ($r.TcpTestSucceeded) { 'OK' } else { 'FAILED' })
+}
+if ($bad) { exit 1 }
+"""
+
+SCRIPT_OPEN_PORTS = r"""
+Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Sort-Object LocalPort -Unique | ForEach-Object {
+  $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+  '{0,-6} {1,-16} {2}' -f $_.LocalPort, $_.LocalAddress, $(if ($p) { $p.ProcessName } else { "pid $($_.OwningProcess)" })
+}
+"""
+
+
+def wlan_report(ctx) -> Esito:
+    esito = ctx.comando(["netsh", "wlan", "show", "wlanreport"])
+    if esito.stato is Stato.OK:
+        esito.nota = r"report saved to C:\ProgramData\Microsoft\Windows\WlanReport\wlan-report-latest.html"
+    return esito
+
+
+# startup
+SCRIPT_SCHEDULED_TASKS = r"""
+Get-ScheduledTask | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft\*' } | Sort-Object TaskName | ForEach-Object {
+  '{0,-44} {1,-8} {2}' -f $_.TaskName, $_.State, (($_.Actions | Select-Object -First 1).Execute)
+}
+"""
+
+SCRIPT_BOOT_TIME = r"""
+$e = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 10 -ErrorAction SilentlyContinue)
+if (-not $e) { 'Boot performance events are not available (run as administrator).'; exit 0 }
+$e | ForEach-Object { $x = [xml]$_.ToXml(); $ms = ($x.Event.EventData.Data | Where-Object Name -eq 'BootTime').'#text'
+  '{0:yyyy-MM-dd HH:mm}  boot {1,6:N1} s' -f $_.TimeCreated, ([double]$ms / 1000) }
+"""
+
+SCRIPT_THIRD_PARTY_SERVICES = r"""
+Get-CimInstance Win32_Service | Where-Object { $_.StartMode -eq 'Auto' -and $_.PathName -and $_.PathName -notmatch '\\Windows\\' } |
+  Sort-Object DisplayName | ForEach-Object { '{0,-40} {1,-8} {2}' -f $_.DisplayName, $_.State, $_.PathName }
+"""
+
+SCRIPT_INSTALLED_APPS = r"""
+$k = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+$a = @(Get-ItemProperty $k -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -and -not $_.SystemComponent } | Sort-Object DisplayName -Unique)
+"$($a.Count) applications installed"
+$a | ForEach-Object { '{0,-56} {1,-18} {2}' -f $_.DisplayName, $_.DisplayVersion, $_.InstallDate }
+"""
+
+
+def edge_boost_off(ctx) -> Esito:
+    chiave = r"SOFTWARE\Policies\Microsoft\Edge"
+
+    def scrivi():
+        write_dword("HKEY_LOCAL_MACHINE", chiave, "StartupBoostEnabled", 0)
+        write_dword("HKEY_LOCAL_MACHINE", chiave, "BackgroundModeEnabled", 0)
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}: StartupBoostEnabled = 0, BackgroundModeEnabled = 0", scrivi,
+                            "Edge no longer preloads at sign-in or runs after it is closed")
+
+
+# security
+SCRIPT_TPM = r"""
+$t = Get-Tpm -ErrorAction SilentlyContinue
+if (-not $t) { 'TPM state is not readable (run as administrator).'; exit 0 }
+"Present: $($t.TpmPresent)  Ready: $($t.TpmReady)  Enabled: $($t.TpmEnabled)  Activated: $($t.TpmActivated)"
+$v = (Get-CimInstance -Namespace root\cimv2\security\microsofttpm -ClassName Win32_Tpm -ErrorAction SilentlyContinue).SpecVersion
+if ($v) { "Specification: $v" }
+if (-not $t.TpmPresent -or -not $t.TpmReady) { exit 1 }
+"""
+
+SCRIPT_SECURE_BOOT = r"""
+try { $s = Confirm-SecureBootUEFI -ErrorAction Stop } catch { 'Secure Boot is not supported (legacy BIOS) or not readable.'; exit 1 }
+if ($s) { 'Secure Boot is on.' } else { 'Secure Boot is OFF.'; exit 1 }
+"""
+
+SCRIPT_LOCAL_ADMINS = r"""
+$m = @(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue)
+"$($m.Count) member(s) of the local Administrators group:"
+$m | ForEach-Object { '  {0,-40} {1,-8} {2}' -f $_.Name, $_.ObjectClass, $_.PrincipalSource }
+"""
+
+SCRIPT_DEFENDER_STATUS = r"""
+$s = Get-MpComputerStatus -ErrorAction SilentlyContinue
+if (-not $s) { 'Microsoft Defender is not active (another antivirus may be installed).'; exit 1 }
+"Real-time protection: $($s.RealTimeProtectionEnabled)"
+"Tamper protection:    $($s.IsTamperProtected)"
+"Signatures:           $($s.AntivirusSignatureVersion) ($($s.AntivirusSignatureAge) days old)"
+"Engine / platform:    $($s.AMEngineVersion) / $($s.AMProductVersion)"
+"Last quick scan:      $($s.QuickScanEndTime)"
+"Last full scan:       $($s.FullScanEndTime)"
+if (-not $s.RealTimeProtectionEnabled -or $s.AntivirusSignatureAge -gt 7) { exit 1 }
+"""
+
+
+# updates
+SCRIPT_UPDATE_HISTORY = r"""
+Get-HotFix | Sort-Object { $_.InstalledOn -as [datetime] } -Descending | Select-Object -First 20 | ForEach-Object {
+  '{0,-11} {1,-16} {2}' -f $_.HotFixID, $_.Description, $(if ($_.InstalledOn) { ([datetime]$_.InstalledOn).ToString('yyyy-MM-dd') } else { '' })
+}
+"""
+
+SCRIPT_PROBLEM_DEVICES = r"""
+$d = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'OK' -and $_.Status -ne 'Unknown' })
+if (-not $d) { 'Every device works.'; exit 0 }
+$d | ForEach-Object { '{0,-8} {1,-14} {2}' -f $_.Status, $_.Class, $_.FriendlyName }
+exit 1
+"""
+
+REBOOT_KEYS = (
+    ("HKEY_LOCAL_MACHINE", r"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending", "Windows servicing"),
+    ("HKEY_LOCAL_MACHINE", r"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired", "Windows Update"),
+)
+
+
+def key_exists(root: str, key: str) -> bool:
+    import winreg
+    try:
+        winreg.CloseKey(winreg.OpenKey(getattr(winreg, root), key))
+        return True
+    except OSError:
+        return False
+
+
+def pending_file_renames() -> bool:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager") as handle:
+            return bool(winreg.QueryValueEx(handle, "PendingFileRenameOperations")[0])
+    except OSError:
+        return False
+
+
+def pending_reboot(ctx) -> Esito:
+    """Read-only: the places where Windows records a restart it is waiting for."""
+    motivi = [nome for radice, chiave, nome in REBOOT_KEYS if key_exists(radice, chiave)]
+    if pending_file_renames():
+        motivi.append("file rename operations")
+    for motivo in motivi:
+        ctx.scrivi(f"  Pending: {motivo}")
+    if motivi:
+        return Esito(Stato.AVVISO, "a restart is pending: " + ", ".join(motivi))
+    return Esito(Stato.OK, "no restart pending")

@@ -38,6 +38,8 @@
             window.dispatchEvent(new CustomEvent("wmm-unauthorized"));
           } else if (response.status === 409 && /administrator rights/i.test(message)) {
             window.dispatchEvent(new CustomEvent("wmm-need-admin"));
+          } else if (data && data.error && response.status >= 404) {
+            message += " (HTTP " + response.status + ")";  // helps support tell "not found" from an agent error
           }
           var error = new Error(message);
           error.status = response.status;
