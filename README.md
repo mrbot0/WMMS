@@ -69,7 +69,7 @@ python wmm.py --preview
 | **Health** | System Integrity · Security · Updates & Drivers · Network |
 | **Operations** | Actions (whole catalog: details, sort, multi-select) · Activity (runs and scans in progress, step by step, run again) · Playbooks · Schedules · History · Reports |
 | **Support** | User guide: getting started, searchable FAQ, risk levels, shortcuts, diagnostics to copy, areas at a glance |
-| **Settings** | Start-up (restore point at every start, start with Windows), report branding, theme, density, dashboard sections, export / import / reset of console preferences, health check, installation status |
+| **Settings** | Start-up (restore point at every start, start with Windows), report branding, theme, animations (fun / subtle / off), density, dashboard sections, export / import / reset of console preferences, health check, installation status |
 
 Every area page shows a **score from 0 to 100**, charts and descriptive data, the **recommended
 improvements** with *Apply* and *Schedule* buttons and a *Fix recommended* button that applies them all,
@@ -84,6 +84,11 @@ shortcuts (**?** for the list, e.g. `G` then `D` for the dashboard, **Shift+S** 
 collapse all cards), light/dark theme, collapsible cards, sortable and searchable tables with CSV
 export, notification center, status bar with agent health (click the machine ID to copy it). The
 console reopens the last page used and remembers the scroll position of each page.
+
+Animations have three levels in Settings › Appearance: **Fun** (default: pages and cards arrive one after
+the other, hover lifts and wiggles, click ripples, bouncing dialogs and toasts, confetti when a run, a full
+scan or the visit checklist completes), **Subtle** (short fades only, the default when Windows animation
+effects are off) and **Off** (only spinners and progress bars move).
 
 ## Areas and actions
 

@@ -132,6 +132,7 @@
           var star = e.target.closest("[data-star]");
           if (!star) return;
           var on = toggleFavorite(star.closest("[data-id]").getAttribute("data-id"));
+          if (on) FX.burst(star);
           UI.toast(on ? "Added to favorites: shown on the dashboard." : "Removed from favorites.", "ok");
           draw();
         });

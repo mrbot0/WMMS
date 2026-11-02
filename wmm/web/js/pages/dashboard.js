@@ -217,7 +217,8 @@
             var n = VISIT.filter(function (x) { return v.done[x[0]]; }).length;
             el.querySelector(".visit-progress .progress > div").style.width = Math.round(100 * n / VISIT.length) + "%";
             el.querySelector(".visit-progress .muted").textContent = n + " of " + VISIT.length;
-            if (n === VISIT.length) UI.toast("Visit checklist completed.", "ok");
+            if (box.checked) FX.burst(box);
+            if (n === VISIT.length) { UI.toast("Visit checklist completed.", "ok"); FX.confetti(); }
           });
         });
         var reset = el.querySelector("#visit-reset");

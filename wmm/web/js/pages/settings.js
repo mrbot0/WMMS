@@ -40,7 +40,11 @@
             '<div class="page-actions"><button class="btn btn-primary" type="submit">' + UI.icon("check") + "Save</button></div></form>") +
           UI.card("Appearance", '<div class="form"><label>Theme<span class="btn-group" role="group">' + ["system", "light", "dark"].map(function (t) {
             return '<button type="button" class="btn btn-sm' + (theme === t ? " active" : "") + '" data-theme="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + "</button>";
-          }).join("") + '</span></label><label>Accent color<span style="display:flex;gap:8px">' + [["blue", "#0F6CBD"], ["teal", "#0E8A7B"], ["violet", "#6D4AD6"], ["orange", "#C2570C"], ["graphite", "#3E4C5E"]].map(function (c) {
+          }).join("") + '</span></label><label>Animations<span class="btn-group" role="group">' + [["fun", "Fun"], ["subtle", "Subtle"], ["off", "Off"]].map(function (f) {
+            return '<button type="button" class="btn btn-sm' + (FX.level() === f[0] ? " active" : "") + '" data-fx-level="' + f[0] + '">' + f[1] + "</button>";
+          }).join("") + '</span><span class="hint">Fun: page entrances, hover effects and confetti when work completes. Subtle: short fades only. ' +
+            "Off: nothing moves except spinners and progress bars.</span></label>" +
+          '<label>Accent color<span style="display:flex;gap:8px">' + [["blue", "#0F6CBD"], ["teal", "#0E8A7B"], ["violet", "#6D4AD6"], ["orange", "#C2570C"], ["graphite", "#3E4C5E"]].map(function (c) {
             return '<button type="button" class="swatch-pick' + ((Components.store("accent") || "blue") === c[0] ? " active" : "") + '" data-accent="' + c[0] + '" title="' + c[0] + '" style="background:' + c[1] + '"></button>';
           }).join("") + '</span></label><label>Text size<span class="btn-group" role="group">' + [["small", "Small"], ["normal", "Normal"], ["large", "Large"]].map(function (f) {
             return '<button type="button" class="btn btn-sm' + ((Components.store("fontSize") || "normal") === f[0] ? " active" : "") + '" data-font="' + f[0] + '">' + f[1] + "</button>";
@@ -88,6 +92,14 @@
           e.currentTarget.disabled = true;
           e.currentTarget.classList.add("busy");
           API.get("/health?refresh=1").then(function (h) { App.state.health = h; App.render(); }, function (err) { UI.toast(err.message, "error"); });
+        });
+        el.querySelectorAll("[data-fx-level]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var value = btn.getAttribute("data-fx-level");
+            FX.set(value);
+            el.querySelectorAll("[data-fx-level]").forEach(function (b) { b.classList.toggle("active", b === btn); });
+            UI.toast(value === "fun" ? "Animations: fun. Enjoy!" : value === "subtle" ? "Animations: subtle." : "Animations are off.", "ok");
+          });
         });
         el.querySelectorAll("[data-density]").forEach(function (btn) {
           btn.addEventListener("click", function () {

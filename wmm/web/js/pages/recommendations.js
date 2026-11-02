@@ -96,7 +96,8 @@
           if (i >= 0) keys.splice(i, 1); else keys.push(key);
           Components.store("recDismissed", keys);
           UI.toast(i >= 0 ? "Improvement shown again." : "Improvement hidden. Tick Show dismissed to see it.", "info");
-          App.render();
+          // At the fun level the item slides away before the list is drawn again.
+          if (FX.fun() && i < 0) { b.closest(".rec").classList.add("fx-out"); setTimeout(App.render, 300); } else App.render();
         });
         el.querySelectorAll("[data-f]").forEach(function (input) {
           input.addEventListener(input.tagName === "SELECT" || input.type === "checkbox" ? "change" : "input", function () {

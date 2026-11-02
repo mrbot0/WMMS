@@ -8,6 +8,9 @@
   <script>
     // Apply the saved theme before the first paint.
     try { var t = JSON.parse(localStorage.getItem("wmm.theme") || "null"); if (t && t !== "system") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+    // Animation level (fx.js keeps it up to date): fun, subtle or off.
+    try { var f = JSON.parse(localStorage.getItem("wmm.animations") || "null");
+      document.documentElement.setAttribute("data-fx", f || (matchMedia("(prefers-reduced-motion: reduce)").matches ? "subtle" : "fun")); } catch (e) {}
   </script>
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
@@ -86,6 +89,7 @@
   <script src="/static/js/api.js"></script>
   <script src="/static/js/charts.js"></script>
   <script src="/static/js/ui.js"></script>
+  <script src="/static/js/fx.js"></script>
   <script src="/static/js/components.js"></script>
   <script src="/static/js/report.js"></script>
   <script src="/static/js/pages/dashboard.js"></script>

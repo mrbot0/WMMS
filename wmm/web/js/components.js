@@ -172,7 +172,8 @@
   /* ---------- number animation ---------- */
 
   function countUp(root) {
-    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Counting numbers follow the animation level (Settings › Appearance), which also covers reduced motion.
+    var reduce = window.FX ? FX.level() === "off" : window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     Array.prototype.forEach.call(root.querySelectorAll("[data-count]"), function (el) {
       var target = Number(el.getAttribute("data-count"));
       if (!isFinite(target) || reduce) return;

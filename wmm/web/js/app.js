@@ -110,12 +110,14 @@
     // Each page keeps its own scroll position; a refresh of the same page keeps the current one.
     if (state.lastPage && state.lastPage !== name) state.scrollPos[state.lastPage] = scroller.scrollTop;
     var restore = state.lastPage !== name ? state.scrollPos[name] || 0 : scroller.scrollTop;
+    var arriving = state.lastPage !== name;  // refreshes of the same page do not replay the entrance
     state.lastPage = name;
     Components.store("lastPage", name);
     content.innerHTML = Components.skeleton();
     Promise.resolve().then(function () { return page.render(content, App); }).then(function () {
       if (token !== state.rendering) return;
       Components.countUp(content);
+      if (arriving) FX.pageEnter(content);
       scroller.scrollTop = restore;
       if (area >= 0) fixButton(content, name, token);
     }).catch(function (error) {
@@ -235,6 +237,7 @@
           UI.toast((errors ? errors + " action(s) failed." : "Run completed: " + text + ".") + " Details in Activity.", errors ? "error" : "ok");
           Components.notifications.add(errors ? "Run finished with errors" : "Run completed", text, errors ? "error" : "ok");
           desktopNotify(errors ? "Run finished with errors" : "Run completed", text);
+          if (!errors) FX.confetti();
           refreshAreas(areas || areasOf(job.results.map(function (r) { return r.action_id; })));
         }
       }).catch(function (error) {
@@ -334,6 +337,7 @@
     return API.post("/scan").then(function () {
       UI.toast("Scan completed.", "ok");
       Components.notifications.add("Full scan completed", "All areas were scanned.", "ok");
+      FX.confetti({ count: 90 });
       return refreshScores();
     }).catch(function (error) { UI.toast(error.message, "error"); }).then(function () {
       state.scanning = false;
@@ -434,6 +438,12 @@
     toggle("Compact sidebar", "sidebar", function (on) { document.body.classList.toggle("sidebar-collapsed", on); });
     toggle("Desktop notifications", "desktopNotify", function (on) {
       if (on && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    });
+    FX.LEVELS.forEach(function (level) {
+      list.push({ group: "Preferences", title: "Animations: " + level, icon: "sparkle", keywords: "motion effects confetti", run: function () {
+        FX.set(level);
+        UI.toast("Animations: " + level + ".", "ok");
+      } });
     });
     list.push({ group: "Preferences", title: "Compact density", icon: "settings", run: function () {
       Components.density.set(Components.density.get() === "compact" ? "comfortable" : "compact");
