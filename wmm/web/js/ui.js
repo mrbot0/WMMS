@@ -79,7 +79,10 @@
     gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.4" fill="currentColor"/>'
   };
   ICONS.power = '<path d="M12 3v9M6.4 6.6a8 8 0 1 0 11.2 0"/>';
-  ICONS.toolbox = '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/>';
+  ICONS.events = '<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5M8 17h3"/><circle cx="17" cy="16" r="2.5" fill="currentColor" stroke="none"/>';
+  ICONS.processes = '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-4 3 3 4-5M8 21h8"/>';
+  ICONS.registry = '<path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4z"/><path d="M7 11v4M17 11v3h-7"/>';
+  ICONS.toolbox ='<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/>';
   ICONS.upload ='<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>';
   ICONS.support ='<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5"/>';
   ICONS.actions ='<circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/>';
@@ -298,6 +301,23 @@
     return promise;
   }
 
+  /* Why schedules are disabled on this copy, in plain words, with the automatic fix. */
+  function installCallout(inst) {
+    if (!inst || inst.protected) return "";
+    var cause = !inst.python_protected && inst.program_protected
+      ? "The program is protected, but the console runs with a Python that standard users can change (<code>" + esc(inst.python) + "</code>). " +
+        "Scheduled actions run as SYSTEM, so a per-user Python, such as the Microsoft Store one, is not safe for them and may not start at all."
+      : !inst.program_protected && inst.python_protected
+        ? "The program runs from a folder that standard users can change (<code>" + esc(inst.writable[0] || "") + "</code>). Scheduled actions run as SYSTEM, so it must live in Program Files."
+        : "Both the program folder and the Python it runs with can be changed by standard users. Scheduled actions run as SYSTEM, so neither is safe for them.";
+    var fix = "<strong>Fix automatically</strong> uses a Python installed for all users, or installs one (winget or the signed python.org installer), " +
+      "moves the program to Program Files if needed, registers the schedules again and restarts the console with it.";
+    return '<div class="callout callout-warning install-callout">' + icon("shield") + "<div><strong>Schedules are disabled on this copy.</strong> " + cause +
+      '<p class="small" style="margin:8px 0 10px">' + fix + "</p>" +
+      (inst.can_fix ? button("Fix automatically", "data-fix-install", "btn-primary btn-sm", "bolt")
+        : '<span class="muted small">Restart the console as administrator to fix it.</span>') + "</div></div>";
+  }
+
   function loading(text) {
     return '<div class="loading"><span class="spinner"></span>' + esc(text || "Loading…") + "</div>";
   }
@@ -383,7 +403,7 @@
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
-    kindBadge: kindBadge, toolCard: toolCard,
+    kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL

@@ -845,6 +845,77 @@ body.font-small { zoom: .92; } body.font-large { zoom: 1.08; }
 .whatsnew-more ul { margin: 8px 0 0; padding-left: 18px; color: var(--text-2); max-height: 260px; overflow: auto; }
 .job-results li .btn { margin-left: auto; }
 
+/* ---------- 1.2: Event Viewer, Task Manager, Registry ---------- */
+.ev-filters { align-items: flex-end; }
+.ev-levels { border: 0; padding: 0; margin: 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ev-levels legend { font-size: 12px; color: var(--text-2); padding: 0; margin-bottom: 4px; float: left; width: 100%; }
+.ev-msg { text-align: left; max-width: 640px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-level.ev-critical { background: var(--error); color: #fff; }
+.nowrap { white-space: nowrap; }
+.live-toggle { margin: 0 4px; }
+
+.tm-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.tm-shield { display: inline-grid; color: var(--accent); }
+.tm-shield .icon { width: 14px; height: 14px; }
+.tm-meter { position: relative; display: inline-block; min-width: 74px; padding: 1px 6px; border-radius: 5px; font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, var(--accent-soft) var(--v), transparent var(--v)); }
+.tm-meter.mem { background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 18%, transparent) var(--v), transparent var(--v)); }
+.tm-clip { display: inline-block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.tm-actions { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.tm-actions select { padding: 3px 6px; font-size: 12px; }
+.tm-cols { position: relative; }
+.tm-cols > summary { list-style: none; cursor: pointer; }
+.tm-cols > summary::-webkit-details-marker { display: none; }
+.tm-cols > div { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow-lg); padding: 10px 14px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 4px 16px; }
+.tm-selbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 10px; border-radius: 10px; background: var(--accent-soft); }
+.tm-selbar > span { font-weight: 600; margin-right: auto; }
+
+.rg-address { display: flex; gap: 6px; align-items: center; margin-bottom: 14px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.rg-address input { flex: 1; min-width: 0; border: 0; background: transparent; font: 13px var(--mono); color: var(--text); padding: 6px; }
+.rg-address input:focus { outline: none; }
+.rg-computer { color: var(--text-3); display: grid; }
+.rg-star.on { color: #E3A008; }
+.rg-layout { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.rg-side { padding: 12px 0; max-height: calc(100vh - 260px); overflow: auto; position: sticky; top: 0; }
+.rg-favs { padding: 0 14px 12px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.rg-fav { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text-2); padding: 5px 8px; border-radius: 6px; font: 12.5px var(--font); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rg-fav:hover { background: var(--surface-2); color: var(--text); }
+.rg-tree, .rg-tree ul { list-style: none; margin: 0; padding: 0; }
+.rg-tree ul { padding-left: 14px; }
+.rg-row { display: flex; align-items: center; gap: 2px; padding: 0 8px; }
+.rg-row.active .rg-key { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.rg-twist { width: 20px; height: 22px; border: 0; background: none; color: var(--text-3); cursor: pointer; padding: 0; flex: none; }
+.rg-key { display: flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--text); padding: 3px 6px; border-radius: 6px; font: 12.5px var(--font);
+  cursor: pointer; min-width: 0; text-align: left; }
+.rg-key span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rg-key .icon { width: 14px; height: 14px; color: #D29C1F; flex: none; }
+.rg-key:hover { background: var(--surface-2); }
+.rg-empty { padding: 2px 0 2px 34px; }
+.rg-main .card-body, .rg-main > div { padding: 16px var(--pad); }
+.rg-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.rg-crumbs { flex: 1 1 100%; font: 13px var(--mono); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.rg-sep { color: var(--text-3); margin: 0 4px; }
+.rg-meta { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.rg-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.rg-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.rg-search .dt-search { flex: 1; }
+.rg-results ul { margin: 8px 0 0; padding-left: 16px; max-height: 260px; overflow: auto; font-size: 12.5px; }
+.rg-type { display: inline-grid; place-items: center; width: 22px; height: 18px; margin-right: 8px; border-radius: 4px; background: var(--surface-3); color: var(--text-2);
+  font: 700 10px var(--mono); }
+#rg-values td:nth-child(-n+2) { white-space: nowrap; }
+.rg-data { display: inline-block; max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.rg-subkeys { display: flex; flex-wrap: wrap; gap: 6px; }
+.rg-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2);
+  color: var(--text); font: 12px var(--font); cursor: pointer; }
+.rg-chip .icon { width: 13px; height: 13px; color: #D29C1F; }
+.rg-chip:hover { border-color: var(--accent); }
+@media (max-width: 1000px) {
+  .rg-layout { grid-template-columns: minmax(0, 1fr); }
+  .rg-side { position: static; max-height: 320px; }
+}
+
 @media (max-width: 700px) {
   .action-grid { grid-template-columns: minmax(0, 1fr); }
   .tb-bar { flex-direction: column; align-items: stretch; }

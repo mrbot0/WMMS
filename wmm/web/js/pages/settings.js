@@ -58,8 +58,7 @@
             ["Device", esc(info.hostname)], ["Machine ID", '<span class="cell-mono">' + esc(info.machine_id) + "</span>"], ["Version", esc(info.version)],
             ["Mode", info.preview ? "Preview" : info.admin ? "Administrator" : "Read-only"], ["API", '<span class="cell-mono">http://127.0.0.1/api/v1</span>'],
             ["Installation", inst.protected ? '<span class="badge badge-status-ok">Protected</span>' : '<span class="badge badge-status-warning">Not protected</span>']
-          ]) + (inst.protected ? "" : '<div class="callout callout-warning">' + UI.icon("shield") + "<div>Schedules need a protected installation. Run once as administrator:" +
-            '<pre class="log" style="min-height:0;margin-top:8px">' + esc(inst.command || "") + "</pre></div></div>")) +
+          ]) + UI.installCallout(inst)) +
           UI.card("Keyboard shortcuts", '<p class="muted" style="margin-top:0">Press <span class="kbd">?</span> anywhere to see all shortcuts, or <span class="kbd">Ctrl K</span> to search pages and actions.</p>' +
             UI.button("Show shortcuts", 'id="show-keys"', "", "keyboard")) +
           UI.card("Dashboard sections", '<p class="muted" style="margin-top:0">Choose what the dashboard shows. The overall health and quick actions are always visible.</p><div class="form">' +

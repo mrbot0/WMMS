@@ -99,9 +99,9 @@ def install(target: Optional[str]) -> int:
         return 1
     print("Program folder protected: only administrators can change it.")
     if python:
-        print(f"Warning: Python at {sys.executable} can be changed by standard users.")
-        print("Install Python for all users (python.org installer > Customize > Install Python for all users)")
-        print("and start the console with that Python, otherwise schedules stay disabled.")
+        print(f"Warning: Python at {sys.executable} can be changed by standard users, so schedules stay disabled.")
+        print("Fix it from the console: Settings > This agent > Fix automatically. It installs Python for all users")
+        print("when needed and makes every start use it.")
     print(f"Start the console from: {destinazione / 'start_wmm.bat'}")
     print("Schedules created before the installation show 'Program moved': press Resync on each of them.")
     return 0
@@ -160,6 +160,12 @@ def main(argomenti: Optional[Sequence[str]] = None) -> int:
     os.chdir(ROOT)
     if opzioni.run_schedule is not None:
         return run_schedule(opzioni.run_schedule)
+    # The protected Python recorded by "Fix automatically" runs the console, whatever started it.
+    from wmm import runtime
+    preferito = runtime.configured(ROOT)
+    if preferito and not runtime.same_file(preferito, sys.executable) and not os.environ.get(runtime.HANDOVER_ENV):
+        inoltrati = list(argomenti) if argomenti is not None else sys.argv[1:]
+        return subprocess.call([preferito, str(Path(__file__).resolve()), *inoltrati], env=dict(os.environ, **{runtime.HANDOVER_ENV: "1"}))
     if opzioni.wait_port:
         wait_for_port(opzioni.port)
     if opzioni.install:
