@@ -298,6 +298,23 @@
     return promise;
   }
 
+  /* Why schedules are disabled on this copy, in plain words, with the automatic fix. */
+  function installCallout(inst) {
+    if (!inst || inst.protected) return "";
+    var cause = !inst.python_protected && inst.program_protected
+      ? "The program is protected, but the console runs with a Python that standard users can change (<code>" + esc(inst.python) + "</code>). " +
+        "Scheduled actions run as SYSTEM, so a per-user Python, such as the Microsoft Store one, is not safe for them and may not start at all."
+      : !inst.program_protected && inst.python_protected
+        ? "The program runs from a folder that standard users can change (<code>" + esc(inst.writable[0] || "") + "</code>). Scheduled actions run as SYSTEM, so it must live in Program Files."
+        : "Both the program folder and the Python it runs with can be changed by standard users. Scheduled actions run as SYSTEM, so neither is safe for them.";
+    var fix = "<strong>Fix automatically</strong> uses a Python installed for all users, or installs one (winget or the signed python.org installer), " +
+      "moves the program to Program Files if needed, registers the schedules again and restarts the console with it.";
+    return '<div class="callout callout-warning install-callout">' + icon("shield") + "<div><strong>Schedules are disabled on this copy.</strong> " + cause +
+      '<p class="small" style="margin:8px 0 10px">' + fix + "</p>" +
+      (inst.can_fix ? button("Fix automatically", "data-fix-install", "btn-primary btn-sm", "bolt")
+        : '<span class="muted small">Restart the console as administrator to fix it.</span>') + "</div></div>";
+  }
+
   function loading(text) {
     return '<div class="loading"><span class="spinner"></span>' + esc(text || "Loading…") + "</div>";
   }
@@ -383,7 +400,7 @@
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
-    kindBadge: kindBadge, toolCard: toolCard,
+    kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL

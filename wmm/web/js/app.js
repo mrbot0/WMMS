@@ -9,7 +9,10 @@
     ["Operations", [["toolbox", "Toolbox"], ["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
     ["", [["support", "Support"], ["settings", "Settings"]]]
   ];
-  var PSEUDO_ACTIONS = { "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" } };
+  var PSEUDO_ACTIONS = {
+    "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" },
+    "integrity.protect_install": { id: "integrity.protect_install", title: "Installation protected for schedules", area: "integrity", risk: "moderate" }
+  };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };
 
@@ -459,6 +462,43 @@
     });
   }
   document.getElementById("btn-power").addEventListener("click", powerOff);
+
+  /* "Fix automatically": protected Python (installed when missing), program in Program Files, schedules, restart. */
+  function fixInstallation() {
+    return UI.confirm("Fix the installation for schedules",
+      "The console looks for a Python installed for all users and installs one when there is none (a few minutes; it needs the internet). " +
+      "Then it moves the program to Program Files if needed, registers the schedules again and restarts with the protected Python in a new tab.",
+      { ok: "Fix automatically" }).then(function (ok) {
+      if (!ok) return;
+      return API.post("/agent/protect").then(function () {
+        var shown = UI.modal("Fixing the installation", '<div class="job-status"><span class="spinner"></span><strong data-step>Starting…</strong></div>' +
+          '<pre class="log" data-plog style="min-height:180px;max-height:46vh;margin-top:10px"></pre>', [{ label: "Hide", cls: "btn-ghost" }]);
+        var box = document.querySelector("#modal-root .modal-backdrop:last-child");
+        var timer = setInterval(function () {
+          API.get("/agent/protect").then(function (s) {
+            if (box) {
+              box.querySelector("[data-step]").textContent = s.active ? s.step : s.status === "ok" ? "Done" : "Failed";
+              var log = box.querySelector("[data-plog]");
+              log.textContent = s.log.join("\n");
+              log.scrollTop = log.scrollHeight;
+            }
+            if (s.active) return;
+            clearInterval(timer);
+            if (s.status === "ok") {
+              state.stopped = true;
+              UI.toast("Fixed. The console restarts with the protected Python and opens in a new tab: you can close this one.", "ok");
+              Components.notifications.add("Installation protected", s.note || "", "ok");
+            } else {
+              UI.toast("The installation could not be fixed: " + (s.note || "see the log") + ".", "error");
+              if (box) box.querySelector(".spinner").remove();
+            }
+          }, function () { /* the agent is restarting */ });
+        }, 1500);
+        return shown;
+      });
+    }).catch(function (e) { UI.toast(e.message, "error"); });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-fix-install]")) fixInstallation(); });
 
   var adminOpen = false;
   function needAdmin() {

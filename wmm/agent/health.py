@@ -126,7 +126,8 @@ def check_installation(python: str, script: str) -> List[dict]:
                ("Program folder writable by standard users: schedules are disabled. Start from start_wmm.bat to install it in Program Files."
                 if programma else "Program folder can only be changed by administrators")),
         _check("python_protected", "Python for all users", "warning" if interprete else "ok",
-               (f"{python} can be changed by standard users: schedules are disabled. Install Python for all users."
+               (f"{python} can be changed by standard users: schedules are disabled. "
+                "Use Settings > This agent > Fix automatically (it installs Python for all users when needed)."
                 if interprete else "Python can only be changed by administrators")),
     ]
 

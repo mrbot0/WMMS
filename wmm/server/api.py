@@ -88,6 +88,8 @@ class Agent:
         self.monitor = live.LiveMonitor()
         self.tasks = TaskRegistry()
         self.started = time.time()
+        self._protect_lock = threading.Lock()
+        self._protect: dict = {"active": False, "status": "idle", "log": []}
 
     # ---------- data ----------
 
@@ -403,11 +405,98 @@ class Agent:
         """Whether SYSTEM tasks may run this copy of the program (cached: reading ACLs takes a second)."""
         if self._installation is None:
             aperti = scheduler.unprotected_paths(scheduler.protected_targets(self.python, self.script))
+            interprete = {os.path.normcase(p) for p in scheduler.python_paths(self.python)}
+            python_aperto = [p for p in aperti if os.path.normcase(p) in interprete]
             self._installation = {
                 "protected": not aperti, "writable": aperti[:5],
+                # Which half is the problem: the program folder, the Python it runs with, or both.
+                "program_protected": len(python_aperto) == len(aperti), "python_protected": not python_aperto,
+                "python": self.python, "script": self.script,
                 "command": f'"{self.python}" "{self.script}" --install',
+                "can_fix": self.admin and not self.preview,
             }
         return self._installation
+
+    # ---------- protected installation fix ----------
+
+    def protection_status(self) -> dict:
+        with self._protect_lock:
+            return dict(self._protect, log=list(self._protect.get("log", [])))
+
+    def protect(self) -> dict:
+        """Makes schedules possible on this PC: a Python installed for all users (installed when missing),
+        the program in Program Files, schedules registered again, then a restart with that Python."""
+        if self.preview or not self.admin:
+            raise ApiError(409, "Only a console running as administrator can fix the installation.")
+        if self.jobs.busy:
+            raise ApiError(409, "Wait for the current run to finish before fixing the installation.")
+        with self._protect_lock:
+            if self._protect.get("active"):
+                raise ApiError(409, "The installation is already being fixed.")
+            self._protect = {"active": True, "status": "running", "log": [], "step": "Looking for a Python installed for all users"}
+        threading.Thread(target=self._protect_worker, name="wmm-protect", daemon=True).start()
+        return self.protection_status()
+
+    def _protect_log(self, riga: str) -> None:
+        with self._protect_lock:
+            self._protect["log"].append(riga)
+
+    def _protect_step(self, task_id: str, testo: str) -> None:
+        with self._protect_lock:
+            self._protect["step"] = testo
+        self._protect_log(f"== {testo} ==")
+        self.tasks.step(task_id, testo)
+
+    def _protect_worker(self) -> None:
+        from wmm import installer, runtime
+        task_id = self.tasks.start("fix", "Protect the installation for schedules", 4)
+        run_id = self.store.open_run(self.machine_id, "integrity.protect_install", "manual")
+        stato, nota = "error", ""
+        try:
+            self._protect_step(task_id, "Python installed for all users")
+            python = runtime.ensure_protected_python(scheduler.unprotected_paths, self._protect_log)
+            if not python:
+                raise RuntimeError("no Python installed for all users could be found or installed (winget and python.org both failed)")
+            self._protect_step(task_id, "Program in Program Files")
+            radice, script = ROOT, self.script
+            if scheduler.unprotected_paths(scheduler.program_paths(script)):
+                radice = installer.default_target(os.environ)
+                self._protect_log(f"Copying the program to {radice}")
+                installer.copy_program(ROOT, radice)
+                installer.harden(radice)
+                script = str(radice / "wmm.py")
+                aperti = scheduler.unprotected_paths(scheduler.program_paths(script))
+                if aperti:
+                    raise RuntimeError("the program folder is still writable by standard users: " + ", ".join(aperti[:3]))
+            self._protect_log(f"Program protected: {script}")
+            runtime.record(radice, python)
+            self._protect_log(f"Every start now uses {python} ({runtime.PYTHON_FILE} next to the program)")
+            self._protect_step(task_id, "Schedules registered with the protected Python")
+            for voce in self.store.schedules():
+                try:
+                    scheduler.register(voce, python, script)
+                    self._protect_log(f"  Schedule #{voce['id']} ({voce['action_id']}) registered again")
+                except Exception as errore:  # one bad task must not block the others
+                    self._protect_log(f"  Schedule #{voce['id']}: {errore}")
+            self._protect_step(task_id, "Restarting the console with the protected Python")
+            stato, nota = "ok", f"Python {python}; program {script}"
+            ambiente = dict(os.environ, **{runtime.HANDOVER_ENV: "1"})
+            subprocess.Popen([python, script, "--port", str(self.port), "--wait-port"], cwd=str(radice), env=ambiente,
+                             creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+            with self._protect_lock:
+                self._protect["restarting"] = True
+        except Exception as errore:
+            nota = str(errore)
+            self._protect_log(f"Error: {errore}")
+        finally:
+            with self._protect_lock:
+                self._protect.update(active=False, status=stato, note=nota)
+                log = "\n".join(self._protect["log"])
+            self.tasks.finish(task_id, stato)
+            self.store.close_run(run_id, stato, nota, 0, log)
+            self._installation = None
+        if stato == "ok":
+            self._schedule_shutdown()
 
     def schedules(self) -> List[dict]:
         elenco = self.store.schedules()
@@ -755,6 +844,12 @@ class Handler(BaseHTTPRequestHandler):
     def stop_all(self, query):
         self._json(200, self.agent.shutdown())
 
+    def protect(self, query):
+        self._json(202, self.agent.protect())
+
+    def protection_status(self, query):
+        self._json(200, self.agent.protection_status())
+
     def get_autostart(self, query):
         self._json(200, self.agent.autostart())
 
@@ -794,6 +889,8 @@ ROUTES: List[Route] = [
     _route("POST", "/agent/token-check", Handler.token_check),
     _route("POST", "/agent/elevate", Handler.elevate),
     _route("POST", "/agent/shutdown", Handler.stop_all),
+    _route("POST", "/agent/protect", Handler.protect),
+    _route("GET", "/agent/protect", Handler.protection_status),
     _route("GET", "/dashboard", Handler.dashboard),
     _route("POST", "/scan", Handler.scan_all),
     _route("GET", f"/areas/{AREA}", Handler.area),

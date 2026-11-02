@@ -61,13 +61,7 @@
           }), "No schedules yet. Use Schedule on any action or recommendation, or create one here.");
 
         var inst = data.installation || { protected: true };
-        var install = inst.protected ? "" :
-          '<div class="callout callout-warning">' + UI.icon("shield") + "<div><strong>Install the suite to enable schedules.</strong> " +
-          "Scheduled actions run as SYSTEM, so the program and Python must not be writable by standard users. This copy is not protected (" +
-          esc(inst.writable.join(", ")) + "). Run this command once in an administrator prompt, then start the console from " +
-          "<code>C:\\Program Files\\WindowsMaintenanceManager\\start_wmm.bat</code>:" +
-          '<pre class="log" style="min-height:0;margin-top:8px">' + esc(inst.command) + "</pre>" +
-          "If Python itself is listed, install Python for all users first.</div></div>";
+        var install = UI.installCallout(inst);
         el.innerHTML = UI.pageHeader("Schedules", "Registered in Windows Task Scheduler › WindowsMaintenanceManager",
           UI.button("New schedule", 'id="new-schedule"', "btn-primary", "clock")) + install + kpis +
           '<div class="grid grid-2-1">' + UI.card("Scheduled actions", table) +
