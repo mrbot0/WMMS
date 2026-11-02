@@ -3,6 +3,21 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.4.0 — 2026-11-02
+
+**A livelier, more polished console.** Every effect follows Settings › Appearance › Animations: full at *Fun*, plain
+fades at *Subtle*, nothing at *Off* (Windows "reduce animations" picks Subtle by default).
+
+- Scroll reveal for cards, figures, sections and pages; a pointer-following glow on cards; 3D tilt on tiles and figures;
+  primary buttons that lean toward the pointer; a pulse on the card whose action starts.
+- Sidebar indicator that glides to the active page and items that slide in at start; tab underlines that grow into place.
+- Circular theme switch from the button (View Transitions); aurora behind the dashboard gauge; bars that grow and lines
+  that draw themselves; a rising +N when the overall score improved since the last visit.
+- Toasts with a time bar that pauses on hover; back-to-top with a scroll-progress ring; top bar shadow on scroll; a
+  loading line while a page opens; live CPU/RAM figures that tick on change; staggered palette results and dialog buttons.
+- Layout: filter cards and toolbars keep their spacing from the figures below (Event Viewer, Toolbox, Task Manager).
+- Settings › Appearance › *Try them* to see the effects, and a small secret.
+
 ## 1.3.0 — 2026-11-02
 
 **30 performance tools, category pages and built-in guides** (194 tools in total).
