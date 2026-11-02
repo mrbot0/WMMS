@@ -277,9 +277,19 @@
       var input = box.querySelector("input"), ul = box.querySelector("ul"), active = 0, shown = [];
       function close() { back.remove(); box.remove(); }
       function render() {
-        var q = input.value.toLowerCase().trim();
-        shown = palette.items().filter(function (it) {
-          return !q || (it.title + " " + (it.keywords || "") + " " + it.group).toLowerCase().indexOf(q) >= 0;
+        // Every word must match, in any order ("dns flush" finds "Flush DNS and ARP caches").
+        var words = input.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+        var recent = store("recentCommands") || [];
+        var items = palette.items();
+        if (!words.length) {
+          items = recent.map(function (title) {
+            var found = items.filter(function (it) { return it.title === title; })[0];
+            return found ? Object.assign({}, found, { group: "Recent commands" }) : null;
+          }).filter(Boolean).concat(items);
+        }
+        shown = items.filter(function (it) {
+          var text = (it.title + " " + (it.keywords || "") + " " + it.group + " " + (it.sub || "")).toLowerCase();
+          return words.every(function (w) { return text.indexOf(w) >= 0; });
         }).slice(0, 40);
         active = Math.min(active, Math.max(0, shown.length - 1));
         var group = "", html = "";
@@ -292,7 +302,15 @@
         var el = ul.querySelector(".active");
         if (el) el.scrollIntoView({ block: "nearest" });
       }
-      function run(i) { var it = shown[i]; if (!it) return; close(); it.run(); }
+      function run(i) {
+        var it = shown[i];
+        if (!it) return;
+        if (it.group !== "Pages" && it.group !== "Recent pages") {
+          store("recentCommands", [it.title].concat((store("recentCommands") || []).filter(function (t) { return t !== it.title; })).slice(0, 5));
+        }
+        close();
+        it.run();
+      }
       input.addEventListener("input", function () { active = 0; render(); });
       input.addEventListener("keydown", function (e) {
         if (e.key === "ArrowDown") { active = Math.min(shown.length - 1, active + 1); render(); e.preventDefault(); }
@@ -309,7 +327,7 @@
 
   /* ---------- keyboard shortcuts ---------- */
 
-  var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services",
+  var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services", k: "toolbox",
     i: "integrity", e: "security", u: "updates", n: "network", x: "activity", z: "actions", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
   var pendingG = 0;
 
@@ -349,9 +367,105 @@
   };
   density.set(density.get());
 
+  /* ---------- report viewer ---------- */
+
+  /* Shows the text output of one or more tools: find with highlighted matches, copy (plain or Markdown), download, print. */
+  function reportViewer(title, text, sub) {
+    var body = '<div class="viewer">' + (sub ? '<p class="muted small" style="margin:0 0 10px">' + esc(sub) + "</p>" : "") +
+      '<div class="viewer-bar"><label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Find in output</span>' +
+      '<input type="search" data-find placeholder="Find in output…"></label><span class="muted small" data-hits></span><span class="grow"></span>' +
+      '<button type="button" class="btn btn-sm" data-v="copy">' + UI.icon("download") + "Copy</button>" +
+      '<button type="button" class="btn btn-sm" data-v="md" title="Copy as a Markdown block for a ticket">Markdown</button>' +
+      '<button type="button" class="btn btn-sm" data-v="save">' + UI.icon("download") + "Download</button>" +
+      '<button type="button" class="btn btn-sm" data-v="print">' + UI.icon("print") + "Print</button></div>" +
+      '<pre class="log viewer-log" tabindex="0"></pre></div>';
+    var done = UI.modal(title, body, [{ label: "Close", cls: "btn-primary" }]);
+    var wrap = document.querySelector("#modal-root .modal-backdrop:last-child");
+    if (!wrap) return done;
+    wrap.querySelector(".modal").classList.add("modal-wide");
+    var pre = wrap.querySelector(".viewer-log"), find = wrap.querySelector("[data-find]"), hits = wrap.querySelector("[data-hits]");
+    function draw() {
+      var q = find.value.trim();
+      if (!q) { pre.textContent = text || "(no output)"; hits.textContent = ""; return; }
+      var parts = String(text).split(new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi"));
+      pre.innerHTML = parts.map(function (p, i) { return i % 2 ? "<mark>" + esc(p) + "</mark>" : esc(p); }).join("");
+      var n = (parts.length - 1) / 2;
+      hits.textContent = n ? n + " match" + (n > 1 ? "es" : "") : "No match";
+      var first = pre.querySelector("mark");
+      if (first) first.scrollIntoView({ block: "center" });
+    }
+    find.addEventListener("input", draw);
+    wrap.querySelector(".viewer-bar").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-v]");
+      if (!b) return;
+      var v = b.getAttribute("data-v"), name = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      if (v === "copy") App.copyText(text, "Output");
+      if (v === "md") App.copyText("**" + title + "**" + (sub ? " — " + sub : "") + "\n\n```\n" + text + "\n```\n", "Markdown");
+      if (v === "save") downloadText("wmm-" + name + ".txt", text, "text/plain;charset=utf-8");
+      if (v === "print") { document.body.classList.add("printing-viewer"); window.print(); document.body.classList.remove("printing-viewer"); }
+    });
+    draw();
+    return done;
+  }
+
+  /* Opens the stored output of one history run. */
+  function showRunOutput(runId, title) {
+    return API.get("/history/runs/" + runId + "/log").then(function (r) { return reportViewer(title || "Output", r.log || ""); },
+      function (e) { UI.toast(e.message, "error"); });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-output]");
+    if (!b) return;
+    e.preventDefault();
+    var card = b.closest("[data-id]"), a = card && window.App && App.action(card.getAttribute("data-id"));
+    showRunOutput(b.getAttribute("data-output"), a ? a.title : b.getAttribute("data-title"));
+  });
+
+  /* ---------- what's new ---------- */
+
+  function whatsNew(force) {
+    return API.get("/changelog").then(function (c) {
+      var seen = store("seenVersion");
+      store("seenVersion", c.version);
+      // First visit ever: nothing is "new" yet. After an upgrade, or on request, show the notes.
+      if (!force && (!seen || seen === c.version)) return null;
+      var r = c.releases[0];
+      return UI.modal("What's new in " + r.version, '<p class="modal-text"><strong>' + esc(r.title) + '</strong> <span class="muted small">· ' + esc(r.date) + "</span></p>" +
+        '<ul class="whatsnew-hl">' + r.highlights.map(function (h) { return "<li>" + UI.icon("sparkle") + "<span>" + esc(h) + "</span></li>"; }).join("") + "</ul>" +
+        (r.changes.length ? '<details class="whatsnew-more"><summary>All ' + r.changes.length + " improvements</summary><ul>" +
+          r.changes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></details>" : ""),
+        [{ label: "Open the Toolbox", cls: "btn-ghost", value: function () { return "toolbox"; } }, { label: "Got it", cls: "btn-primary" }]
+      ).then(function (v) { if (v === "toolbox") location.hash = "#/toolbox"; });
+    }, function () { return null; });
+  }
+
+  /* ---------- favicon progress ---------- */
+
+  var faviconLink = document.querySelector('link[rel="icon"]'), faviconBase = faviconLink && faviconLink.href, faviconLast = null;
+  /* Draws the progress of a run around the app icon in the browser tab; null restores the plain icon. */
+  function faviconProgress(pct) {
+    if (!faviconLink) return;
+    var key = pct == null ? null : Math.round(pct / 5) * 5;  // redraw only every 5%
+    if (key === faviconLast) return;
+    faviconLast = key;
+    if (key == null) { faviconLink.href = faviconBase; return; }
+    var c = document.createElement("canvas");
+    c.width = c.height = 64;
+    var g = c.getContext("2d");
+    g.fillStyle = "#0F6CBD";
+    g.beginPath(); g.arc(32, 32, 24, 0, 2 * Math.PI); g.fill();
+    g.lineWidth = 7; g.lineCap = "round";
+    g.strokeStyle = "rgba(15,108,189,.25)"; g.beginPath(); g.arc(32, 32, 28, 0, 2 * Math.PI); g.stroke();
+    g.strokeStyle = "#2E9D8F"; g.beginPath(); g.arc(32, 32, 28, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * key / 100); g.stroke();
+    g.fillStyle = "#fff"; g.font = "bold 22px Segoe UI, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(String(key), 32, 33);
+    faviconLink.href = c.toDataURL("image/png");
+  }
+
   window.Components = {
     density: density,
     dataTable: dataTable, downloadText: downloadText, countUp: countUp, num: num, skeleton: skeleton,
-    theme: theme, notifications: notifications, palette: palette, shortcutsHelp: shortcutsHelp, store: store
+    theme: theme, notifications: notifications, palette: palette, shortcutsHelp: shortcutsHelp, store: store,
+    reportViewer: reportViewer, showRunOutput: showRunOutput, whatsNew: whatsNew, faviconProgress: faviconProgress
   };
 })();

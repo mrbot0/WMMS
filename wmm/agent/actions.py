@@ -1,7 +1,7 @@
 """Catalog of the maintenance actions, grouped by area and risk."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Callable, Dict, List, Optional
 
 import wmm  # noqa: F401
@@ -25,6 +25,7 @@ class Action:
     minutes: float
     run: Callable = field(repr=False, compare=False)
     warning: str = ""
+    kind: str = "fix"  # "fix" changes the PC, "report" only reads it
 
     def as_dict(self) -> dict:
         data = asdict(self)
@@ -386,7 +387,183 @@ _ACTIONS += (
            "Going back to the previous Windows version and recovering files left in Windows.old is no longer possible."),
 )
 
-CATALOG: Dict[str, Action] = {action.id: action for action in _ACTIONS}
+_ACTIONS += (
+    # Toolbox: 50 tools across every area. Reports are read-only and safe.
+    # ---------- cleanup ----------
+    Action("cleanup.shader_cache", "cleanup", "Clear GPU shader caches",
+           "Deletes the DirectX, NVIDIA, AMD and Intel shader caches that grow after driver updates.", "moderate", 0.5,
+           lambda ctx: tools.clean_folders(ctx, "Delete GPU shader caches", tools.SHADER_CACHES),
+           "Games rebuild their shaders once: the first launch may stutter."),
+    Action("cleanup.teams_cache", "cleanup", "Clear the Microsoft Teams cache",
+           "Fixes a slow or misbehaving Teams by clearing its cache (classic and new Teams).", "moderate", 0.5,
+           lambda ctx: tools.clean_folders(ctx, "Delete Microsoft Teams cache", tools.TEAMS_CACHES),
+           "Close Teams first; it downloads chats and images again at the next start."),
+    Action("cleanup.user_crash_dumps", "cleanup", "Delete application crash dumps",
+           "Deletes crash dumps written by desktop applications in the user profile.", "moderate", 0.2,
+           lambda ctx: tools.clean_folders(ctx, "Delete application crash dumps", tools.USER_CRASH_DUMPS),
+           "Software vendors can no longer analyze those crashes."),
+    Action("cleanup.office_cache", "cleanup", "Clear the Office document cache",
+           "Deletes the Office upload cache and add-in cache, fixing stuck OneDrive/SharePoint uploads.", "moderate", 0.5,
+           lambda ctx: tools.clean_folders(ctx, "Delete Office document cache", tools.OFFICE_CACHES),
+           "Close Office first; documents not yet uploaded are lost."),
+    Action("cleanup.dev_caches", "cleanup", "Clear developer package caches",
+           "Deletes the pip, npm, Yarn, NuGet and Go build caches.", "moderate", 0.5,
+           lambda ctx: tools.clean_folders(ctx, "Delete developer package caches", tools.DEV_CACHES),
+           "Packages are downloaded again at the next build."),
+    # ---------- integrity ----------
+    Action("integrity.component_store_report", "integrity", "Analyze the component store",
+           "Reports the size of WinSxS and whether a component cleanup is recommended.", "safe", 2,
+           lambda ctx: ctx.comando(["DISM", "/Online", "/Cleanup-Image", "/AnalyzeComponentStore"])),
+    Action("integrity.boot_config_report", "integrity", "Boot configuration report",
+           "Lists the boot manager and boot entries (BCD).", "safe", 0.2, lambda ctx: ctx.comando(["bcdedit", "/enum"])),
+    Action("integrity.reliability_report", "integrity", "Reliability history",
+           "Lists application failures, Windows errors and installs of the last 30 days.", "safe", 0.5,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_RELIABILITY)),
+    Action("integrity.bsod_report", "integrity", "Blue screen report",
+           "Lists recent blue screens (bug check codes) and the minidumps on disk.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_BSOD, "blue screens were recorded: check drivers and memory")),
+    Action("integrity.unsigned_drivers", "integrity", "Unsigned drivers",
+           "Lists loaded drivers without a valid digital signature.", "safe", 0.5,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_UNSIGNED, "unsigned drivers found: update or remove them")),
+    Action("integrity.recovery_status", "integrity", "Recovery environment status",
+           "Shows whether Windows Recovery Environment (WinRE) is enabled and where it lives.", "safe", 0.2,
+           lambda ctx: ctx.comando(["reagentc", "/info"])),
+    # ---------- services ----------
+    Action("services.stopped_auto_report", "services", "Stopped automatic services",
+           "Lists services set to start automatically that are not running.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_STOPPED_AUTO, "automatic services are stopped: check them")),
+    Action("services.restart_wlan", "services", "Restart the Wi-Fi service",
+           "Restarts WLAN AutoConfig when Wi-Fi networks are not listed or do not connect.", "moderate", 0.2,
+           lambda ctx: tools.restart_service(ctx, "WlanSvc"), "Wi-Fi disconnects for a few seconds."),
+    Action("services.restart_search", "services", "Restart Windows Search",
+           "Restarts the search indexer when Start or Explorer search returns nothing.", "moderate", 0.2,
+           lambda ctx: tools.restart_service(ctx, "WSearch"), "Searches return partial results while the index reloads."),
+    Action("services.restart_time", "services", "Restart Windows Time",
+           "Restarts the time service when the clock does not synchronize.", "moderate", 0.2,
+           lambda ctx: tools.restart_service(ctx, "W32Time"), "The clock may jump when it resynchronizes."),
+    Action("services.sysmain_manual", "services", "Set SysMain (Superfetch) to manual",
+           "Stops memory preloading that keeps old hard disks busy; the original state is backed up.", "moderate", 0.3,
+           lambda ctx: op.esito_servizi(ctx, *op.imposta_servizi(ctx, ["SysMain"], "demand")),
+           "Apps used often may start a little slower."),
+    # ---------- performance ----------
+    Action("performance.top_processes", "performance", "Heaviest processes",
+           "Lists the processes using the most memory and CPU time right now.", "safe", 0.2,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_TOP_PROCESSES)),
+    Action("performance.battery_report", "performance", "Battery report",
+           "Creates the Windows battery report (capacity, wear, usage) in Public Documents.", "safe", 0.3, tools.battery_report),
+    Action("performance.usb_suspend_off", "performance", "Turn off USB selective suspend",
+           "Stops Windows from powering down idle USB devices (fixes dropping mice, docks and audio).", "moderate", 0.2,
+           tools.usb_suspend_off, "Laptops use a little more battery."),
+    Action("performance.menu_delay", "performance", "Faster menus",
+           "Reduces the delay before menus open from 400 ms to 100 ms.", "moderate", 0.2, tools.menu_delay,
+           "Applies at the next sign-in."),
+    Action("performance.startup_delay_off", "performance", "Remove the startup delay",
+           "Starts startup programs right after sign-in instead of waiting.", "moderate", 0.2, tools.startup_delay_off,
+           "Sign-in may feel busier for a few seconds."),
+    Action("performance.game_mode_on", "performance", "Turn on Game Mode",
+           "Lets Windows prioritize the game in focus and pause updates while playing.", "moderate", 0.2, tools.game_mode_on,
+           "Background tasks get fewer resources while a game runs."),
+    # ---------- storage ----------
+    Action("storage.temp_report", "storage", "Temporary folders size",
+           "Measures the user and Windows temporary folders and the update download cache (read-only).", "safe", 1,
+           lambda ctx: tools.measured(ctx, "temporary folders", tools.TEMP_FOLDERS)),
+    Action("storage.downloads_report", "storage", "Old files in Downloads",
+           "Measures Downloads and lists the largest files not touched for 90 days (read-only).", "safe", 1, tools.downloads_report),
+    Action("storage.recycle_report", "storage", "Recycle Bin size",
+           "Counts the items and the space used by the Recycle Bin (read-only).", "safe", 0.2, tools.recycle_report),
+    Action("storage.system_files_report", "storage", "Page, swap and hibernation files",
+           "Shows the size of pagefile.sys, swapfile.sys and hiberfil.sys (read-only).", "safe", 0.1, tools.system_files_report),
+    Action("storage.trim_status", "storage", "TRIM status",
+           "Checks that Windows sends TRIM to SSDs (DisableDeleteNotify = 0).", "safe", 0.1,
+           lambda ctx: ctx.comando(["fsutil", "behavior", "query", "DisableDeleteNotify"])),
+    Action("storage.trim_enable", "storage", "Turn on TRIM",
+           "Makes Windows send TRIM to SSDs on NTFS and ReFS.", "moderate", 0.1,
+           lambda ctx: ctx.comando(["fsutil", "behavior", "set", "DisableDeleteNotify", "0"]),
+           "Only needed when another tool turned TRIM off."),
+    # ---------- network ----------
+    Action("network.connectivity_report", "network", "Connectivity test",
+           "Tests DNS servers, Microsoft and Microsoft 365 sign-in on their ports.", "safe", 0.5,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_CONNECTIVITY, "some destinations are not reachable: check firewall or proxy")),
+    Action("network.wifi_report", "network", "Wi-Fi connection details",
+           "Shows the Wi-Fi network, signal, channel, band and link speed.", "safe", 0.1,
+           lambda ctx: ctx.comando(["netsh", "wlan", "show", "interfaces"])),
+    Action("network.wlan_report", "network", "Wi-Fi history report",
+           "Creates the Windows WLAN report of the last three days (disconnections and errors).", "safe", 0.5, tools.wlan_report),
+    Action("network.ipconfig_report", "network", "Full IP configuration",
+           "Shows addresses, gateways, DNS and DHCP of every adapter.", "safe", 0.1, lambda ctx: ctx.comando(["ipconfig", "/all"])),
+    Action("network.open_ports", "network", "Listening ports",
+           "Lists TCP ports open for incoming connections and the program behind each one.", "safe", 0.2,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_OPEN_PORTS)),
+    Action("network.dns_quad9", "network", "Use Quad9 DNS",
+           "Sets 9.9.9.9 and 149.112.112.112 (blocks known malicious domains) on the connected adapters.", "moderate", 0.2,
+           lambda ctx: op.imposta_dns(ctx, ("9.9.9.9", "149.112.112.112")), "Company DNS servers are replaced: internal names may stop resolving."),
+    # ---------- startup ----------
+    Action("startup.scheduled_tasks_report", "startup", "Third-party scheduled tasks",
+           "Lists enabled scheduled tasks that are not part of Windows.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_SCHEDULED_TASKS)),
+    Action("startup.boot_time_report", "startup", "Boot time history",
+           "Shows how long the last ten boots took.", "safe", 0.2, lambda ctx: tools.report(ctx, tools.SCRIPT_BOOT_TIME)),
+    Action("startup.third_party_services", "startup", "Third-party automatic services",
+           "Lists services that start with Windows and are installed by other vendors.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_THIRD_PARTY_SERVICES)),
+    Action("startup.installed_apps_report", "startup", "Installed applications list",
+           "Lists every installed desktop application with version and install date.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_INSTALLED_APPS)),
+    Action("startup.edge_boost_off", "startup", "Stop Edge preloading",
+           "Turns off Edge Startup boost and running in the background after closing.", "moderate", 0.2, tools.edge_boost_off,
+           "Edge opens a little slower the first time."),
+    # ---------- security ----------
+    Action("security.bitlocker_status", "security", "BitLocker status",
+           "Shows encryption and protection status of every drive.", "safe", 0.2, lambda ctx: ctx.comando(["manage-bde", "-status"])),
+    Action("security.tpm_status", "security", "TPM status",
+           "Checks that the TPM is present, ready and which version it implements.", "safe", 0.2,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_TPM, "the TPM is missing or not ready")),
+    Action("security.secure_boot_status", "security", "Secure Boot status",
+           "Checks that UEFI Secure Boot is on.", "safe", 0.1,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_SECURE_BOOT, "Secure Boot is off or not supported")),
+    Action("security.local_admins_report", "security", "Local administrators",
+           "Lists the accounts with administrator rights on this PC.", "safe", 0.1,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_LOCAL_ADMINS)),
+    Action("security.defender_status", "security", "Microsoft Defender status",
+           "Real-time and tamper protection, signature age, engine and last scans.", "safe", 0.2,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_DEFENDER_STATUS, "Defender protection is off or signatures are old")),
+    Action("security.network_protection", "security", "Turn on network protection",
+           "Makes Microsoft Defender block connections to phishing and malware sites in every app.", "moderate", 0.2,
+           lambda ctx: ctx.comando(tools.powershell_command("Set-MpPreference -EnableNetworkProtection Enabled; 'Network protection enabled.'")),
+           "Some sites with a bad reputation are blocked outside the browser too."),
+    Action("security.ransomware_audit", "security", "Controlled folder access (audit)",
+           "Turns on ransomware protection in audit mode: suspicious writes to documents are logged, not blocked.", "moderate", 0.2,
+           lambda ctx: ctx.comando(tools.powershell_command("Set-MpPreference -EnableControlledFolderAccess AuditMode; 'Controlled folder access: audit mode.'")),
+           "Events appear in the Defender log; switch to block mode once nothing legitimate is reported."),
+    # ---------- updates ----------
+    Action("updates.history_report", "updates", "Installed updates",
+           "Lists the 20 most recent installed updates with their date.", "safe", 0.3,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_UPDATE_HISTORY)),
+    Action("updates.pending_reboot", "updates", "Pending restart check",
+           "Checks whether Windows is waiting for a restart to finish updates or installs.", "safe", 0.1, tools.pending_reboot),
+    Action("updates.winget_list", "updates", "Available app updates (winget)",
+           "Lists the desktop apps with a newer version available, without installing anything.", "safe", 0.5,
+           lambda ctx: ctx.comando(["winget", "upgrade", "--accept-source-agreements", "--disable-interactivity"])),
+    Action("updates.problem_devices", "updates", "Devices with problems",
+           "Lists devices with a driver error, disabled or not working.", "safe", 0.2,
+           lambda ctx: tools.report(ctx, tools.SCRIPT_PROBLEM_DEVICES, "some devices do not work: update or reinstall their drivers")),
+)
+
+# Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.
+REPORTS = frozenset({
+    "storage.disk_health", "storage.smart_prediction", "storage.volume_report", "storage.partition_report", "storage.dirty_check",
+    "storage.disk_speed", "storage.shadow_report", "storage.top_folders", "storage.temp_report", "storage.downloads_report",
+    "storage.recycle_report", "storage.system_files_report", "storage.trim_status", "integrity.dism_scan", "integrity.sfc_verify",
+    "integrity.wmi_verify", "integrity.component_store_report", "integrity.boot_config_report", "integrity.reliability_report",
+    "integrity.bsod_report", "integrity.unsigned_drivers", "integrity.recovery_status", "services.stopped_auto_report",
+    "performance.top_processes", "performance.battery_report", "network.connectivity_report", "network.wifi_report",
+    "network.wlan_report", "network.ipconfig_report", "network.open_ports", "startup.scheduled_tasks_report", "startup.boot_time_report",
+    "startup.third_party_services", "startup.installed_apps_report", "security.bitlocker_status", "security.tpm_status",
+    "security.secure_boot_status", "security.local_admins_report", "security.defender_status", "updates.history_report",
+    "updates.pending_reboot", "updates.winget_list", "updates.problem_devices",
+})
+
+CATALOG: Dict[str, Action] = {action.id: replace(action, kind="report") if action.id in REPORTS else action for action in _ACTIONS}
 
 
 def by_area(area: str) -> List[Action]:
@@ -394,4 +571,10 @@ def by_area(area: str) -> List[Action]:
 
 
 def safe(area: Optional[str] = None) -> List[Action]:
-    return [action for action in CATALOG.values() if action.risk == "safe" and (area is None or action.area == area)]
+    """Safe actions that change something (reports are left out)."""
+    return [action for action in CATALOG.values()
+            if action.risk == "safe" and action.kind != "report" and (area is None or action.area == area)]
+
+
+def reports(area: Optional[str] = None) -> List[Action]:
+    return [action for action in CATALOG.values() if action.kind == "report" and (area is None or action.area == area)]

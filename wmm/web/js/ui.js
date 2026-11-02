@@ -79,6 +79,7 @@
     gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.4" fill="currentColor"/>'
   };
   ICONS.power = '<path d="M12 3v9M6.4 6.6a8 8 0 1 0 11.2 0"/>';
+  ICONS.toolbox = '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M10 13v2h4v-2"/>';
   ICONS.upload ='<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>';
   ICONS.support ='<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5"/>';
   ICONS.actions ='<circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/>';
@@ -140,6 +141,26 @@
   var RISK_LABEL = { safe: "Safe", moderate: "Moderate", high: "High risk" };
   var STATUS_LABEL = { ok: "Success", warning: "Warning", error: "Error", skipped: "Skipped", preview: "Preview", running: "Running" };
   function riskBadge(risk) { return '<span class="badge badge-' + esc(risk) + '">' + esc(RISK_LABEL[risk] || risk) + "</span>"; }
+  /* Reports only read the PC; fixes change it. */
+  function kindBadge(kind) {
+    return kind === "report" ? '<span class="badge badge-report" title="Read-only: changes nothing">' + icon("reports") + "Report</span>"
+      : '<span class="badge badge-fix" title="Changes a setting or deletes files">' + icon("bolt") + "Fix</span>";
+  }
+  /* One tool card: title, description, badges, last run and the run / schedule buttons. */
+  function toolCard(a, last, options) {
+    options = options || {};
+    return '<div class="action-card tool-card kind-' + esc(a.kind || "fix") + (options.picked ? " picked" : "") + '" data-id="' + esc(a.id) + '" tabindex="0">' +
+      '<div class="action-top">' + (options.pick ? '<input type="checkbox" data-pick aria-label="Select ' + esc(a.title) + '"' + (options.picked ? " checked" : "") + ">" : "") +
+      '<span class="tool-icon">' + icon(a.kind === "report" ? "reports" : a.area) + '</span><button type="button" class="cell-title grow link-btn" data-detail title="Details">' + esc(a.title) + "</button>" +
+      (options.star != null ? '<button type="button" class="star' + (options.star ? " on" : "") + '" data-star title="' + (options.star ? "Remove from favorites" : "Add to favorites") +
+        '" aria-pressed="' + options.star + '">★</button>' : "") + "</div>" +
+      '<div class="cell-sub">' + esc(a.description) + "</div>" +
+      '<div class="action-foot">' + kindBadge(a.kind) + (a.kind === "report" ? "" : riskBadge(a.risk)) + '<span class="badge">' + icon("clock") + esc(duration(a.minutes)) + "</span>" +
+      (last ? statusBadge(last.status) + '<span class="cell-sub">' + esc(relative(last.finished || last.started)) + "</span>" : '<span class="cell-sub">Never run</span>') +
+      '<span class="grow"></span>' + (last && last.id && a.kind === "report" ? '<button class="btn btn-sm btn-ghost" type="button" data-output="' + esc(last.id) + '" title="Last output">' + icon("reports") + "</button>" : "") +
+      '<button class="btn btn-sm" data-run="' + esc(a.id) + '">' + icon("play") + 'Run</button><button class="btn btn-sm" data-schedule="' + esc(a.id) + '" title="Schedule" aria-label="Schedule ' +
+      esc(a.title) + '">' + icon("clock") + "</button></div></div>";
+  }
   function statusBadge(status) { return '<span class="badge badge-status-' + esc(status) + '">' + esc(STATUS_LABEL[status] || status || "—") + "</span>"; }
   function impactBadge(impact) { return '<span class="badge badge-impact-' + esc(impact) + '">' + esc(impact.charAt(0).toUpperCase() + impact.slice(1)) + " impact</span>"; }
 
@@ -181,11 +202,15 @@
     return higherIsWorse ? (value >= bad ? "error" : value >= warn ? "warning" : "ok") : (value <= bad ? "error" : value <= warn ? "warning" : "ok");
   }
 
+  var TOAST_ICON = { ok: "check", error: "x", warning: "alert", info: "info" };
   function toast(message, toneName) {
     var root = document.getElementById("toasts");
     var el = document.createElement("div");
     el.className = "toast toast-" + (toneName || "info");
-    el.textContent = message;
+    el.innerHTML = '<span class="toast-icon">' + icon(TOAST_ICON[toneName] || "info") + '</span><span class="toast-text"></span>';
+    el.querySelector(".toast-text").textContent = message;
+    el.title = "Click to dismiss";
+    el.addEventListener("click", function () { el.classList.add("leaving"); setTimeout(function () { el.remove(); }, 300); });
     // At most four toasts on screen: the oldest gives way to the newest.
     while (root.children.length >= 4) root.removeChild(root.firstChild);
     root.appendChild(el);
@@ -307,25 +332,29 @@
   /* Pieces shared by the Cleanup, System Integrity and Services pages. */
   function areaParts(view, area) {
     var title = function (id) { var a = window.App && App.action(id); return a ? a.title : id; };
-    var hasSafe = view.actions.some(function (a) { return a.risk === "safe"; });
+    // "Apply safe actions" only where a safe fix exists: reports are never part of it.
+    var hasSafe = view.actions.some(function (a) { return a.risk === "safe" && a.kind !== "report"; });
     var noActions = !view.actions.length;
+    var reportIds = view.actions.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
     var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created),
       button("Scan", 'data-scan-area="' + area + '"', "", "refresh") +
       (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '"', "", "bolt") : "") +
       button("Export report", 'data-export-area="' + area + '"', "btn-primary", "download"));
-    var actionsTable = table(
-      [{ title: "Action" }, { title: "Risk" }, { title: "Duration" }, { title: "Last run" }, { title: "", cls: "actions" }],
-      view.actions.map(function (a) {
-        var last = a.last_run ? statusBadge(a.last_run.status) + ' <span class="cell-sub">' + relative(a.last_run.finished || a.last_run.started) + "</span>" : '<span class="cell-sub">Never</span>';
-        return ['<div class="cell-title">' + esc(a.title) + '</div><div class="cell-sub">' + esc(a.description) + "</div>", riskBadge(a.risk), esc(duration(a.minutes)), last,
-          '<button class="btn btn-sm" data-run="' + esc(a.id) + '">' + icon("play") + 'Run</button><button class="btn btn-sm" data-schedule="' + esc(a.id) + '">' + icon("clock") + "Schedule</button>"];
-      }));
+    var group = function (label, iconName, hint, list) {
+      return list.length ? '<div class="section-title">' + icon(iconName) + esc(label) + '<span class="extra">' + esc(hint) + "</span></div>" +
+        '<div class="action-grid">' + list.map(function (a) { return toolCard(a, a.last_run); }).join("") + "</div>" : "";
+    };
+    var actionsTable = group("Fixes", "bolt", "Change settings or delete files; non-safe ones create a restore point first.",
+      view.actions.filter(function (a) { return a.kind !== "report"; })) +
+      group("Diagnostics", "reports", "Read-only reports: nothing on the PC changes.", view.actions.filter(function (a) { return a.kind === "report"; }));
     var trend = Charts.line([{ name: AREA_LABEL[area] + " score", points: view.trend.map(function (p) { return { x: p.created, y: p.score }; }) }], { min: 0, max: 100 });
     return {
       header: header,
       score: Charts.gauge(view.score, { label: AREA_LABEL[area] + " score" }),
       recommendations: card("Recommended improvements", recommendations(view.recommendations), '<span class="muted small">' + view.recommendations.length + " found</span>"),
-      actions: noActions ? "" : card("Optimization actions", actionsTable, '<span class="muted small">' + view.actions.length + " actions</span>", "card-flush"),
+      actions: noActions ? "" : card("Optimization actions", actionsTable, '<span class="muted small">' + view.actions.length + " tools</span>" +
+        (reportIds.length ? '<button type="button" class="btn btn-sm" data-run-reports="' + esc(reportIds.join(",")) + '">' + icon("reports") + "Run all diagnostics</button>" : "") +
+        '<a class="btn btn-sm btn-ghost" href="#/toolbox?area=' + area + '">' + icon("explorer") + "Toolbox</a>"),
       trend: card("Score trend", trend),
       runs: card("Recent activity", runsTable(view.runs.slice(0, 8), title)),
       errors: view.data.errors && view.data.errors.length
@@ -354,6 +383,7 @@
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
+    kindBadge: kindBadge, toolCard: toolCard,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL

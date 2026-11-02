@@ -308,7 +308,7 @@ class JobManager:
         stato = STATUS[esito.stato]
         job.write(f"Result: {stato} {esito.nota}".rstrip())
         risultato = {"action_id": action.id, "status": stato, "note": esito.nota,
-                     "seconds": round(time.monotonic() - partenza, 1), "bytes_freed": liberati}
+                     "seconds": round(time.monotonic() - partenza, 1), "bytes_freed": liberati, "run_id": run_id}
         job.results.append(risultato)
         try:
             self.store.close_run(run_id, stato, esito.nota, liberati, "\n".join(job.log[inizio_log:]))

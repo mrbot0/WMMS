@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import ctypes
+import gzip
 import hmac
 import subprocess
 import io
@@ -28,6 +29,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 import wmm
 from wmm import APP_NAME, ROOT, VERSION
+from wmm.changelog import CHANGELOG
 import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
@@ -42,6 +44,17 @@ SCRIPT = ROOT / "wmm.py"
 SYSTEM_CACHE_SECONDS = 60
 CONTENT_TYPES = {".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
                  ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json"}
+COMPRESSIBLE = {"application/javascript", "text/css", "text/html", "image/svg+xml", "application/json", "text/csv"}
+GZIP_MIN_BYTES = 1024
+SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "no-referrer",
+                    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+                    "Cross-Origin-Opener-Policy": "same-origin"}
+
+
+def index_page() -> bytes:
+    """index.html with ?v=VERSION on scripts and styles, so an upgrade never runs a stale cached file."""
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    return re.sub(r'(/static/[\w/.-]+\.(?:js|css))"', rf'\1?v={VERSION}"', html).encode("utf-8")
 
 
 class ApiError(Exception):
@@ -74,12 +87,15 @@ class Agent:
         self.server = None
         self.monitor = live.LiveMonitor()
         self.tasks = TaskRegistry()
+        self.started = time.time()
 
     # ---------- data ----------
 
     def info(self) -> dict:
         return {"name": APP_NAME, "version": VERSION, "machine_id": self.machine_id, "hostname": self.hostname,
-                "admin": self.admin, "preview": self.preview, "run_active": self.jobs.busy}
+                "admin": self.admin, "preview": self.preview, "run_active": self.jobs.busy,
+                "actions": len(actions.CATALOG), "reports": len(actions.REPORTS),
+                "uptime_seconds": int(time.time() - self.started), "python": sys.version.split()[0]}
 
     def _context(self) -> op.Contesto:
         return op.Contesto(anteprima=True)
@@ -503,13 +519,24 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- plumbing ----------
 
-    def _send(self, status: int, corpo: bytes, tipo: str, extra: Optional[Dict[str, str]] = None) -> None:
+    def _send(self, status: int, corpo: bytes, tipo: str, extra: Optional[Dict[str, str]] = None, cache: str = "no-store") -> None:
+        # Text larger than a packet travels compressed when the browser accepts it.
+        comprimi = (len(corpo) >= GZIP_MIN_BYTES and tipo.split(";")[0] in COMPRESSIBLE
+                    and "gzip" in self.headers.get("Accept-Encoding", ""))
+        if comprimi:
+            corpo = gzip.compress(corpo, 6)
         self.send_response(status)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(corpo)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Cache-Control", cache)
+        self.send_header("Vary", "Accept-Encoding")
+        if comprimi:
+            self.send_header("Content-Encoding", "gzip")
+        for nome, valore in SECURITY_HEADERS.items():
+            self.send_header(nome, valore)
+        inizio = getattr(self, "_started", None)
+        if inizio is not None:
+            self.send_header("Server-Timing", f"app;dur={(time.perf_counter() - inizio) * 1000:.1f}")
         for nome, valore in (extra or {}).items():
             self.send_header(nome, valore)
         self.end_headers()
@@ -518,6 +545,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, status: int, dati) -> None:
         self._send(status, json.dumps(dati, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+    def _not_modified(self, etag: str) -> bool:
+        if self.headers.get("If-None-Match") != etag:
+            return False
+        self.send_response(304)
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return True
 
     def _read_raw_body(self) -> None:
         # Always drain the body: on a keep-alive connection unread bytes would
@@ -560,6 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(403, "Missing or invalid token.")
 
     def _dispatch(self) -> None:
+        self._started = time.perf_counter()
         try:
             self._read_raw_body()
             self._check_request()
@@ -579,7 +617,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(405, "Method not allowed.")
             self._static(percorso)
         except ApiError as errore:
-            self._json(errore.status, {"error": errore.message})
+            self._json(errore.status, {"error": errore.message, "status": errore.status})
         except Exception as errore:  # never leave the browser without an answer
             sys.stderr.write(f"Internal error on {self.command} {self.path}: {errore!r}\n")
             self._json(500, {"error": f"Internal error: {errore}"})
@@ -589,7 +627,7 @@ class Handler(BaseHTTPRequestHandler):
     def _static(self, percorso: str) -> None:
         # The page never contains the token: the browser gets it from the #k= link the agent opens.
         if percorso in ("/", "/index.html"):
-            self._send(200, (WEB / "index.html").read_bytes(), CONTENT_TYPES[".html"])
+            self._send(200, index_page(), CONTENT_TYPES[".html"])
             return
         if not percorso.startswith("/static/"):
             raise ApiError(404, "Not found.")
@@ -599,7 +637,12 @@ class Handler(BaseHTTPRequestHandler):
         if file is None:
             raise ApiError(404, "Not found.")
         tipo = CONTENT_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
-        self._send(200, file.read_bytes(), tipo)
+        # Revalidated on every load (no-cache + ETag): an unchanged file costs a 304 without a body.
+        info = file.stat()
+        etag = f'"{info.st_mtime_ns:x}-{info.st_size:x}"'
+        if self._not_modified(etag):
+            return
+        self._send(200, file.read_bytes(), tipo, {"ETag": etag}, cache="no-cache")
 
     # ---------- routes ----------
 
@@ -620,7 +663,15 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, self.agent.area_view(area))
 
     def list_actions(self, query):
-        self._json(200, {"actions": [a.as_dict() for a in actions.CATALOG.values()]})
+        """Optional filters: area, kind (fix/report), risk and q (text in title, description or id)."""
+        testo = query.get("q", "").lower()
+        elenco = [a for a in actions.CATALOG.values()
+                  if all(not query.get(campo) or getattr(a, campo) == query[campo] for campo in ("area", "kind", "risk"))
+                  and (not testo or testo in f"{a.id} {a.title} {a.description}".lower())]
+        self._json(200, {"actions": [a.as_dict() for a in elenco], "total": len(actions.CATALOG)})
+
+    def changelog(self, query):
+        self._json(200, {"version": VERSION, "releases": CHANGELOG})
 
     def start_run(self, query):
         corpo = self._body()
@@ -748,6 +799,7 @@ ROUTES: List[Route] = [
     _route("GET", f"/areas/{AREA}", Handler.area),
     _route("POST", f"/areas/{AREA}/scan", Handler.scan_area),
     _route("GET", "/actions", Handler.list_actions),
+    _route("GET", "/changelog", Handler.changelog),
     _route("POST", "/runs", Handler.start_run),
     _route("POST", "/runs/safe", Handler.start_safe),
     _route("GET", "/runs/current", Handler.current_run),

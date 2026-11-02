@@ -59,8 +59,34 @@ class Catalog(unittest.TestCase):
         self.assertEqual(len(set(nuove)), 20)
         for nuova in nuove:
             self.assertEqual(actions.CATALOG[nuova].area, "storage")
-        self.assertEqual(len(actions.CATALOG), 114)
+        self.assertGreaterEqual(len(actions.CATALOG), 114)
         self.assertEqual(actions.CATALOG["storage.delete_windows_old"].risk, "high")
+
+    def test_catalog_has_50_toolbox_actions(self):
+        nuove = ("cleanup.shader_cache", "cleanup.teams_cache", "cleanup.user_crash_dumps", "cleanup.office_cache", "cleanup.dev_caches",
+                 "integrity.component_store_report", "integrity.boot_config_report", "integrity.reliability_report", "integrity.bsod_report",
+                 "integrity.unsigned_drivers", "integrity.recovery_status", "services.stopped_auto_report", "services.restart_wlan",
+                 "services.restart_search", "services.restart_time", "services.sysmain_manual", "performance.top_processes",
+                 "performance.battery_report", "performance.usb_suspend_off", "performance.menu_delay", "performance.startup_delay_off",
+                 "performance.game_mode_on", "storage.temp_report", "storage.downloads_report", "storage.recycle_report",
+                 "storage.system_files_report", "storage.trim_status", "storage.trim_enable", "network.connectivity_report",
+                 "network.wifi_report", "network.wlan_report", "network.ipconfig_report", "network.open_ports", "network.dns_quad9",
+                 "startup.scheduled_tasks_report", "startup.boot_time_report", "startup.third_party_services", "startup.installed_apps_report",
+                 "startup.edge_boost_off", "security.bitlocker_status", "security.tpm_status", "security.secure_boot_status",
+                 "security.local_admins_report", "security.defender_status", "security.network_protection", "security.ransomware_audit",
+                 "updates.history_report", "updates.pending_reboot", "updates.winget_list", "updates.problem_devices")
+        self.assertEqual(len(set(nuove)), 50)
+        for nuova in nuove:
+            self.assertIn(nuova, actions.CATALOG)
+        self.assertEqual(len(actions.CATALOG), 164)
+
+    def test_reports_are_safe_and_skipped_by_safe_runs(self):
+        self.assertTrue(actions.REPORTS <= set(actions.CATALOG))
+        for action in actions.reports():
+            self.assertEqual(action.risk, "safe", action.id)
+            self.assertEqual(action.as_dict()["kind"], "report")
+        self.assertFalse(set(a.id for a in actions.safe()) & actions.REPORTS)
+        self.assertIn("cleanup.temp", [a.id for a in actions.safe()])
 
     def test_playbooks_reference_known_actions(self):
         for playbook in actions.PLAYBOOKS:
