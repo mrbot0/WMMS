@@ -542,6 +542,51 @@ details.log-details pre { max-height: 260px; min-height: 0; }
   .tile { transition: none !important; }
 }
 
+/* Page title icon, colored by area */
+#page-title { display: flex; align-items: center; gap: 10px; }
+.title-icon { display: inline-flex; color: var(--accent); }
+.title-icon .icon { width: 22px; height: 22px; }
+
+/* Status bar: machine ID copies on click */
+.st-copy { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+.st-copy:hover { color: var(--accent); text-decoration: underline; }
+
+/* Action title opens the detail dialog */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.link-btn:hover { color: var(--accent); text-decoration: underline; }
+
+/* Run confirmation with steps */
+.confirm-steps { margin: 0 0 12px; padding: 0; list-style: none; max-height: 320px; overflow: auto; counter-reset: step; }
+.confirm-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); counter-increment: step; }
+.confirm-steps li::before { content: counter(step); min-width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; }
+.confirm-steps li:last-child { border-bottom: 0; }
+
+/* Dismissed improvements */
+.rec-dismissed { opacity: .55; }
+
+/* Dashboard: score opens the improvements of the area */
+.tile-score[data-rec-area] { cursor: pointer; }
+.tile-score[data-rec-area]:hover { text-decoration: underline; }
+
+/* Visit checklist and technician notes */
+.visit-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.visit-progress .progress { flex: 1; margin: 0; }
+.visit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.visit-list input:checked + * , .visit-list label:has(input:checked) { color: var(--text-2); text-decoration: line-through; }
+#tech-notes { width: 100%; resize: vertical; min-height: 140px; font: inherit; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); box-sizing: border-box; }
+.notes-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 8px; }
+
+/* Drawer log tools */
+.log-head { display: flex; align-items: center; gap: 6px; }
+
+/* Support page */
+details.faq { border: 1px solid var(--border); border-radius: 10px; padding: 0 14px; margin-bottom: 8px; background: var(--surface-2); }
+details.faq summary { cursor: pointer; font-weight: 600; padding: 12px 0; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.faq summary::-webkit-details-marker { display: none; }
+details.faq summary::before { content: "›"; color: var(--accent); font-size: 18px; transition: transform .15s; }
+details.faq[open] summary::before { transform: rotate(90deg); }
+details.faq p { margin: 0 0 12px; color: var(--text-2); }
+
 /* Actions catalog */
 .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin-bottom: 8px; }
 .action-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);

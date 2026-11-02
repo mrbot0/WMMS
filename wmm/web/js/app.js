@@ -7,10 +7,11 @@
     ["Optimize", [["performance", "Performance"], ["cleanup", "Cleanup"], ["storage", "Storage"], ["startup", "Startup & Apps"], ["services", "Services"]]],
     ["Health", [["integrity", "System Integrity"], ["security", "Security"], ["updates", "Updates & Drivers"], ["network", "Network"]]],
     ["Operations", [["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
-    ["", [["settings", "Settings"]]]
+    ["", [["support", "Support"], ["settings", "Settings"]]]
   ];
   var PSEUDO_ACTIONS = { "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" } };
-  var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true };
+  var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
+    scrollPos: {}, playbooks: [] };
 
   function current() {
     var name = (location.hash || "").replace(/^#\/?/, "").split("?")[0];
@@ -75,7 +76,7 @@
       (state.scanning ? '<span class="st"><span class="led busy"></span>Scanning all areas…</span>' : "") +
       (running ? '<a class="st" href="#/activity"><span class="led busy"></span>Run in progress · ' + Math.round(state.job.percent || 0) + "% (" + state.job.done + "/" + state.job.total + ")</a>" : "") +
       '<span class="grow"></span><span class="st"><span class="kbd">Ctrl K</span> commands</span><span class="st"><span class="kbd">?</span> shortcuts</span>' +
-      '<span class="st">' + esc(info.machine_id || "") + "</span>";
+      '<button type="button" class="st st-copy" data-copy-id title="Copy the machine ID">' + esc(info.machine_id || "") + "</button>";
   }
 
   function refreshScores() {
@@ -99,19 +100,51 @@
     renderNav();
     var group = groupOf(name);
     document.getElementById("crumbs").innerHTML = "<span>Windows Maintenance Manager</span>" + (group ? "<span>" + esc(group) + "</span>" : "");
-    document.getElementById("page-title").textContent = page.title;
+    var area = UI.AREAS.indexOf(name);
+    document.getElementById("page-title").innerHTML = '<span class="title-icon"' + (area >= 0 ? ' style="color:' + Charts.PALETTE[area % Charts.PALETTE.length] + '"' : "") + ">" +
+      UI.icon(name) + "</span>" + esc(page.title);
     document.getElementById("page-sub").textContent = "";
-    document.title = page.title + " · Windows Maintenance Manager";
+    updateTitle();
     var content = document.getElementById("content");
     var scroller = document.getElementById("scroller");
-    if (state.lastPage !== name) scroller.scrollTop = 0;
+    // Each page keeps its own scroll position; a refresh of the same page keeps the current one.
+    if (state.lastPage && state.lastPage !== name) state.scrollPos[state.lastPage] = scroller.scrollTop;
+    var restore = state.lastPage !== name ? state.scrollPos[name] || 0 : scroller.scrollTop;
     state.lastPage = name;
+    Components.store("lastPage", name);
     content.innerHTML = Components.skeleton();
     Promise.resolve().then(function () { return page.render(content, App); }).then(function () {
-      if (token === state.rendering) Components.countUp(content);
+      if (token !== state.rendering) return;
+      Components.countUp(content);
+      scroller.scrollTop = restore;
+      if (area >= 0) fixButton(content, name, token);
     }).catch(function (error) {
       if (token === state.rendering) content.innerHTML = UI.errorBox(error);
     });
+  }
+
+  /* Area pages: one button applies every one-click improvement found for that area. */
+  function fixButton(content, area, token) {
+    API.get("/recommendations").then(function (r) {
+      var ids = order(r.items.filter(function (x) { return x.area === area && x.action_id && state.actions[x.action_id]; })
+        .map(function (x) { return x.action_id; }).filter(function (id, i, list) { return list.indexOf(id) === i; }));
+      var bar = content.querySelector(".page-actions");
+      if (!ids.length || !bar || token !== state.rendering) return;
+      bar.insertAdjacentHTML("afterbegin", UI.button("Fix recommended (" + ids.length + ")", 'data-fix-area title="Apply the one-click improvements of this area"', "", "sparkle"));
+      bar.querySelector("[data-fix-area]").addEventListener("click", function () { runActions(ids); });
+    }, function () { /* the button is optional */ });
+  }
+  /* DISM before SFC, like the playbooks. */
+  function order(ids) {
+    var rank = function (x) { return x === "integrity.dism" ? 0 : x === "integrity.sfc" ? 1 : 2; };
+    return ids.slice().sort(function (a, b) { return rank(a) - rank(b); });
+  }
+
+  /* The browser tab shows the run percentage, so progress is visible from other tabs too. */
+  function updateTitle() {
+    var page = window.Pages[state.page], job = state.job && state.job.active ? state.job : null;
+    var pct = job ? (job.percent != null ? job.percent : 100 * job.done / Math.max(1, job.total)) : null;
+    document.title = (pct != null ? Math.round(pct) + "% · " : "") + (page ? page.title : "") + " · Windows Maintenance Manager";
   }
 
   function onLeave(fn) { state.leave.push(fn); }
@@ -175,7 +208,9 @@
         return "<li>" + UI.statusBadge(r.status) + "<span>" + esc(a ? a.title : r.action_id) + '</span><span class="muted small">' +
           esc(r.note || "") + (r.bytes_freed ? " · freed " + UI.formatBytes(r.bytes_freed) : "") + "</span></li>";
       }).join("") + "</ul>" +
-      '<div class="log-head">Live log</div><pre class="log">' + esc(job.log.slice(-400).join("\n")) + "</pre>";
+      '<div class="log-head">Live log<span class="grow"></span><button class="btn btn-sm btn-ghost" type="button" data-log="copy">' + UI.icon("download") + "Copy</button>" +
+      '<button class="btn btn-sm btn-ghost" type="button" data-log="save">' + UI.icon("download") + "Download</button></div>" +
+      '<pre class="log">' + esc(job.log.slice(-400).join("\n")) + "</pre>";
     logEl = body.querySelector(".log");
     if (stick) logEl.scrollTop = logEl.scrollHeight;
   }
@@ -190,6 +225,7 @@
         renderDrawer();
         renderStatus();
         updateProgress();
+        updateTitle();
         if (!job.active) {
           clearInterval(state.poll);
           document.getElementById("activity-dot").hidden = true;
@@ -225,14 +261,27 @@
 
   function action(id) { return state.actions[id] || PSEUDO_ACTIONS[id]; }
 
+  /* Confirmation listing every step in run order, its risk and the estimated total time. */
+  function confirmRun(list, risky) {
+    var total = list.reduce(function (s, a) { return s + (a.minutes || 0); }, 0);
+    var body = '<p class="modal-text">' + (risky.length ? "A restore point is created first, then the actions run in this order:" : "The actions run in this order:") + "</p>" +
+      '<ol class="confirm-steps">' + list.map(function (a) {
+        return "<li><span class=\"grow\"><span class=\"cell-title\">" + esc(a.title) + "</span>" + (a.risk !== "safe" && a.warning ? '<br><span class="cell-sub">' + esc(a.warning) + "</span>" : "") +
+          "</span>" + UI.riskBadge(a.risk) + '<span class="badge">' + esc(UI.duration(a.minutes)) + "</span></li>";
+      }).join("") + "</ol>" +
+      '<p class="muted small">Estimated time: ' + esc(UI.duration(total)) + ". You can follow every step in Activity.</p>";
+    var danger = risky.some(function (a) { return a.risk === "high"; });
+    return UI.modal(list.length === 1 ? list[0].title : "Run " + list.length + " actions", body, [
+      { label: "Cancel", cls: "btn-ghost" },
+      { label: "Run now", cls: danger ? "btn-danger" : "btn-primary", value: function () { return true; } }
+    ]).then(function (v) { return v === true; });
+  }
+
   function runActions(ids) {
     var list = ids.map(action).filter(Boolean);
     var risky = list.filter(function (a) { return a.risk !== "safe"; });
-    var ask = risky.length
-      ? UI.confirm(risky.length === 1 && list.length === 1 ? risky[0].title : "Run " + list.length + " actions",
-        risky.map(function (a) { return a.title + ": " + a.warning; }).join(" ") + " A restore point is created first.",
-        { ok: "Run now", danger: risky.some(function (a) { return a.risk === "high"; }) })
-      : Promise.resolve(true);
+    // Safe actions start at once; anything else, or a batch, is confirmed with its steps.
+    var ask = risky.length || list.length > 2 ? confirmRun(list, risky) : Promise.resolve(true);
     return ask.then(function (ok) {
       if (!ok) return null;
       return API.post("/runs", { actions: ids, confirmed: risky.length > 0 }).then(function (r) {
@@ -367,6 +416,33 @@
     list.push({ group: "Commands", title: "Export full report", icon: "download", run: function () { Report.download("full"); } });
     list.push({ group: "Commands", title: "Keyboard shortcuts", icon: "keyboard", run: Components.shortcutsHelp });
     list.push({ group: "Commands", title: "Show activity", icon: "performance", run: openDrawer });
+    list.push({ group: "Commands", title: "Collapse or expand all cards", icon: "dashboard", run: toggleCards });
+    list.push({ group: "Commands", title: "Copy the machine ID", icon: "download", run: function () { if (state.info) copyText(state.info.machine_id, "Machine ID"); } });
+    list.push({ group: "Commands", title: "Open the user guide", icon: "support", keywords: "help faq", run: function () { location.hash = "#/support"; } });
+    state.playbooks.forEach(function (b) {
+      list.push({ group: "Playbooks", title: "Run playbook: " + b.title, sub: b.actions.length + " actions", icon: "playbooks", keywords: b.description,
+        run: function () { runActions(b.actions); } });
+    });
+    var toggle = function (title, key, apply) {
+      list.push({ group: "Preferences", title: title, icon: "settings", run: function () {
+        var on = !Components.store(key);
+        Components.store(key, on);
+        if (apply) apply(on);
+        UI.toast(title + ": " + (on ? "on" : "off") + ".", "info");
+      } });
+    };
+    toggle("Compact sidebar", "sidebar", function (on) { document.body.classList.toggle("sidebar-collapsed", on); });
+    toggle("Desktop notifications", "desktopNotify", function (on) {
+      if (on && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    });
+    list.push({ group: "Preferences", title: "Compact density", icon: "settings", run: function () {
+      Components.density.set(Components.density.get() === "compact" ? "comfortable" : "compact");
+    } });
+    list.push({ group: "Preferences", title: "Dashboard auto-refresh", icon: "settings", run: function () {
+      var on = Components.store("dashAuto") === false;
+      Components.store("dashAuto", on);
+      UI.toast("Dashboard auto-refresh: " + (on ? "on" : "off") + ".", "info");
+    } });
     Object.keys(state.actions).forEach(function (id) {
       var a = state.actions[id];
       list.push({ group: "Run an action", title: a.title, sub: UI.AREA_LABEL[a.area], icon: "play", keywords: a.description + " " + id,
@@ -408,7 +484,8 @@
   var App = window.App = {
     openDrawer: openDrawer, follow: follow, pollActivity: pollActivity, requestAccess: requestAccess, restartAsAdmin: restartAsAdmin,
     state: state, render: render, isCurrent: isCurrent, onLeave: onLeave, runActions: runActions, runSafe: runSafe, schedule: schedule,
-    scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores
+    scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores,
+    order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards
   };
 
   setInterval(pollActivity, 4000);
@@ -450,7 +527,44 @@
   document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
   document.addEventListener("keydown", function (e) {
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
-    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.shiftKey && e.key === "R" && !document.querySelector(".modal-backdrop")) { render(); UI.toast("Page refreshed.", "info"); }
+    if (typing || e.ctrlKey || e.metaKey || e.altKey || !e.shiftKey || document.querySelector(".modal-backdrop")) return;
+    if (e.key === "R") { render(); UI.toast("Page refreshed.", "info"); }
+    if (e.key === "S") scanAll();
+    if (e.key === "C") toggleCards();
+  });
+
+  /* Collapses every card of the page, or expands them all when they are already collapsed. */
+  function toggleCards() {
+    var cards = document.querySelectorAll("#content .card[data-card]");
+    if (!cards.length) return;
+    var collapse = Array.prototype.some.call(cards, function (c) { return !c.classList.contains("collapsed"); });
+    cards.forEach(function (c) {
+      c.classList.toggle("collapsed", collapse);
+      var b = c.querySelector("[data-collapse]");
+      if (b) b.setAttribute("aria-expanded", String(!collapse));
+    });
+  }
+
+  function copyText(text, what) {
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { UI.toast(what + " copied.", "ok"); },
+      function () { UI.toast("The clipboard is not available in this browser.", "warning"); });
+  }
+  function saveText(text, name) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("[data-copy-id]") && state.info) copyText(state.info.machine_id, "Machine ID");
+    var log = e.target.closest("[data-log]");
+    if (log && state.job) {
+      var text = state.job.log.join("\n");
+      if (log.getAttribute("data-log") === "copy") copyText(text, "Log");
+      else saveText(text, "wmm-run-" + (state.job.id || "log") + ".txt");
+    }
   });
 
   /* Recent pages for the command palette. */
@@ -480,7 +594,11 @@
     state.info = results[0];
     results[1].actions.forEach(function (a) { state.actions[a.id] = a; });
     renderChrome();
+    // Reopen the page used last, unless the address already names one.
+    var last = Components.store("lastPage");
+    if (!/^#\/\w/.test(location.hash) && last && window.Pages[last] && last !== "dashboard") history.replaceState(null, "", "#/" + last);
     render();
+    API.get("/playbooks").then(function (p) { state.playbooks = p.playbooks; }, function () { /* palette works without them */ });
     refreshScores();
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });
     // A token from a previous agent run is rejected here: the 403 opens the reconnect dialog.

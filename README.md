@@ -5,7 +5,7 @@ and works from an enterprise web console that runs **offline** on `127.0.0.1`: i
 the system, proposes improvements, applies them in one click or on a schedule, keeps a history and
 produces customer-ready reports.
 
-- **72 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
+- **94 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
 - **5 playbooks** (Quick tune-up, Full maintenance, Repair Windows, Security hardening, Performance boost)
 - **Live monitor** of CPU, memory, disk, network and processes, refreshed every 2 seconds
 - **Schedules** registered in Windows Task Scheduler, running even when the console is closed
@@ -64,33 +64,40 @@ python wmm.py --preview
 
 | Section | Pages |
 |---|---|
-| **Overview** | Dashboard (overall score, quick actions, area tiles, live system, key figures, insights) · Recommendations (all improvements with filters and bulk apply) |
+| **Overview** | Dashboard (overall score, quick actions, today on this PC, visit checklist, technician notes, area tiles, live system, key figures, insights) · Recommendations (all improvements with filters, bulk apply and dismiss) |
 | **Optimize** | Performance · Cleanup · Storage · Startup & Apps · Services |
 | **Health** | System Integrity · Security · Updates & Drivers · Network |
-| **Operations** | Activity (runs and scans in progress, step by step) · Playbooks · Schedules · History · Reports |
-| **Settings** | Report branding, theme, density, health check, installation status |
+| **Operations** | Actions (whole catalog: details, sort, multi-select) · Activity (runs and scans in progress, step by step, run again) · Playbooks · Schedules · History · Reports |
+| **Support** | User guide: getting started, searchable FAQ, risk levels, shortcuts, diagnostics to copy, areas at a glance |
+| **Settings** | Report branding, theme, density, dashboard sections, export / import / reset of console preferences, health check, installation status |
 
 Every area page shows a **score from 0 to 100**, charts and descriptive data, the **recommended
-improvements** with *Apply* and *Schedule* buttons, the list of actions with their risk, the score trend
-and the recent activity.
+improvements** with *Apply* and *Schedule* buttons and a *Fix recommended* button that applies them all,
+the list of actions with their risk, the score trend and the recent activity.
 
-Productivity features: command palette (**Ctrl+K**), keyboard shortcuts (**?** for the list, e.g.
-`G` then `D` for the dashboard), light/dark theme, collapsible cards, sortable and searchable tables
-with CSV export, notification center, status bar with agent health.
+Before a run that is not safe, or a batch of actions, the console lists every step in run order with its
+risk and the estimated total time. While a run is in progress the browser tab shows its percentage, and
+the live log can be copied or downloaded.
+
+Productivity features: command palette (**Ctrl+K**: pages, actions, playbooks, preferences), keyboard
+shortcuts (**?** for the list, e.g. `G` then `D` for the dashboard, **Shift+S** scan all, **Shift+C**
+collapse all cards), light/dark theme, collapsible cards, sortable and searchable tables with CSV
+export, notification center, status bar with agent health (click the machine ID to copy it). The
+console reopens the last page used and remembers the scroll position of each page.
 
 ## Areas and actions
 
 | Area | What it assesses | Actions |
 |---|---|---|
-| **Performance** | Live CPU/memory/disk/network, top processes, power plan, page file, memory modules, visual effects, Fast Startup, Game DVR, battery health | Power plan High performance / Balanced, visual effects, Fast Startup on/off, Game DVR on/off, free standby memory, restart Explorer |
+| **Performance** | Live CPU/memory/disk/network, top processes, power plan, page file, memory modules, visual effects, Fast Startup, Game DVR, battery health | Power plan High performance / Balanced, visual effects, Fast Startup on/off, Game DVR on/off, transparency on/off, mouse acceleration off, free standby memory, restart Explorer |
 | **Cleanup** | Recoverable space in temp folders, update cache, shader caches, crash dumps, Recycle Bin | Temporary files and caches, obsolete Windows components (DISM), empty Recycle Bin, delete crash dumps |
-| **Storage** | Volumes and disks, largest folders and files of the profile, browser caches, error reports, thumbnails, Windows.old, restore point storage, Storage Sense | Optimize all drives (TRIM/defrag), browser caches, error reports, thumbnail cache, Delivery Optimization cache, Storage Sense |
+| **Storage** | Volumes and disks, largest folders and files of the profile, browser caches, error reports, thumbnails, Windows.old, restore point storage, Storage Sense | Optimize all drives (TRIM/defrag), browser caches, error reports, thumbnail cache, Delivery Optimization cache, legacy Internet Explorer cache, delete the oldest restore point, Storage Sense |
 | **Startup & Apps** | Startup programs (registry and startup folders), installed applications, third-party scheduled tasks | **Optimize startup** (turns off non-essential programs), per-entry on/off switch |
-| **Services** | Start types and states of all services, non-essential services, restore backup | Disable non-essential services, Xbox services, print services, restore from backup |
-| **System Integrity** | Disk health (SMART), stability events, event log errors (7 days), firmware age, Defender and firewall, last repair checks | DISM RestoreHealth, SFC, CHKDSK online, disk repair at reboot, TRIM, verify WMI, reset Windows Update components |
-| **Security** | Defender, firewall, UAC, SmartScreen, Secure Boot, TPM, BitLocker, RDP, SMBv1, local administrators, Guest, restore points | Quick and full scan, update signatures, turn on firewall, disable SMBv1, create restore point |
-| **Updates & Drivers** | Pending Windows updates by severity, update history, devices with errors, third-party driver age | Check for updates, install updates, update Microsoft Store apps |
-| **Network** | Adapters, latency/jitter/packet loss to router, Cloudflare and Google, DNS time, connections | Flush DNS, optimize TCP, renew IP, DNS Cloudflare / Google / automatic, full network reset |
+| **Services** | Start types and states of all services, non-essential services, restore backup | Disable non-essential services, Xbox services, print services, Windows Search on manual, restart Windows Update / Bluetooth services, restore from backup |
+| **System Integrity** | Disk health (SMART), stability events, event log errors (7 days), firmware age, Defender and firewall, last repair checks | DISM RestoreHealth, SFC, SFC verify only, CHKDSK online (system or all drives), disk repair at reboot, TRIM, verify and repair WMI, reset Windows Update components |
+| **Security** | Defender, firewall, UAC, SmartScreen, Secure Boot, TPM, BitLocker, RDP, SMBv1, insecure SMB guest logons, LSA protection, LLMNR, telemetry level, advertising ID, recent items, local administrators, Guest, restore points | Quick, full and offline scan, update signatures, turn on firewall, disable SMBv1, block SMB guest logons, LSA protection, disable LLMNR, reduce telemetry, turn off advertising ID, clear recent items, create restore point |
+| **Updates & Drivers** | Pending Windows updates by severity, update history, devices with errors, third-party driver age, Microsoft 365 / Office Click-to-Run | Check for updates, install updates, scan for new devices and drivers, update Office, update Microsoft Store apps |
+| **Network** | Adapters, latency/jitter/packet loss to router, Cloudflare and Google, DNS time, connections | Flush DNS, purge NetBIOS cache, optimize TCP, renew IP, DNS Cloudflare / Google / automatic, reset hosts file (with backup), full network reset |
 
 The overall score is a weighted average of the scanned areas (Security and System Integrity weigh most).
 A scan that could not read its data is marked **incomplete** and capped at 50, so a failed collection

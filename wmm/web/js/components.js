@@ -313,7 +313,8 @@
   var pendingG = 0;
 
   function shortcutsHelp() {
-    var rows = [["Ctrl K  or  /", "Command palette"], ["?", "This help"], ["Shift T", "Toggle light / dark theme"], ["Esc", "Close dialogs"]];
+    var rows = [["Ctrl K  or  /", "Command palette"], ["?", "This help"], ["Shift T", "Toggle light / dark theme"], ["Shift S", "Scan all areas"],
+      ["Shift R", "Refresh the page"], ["Shift C", "Collapse or expand all cards"], ["Esc", "Close dialogs"]];
     Object.keys(GOTO).forEach(function (k) { rows.push(["G then " + k.toUpperCase(), "Go to " + UI.esc((window.App && App.pageTitle(GOTO[k])) || GOTO[k])]); });
     UI.modal("Keyboard shortcuts", '<div class="shortcuts">' + rows.map(function (r) {
       return "<div><span>" + r[1] + '</span><span class="kbd">' + esc(r[0]) + "</span></div>";

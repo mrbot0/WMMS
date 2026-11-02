@@ -223,6 +223,20 @@ class NewAreas(unittest.TestCase):
         self.assertTrue({"performance.hibernation_off", "performance.background_off"} <= {r.action_id for r in racc})
         self.assertIn("updates.winget_upgrade", [r.action_id for r in advisor.assess_updates(updates(winget=True))[1]])
 
+    def test_privacy_and_hardening_rules(self):
+        dati = security(smb_insecure_guest=True, llmnr_disabled=False, lsa_protection=False, telemetry_level=3, advertising_id=True, recent_items=900)
+        punteggio, racc = advisor.assess_security(dati)
+        self.assertEqual(punteggio, 100 - 10 - 3)
+        azioni = {r.action_id for r in racc}
+        for attesa in ("security.block_smb_guest", "security.disable_llmnr", "security.lsa_protection", "security.reduce_telemetry",
+                       "security.disable_advertising_id", "security.clear_recent_items"):
+            self.assertIn(attesa, azioni)
+
+    def test_office_and_search_advice(self):
+        self.assertIn("updates.office_update", [r.action_id for r in advisor.assess_updates(updates(office_c2r=True))[1]])
+        self.assertIn("performance.transparency_off",
+                      [r.action_id for r in advisor.assess_performance(performance(transparency=True, memory={"total_gb": 4, "load_pct": 40, "commit_pct": 40}))[1]])
+
     def test_time_service_stopped(self):
         punteggio, racc = advisor.assess_integrity(integrity(time_service={"running": False, "server": "time.windows.com"}))
         self.assertEqual(punteggio, 95)

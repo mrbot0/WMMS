@@ -450,6 +450,11 @@ def restart_service(ctx, nome: str) -> Esito:
     return ctx.comando(powershell_command(f"Restart-Service -Name '{nome}' -Force; (Get-Service -Name '{nome}').Status"))
 
 
+def ctx_restart_many(ctx, nomi) -> Esito:
+    elenco = ", ".join(f"'{n}'" for n in nomi)
+    return ctx.comando(powershell_command(f"Restart-Service -Name {elenco} -Force; Get-Service -Name {elenco} | ForEach-Object {{ \"$($_.Name): $($_.Status)\" }}"))
+
+
 def restore_all_startup(ctx) -> Esito:
     from . import inventory
     spente = [v for v in inventory.startup_items() if not v["enabled"]]
@@ -461,6 +466,124 @@ def restore_all_startup(ctx) -> Esito:
     if getattr(ctx, "anteprima", False):
         return Esito(Stato.ANTEPRIMA, f"{len(spente)} would be turned on")
     return Esito(Stato.OK, f"{riattivate} startup programs turned on")
+
+
+# ---------- extended actions (iteration 5) ----------
+
+def set_transparency(ctx, enabled: bool) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    return _registry_action(ctx, f"Registry HKCU\\{chiave}\\EnableTransparency = {int(enabled)}",
+                            lambda: write_dword("HKEY_CURRENT_USER", chiave, "EnableTransparency", int(enabled)),
+                            "transparency " + ("on" if enabled else "off"))
+
+
+def mouse_precision_off(ctx) -> Esito:
+    def scrivi():
+        for nome in ("MouseSpeed", "MouseThreshold1", "MouseThreshold2"):
+            write_string("HKEY_CURRENT_USER", r"Control Panel\Mouse", nome, "0")
+    return _registry_action(ctx, "Registry HKCU\\Control Panel\\Mouse: acceleration off", scrivi, "pointer precision off; applies at the next sign-in")
+
+
+def search_manual(ctx) -> Esito:
+    return op.esito_servizi(ctx, *op.imposta_servizi(ctx, ["WSearch"], "demand"))
+
+
+def delete_oldest_restore_point(ctx) -> Esito:
+    return ctx.comando(["vssadmin", "delete", "shadows", "/for=C:", "/oldest", "/quiet"])
+
+
+def clear_ie_cache(ctx) -> Esito:
+    return ctx.comando(["RunDll32.exe", "InetCpl.cpl,ClearMyTracksByProcess", "8"])
+
+
+DEFAULT_HOSTS = ("# Copyright (c) 1993-2009 Microsoft Corp.\n#\n# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.\n#\n"
+                 "# localhost name resolution is handled within DNS itself.\n#\t127.0.0.1       localhost\n#\t::1             localhost\n")
+
+
+def reset_hosts(ctx) -> Esito:
+    import shutil as _shutil
+    import time
+    percorso = os.path.expandvars(r"%SystemRoot%\System32\drivers\etc\hosts")
+    copia = percorso + time.strftime(".wmm-%Y%m%d-%H%M%S")
+    if not ctx.modifica(f"Back up the hosts file to {copia} and restore the Windows default"):
+        return Esito(Stato.ANTEPRIMA)
+    if os.path.exists(percorso):
+        _shutil.copy2(percorso, copia)
+    with open(percorso, "w", encoding="ascii") as file:
+        file.write(DEFAULT_HOSTS)
+    return Esito(Stato.OK, f"default hosts file restored; backup {os.path.basename(copia)}")
+
+
+def purge_netbios(ctx) -> Esito:
+    return ctx.comando(["nbtstat", "-R"])
+
+
+def defender_offline_scan(ctx) -> Esito:
+    return ctx.comando(powershell_command("Start-MpWDOScan; 'Offline scan scheduled: the PC restarts now.'"))
+
+
+def block_smb_guest(ctx) -> Esito:
+    chiave = r"SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\AllowInsecureGuestAuth = 0",
+                            lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "AllowInsecureGuestAuth", 0), "insecure guest logons blocked")
+
+
+def lsa_protection(ctx) -> Esito:
+    esito = _registry_action(ctx, "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\RunAsPPL = 1",
+                             lambda: write_dword("HKEY_LOCAL_MACHINE", r"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL", 1),
+                             "LSA protection enabled; restart required")
+    if esito.stato is Stato.OK:
+        ctx.riavvio_necessario = True
+    return esito
+
+
+def disable_llmnr(ctx) -> Esito:
+    chiave = r"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\EnableMulticast = 0",
+                            lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "EnableMulticast", 0), "LLMNR disabled")
+
+
+def clear_recent_items(ctx) -> Esito:
+    return _wipe_action(ctx, "Delete the recent items list", [(os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Recent"), "*.lnk")])
+
+
+def reduce_telemetry(ctx) -> Esito:
+    chiave = r"SOFTWARE\Policies\Microsoft\Windows\DataCollection"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\AllowTelemetry = 1",
+                            lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "AllowTelemetry", 1), "diagnostic data set to required only")
+
+
+def disable_advertising_id(ctx) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo"
+    return _registry_action(ctx, f"Registry HKCU\\{chiave}\\Enabled = 0",
+                            lambda: write_dword("HKEY_CURRENT_USER", chiave, "Enabled", 0), "advertising ID off")
+
+
+def driver_scan(ctx) -> Esito:
+    return ctx.comando(["pnputil", "/scan-devices"])
+
+
+def office_update(ctx) -> Esito:
+    from .inventory import OFFICE_C2R
+    if not os.path.isfile(OFFICE_C2R):
+        return Esito(Stato.ERRORE, "Microsoft 365 / Office Click-to-Run is not installed")
+    return ctx.comando([OFFICE_C2R, "/update", "user", "displaylevel=false", "forceappshutdown=false"])
+
+
+def chkdsk_all(ctx) -> Esito:
+    return ctx.comando(powershell_command(
+        "Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter } | ForEach-Object { \"== $($_.DriveLetter): ==\"; chkdsk \"$($_.DriveLetter):\" /scan }"))
+
+
+def repair_wmi(ctx) -> Esito:
+    return ctx.comando(["winmgmt", "/salvagerepository"])
+
+
+def sfc_verify(ctx) -> Esito:
+    esito = ctx.comando(["sfc", "/verifyonly"])
+    if esito.stato is Stato.AVVISO:
+        esito.nota = "problems found: run Repair system files (SFC)"
+    return esito
 
 
 SCRIPT_INSTALL_UPDATES = r"""

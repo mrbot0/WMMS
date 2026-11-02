@@ -23,15 +23,29 @@
     if (score >= 65) return ["This PC needs attention", "Some areas have issues worth fixing during this visit."];
     return ["This PC needs maintenance", "Several areas have significant problems."];
   }
+  /* Dashboard sections the technician can hide in Settings. */
+  var SECTIONS = [["visit", "Today, visit checklist and notes"], ["favorites", "Favorite actions"], ["tiles", "Health by area"], ["live", "Live system"],
+    ["figures", "Key figures"], ["insights", "Insights"], ["operations", "System & operations"]];
+  var VISIT = [["scan", "Run a full scan"], ["review", "Review high-impact improvements"], ["restore", "Create a restore point"], ["tuneup", "Run the quick tune-up"],
+    ["updates", "Check pending updates and drivers"], ["report", "Export the report for the customer"]];
+  function hiddenSections() { return Components.store("dashHidden") || []; }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  /* The checklist belongs to one visit: it starts empty again the next day. */
+  function visitState() {
+    var v = Components.store("visit");
+    return v && v.date === today() ? v : { date: today(), done: {} };
+  }
+
   function section(iconName, text, extra) {
     return '<div class="section-title">' + UI.icon(iconName) + esc(text) + (extra ? '<span class="extra">' + extra + "</span>" : "") + "</div>";
   }
 
   window.Pages.dashboard = {
     title: "Dashboard",
+    sections: SECTIONS,
     render: function (el, App) {
-      return Promise.all([API.get("/dashboard"), API.get("/activity")]).then(function (r) {
-        var d = r[0], act = r[1];
+      return Promise.all([API.get("/dashboard"), API.get("/activity"), API.get("/settings")]).then(function (r) {
+        var d = r[0], act = r[1], settings = r[2];
         var s = d.system || {}, os = s.os || {}, mem = s.memory || {}, st = s.stability || {}, h = d.highlights || {};
         var c = volumeC(s), cFree = c.total_gb ? Math.round(100 * c.free_gb / c.total_gb) : null;
         var memFree = mem.total_gb ? Math.round(100 * mem.free_gb / mem.total_gb) : null;
@@ -72,7 +86,8 @@
           var color = score == null ? "var(--border-strong)" : Charts.scoreTone(score);
           return '<a class="tile" href="#/' + a + '" data-area="' + a + '"><div class="tile-head"><span class="tile-icon">' + UI.icon(a) + '</span><span class="tile-name-wrap"><span class="tile-name">' +
             esc(UI.AREA_LABEL[a]) + '</span><span class="tile-sub">' + (d.scanned[a] ? "Scanned " + esc(UI.relative(d.scanned[a])) : "Not scanned yet") + "</span></span>" +
-            '<span class="tile-score ' + tone + '">' + (score == null ? "—" : Components.num(score)) +
+            '<span class="tile-score ' + tone + '"' + (issues.length ? ' data-rec-area="' + a + '" title="Open the ' + issues.length + ' improvement(s) of this area"' : "") + ">" +
+            (score == null ? "—" : Components.num(score)) +
             (trend.length > 1 && trend[trend.length - 1] !== trend[trend.length - 2]
               ? '<span class="delta ' + (trend[trend.length - 1] > trend[trend.length - 2] ? "up" : "down") + '" title="Change since the previous scan">' +
                 (trend[trend.length - 1] > trend[trend.length - 2] ? "▲" : "▼") + Math.abs(trend[trend.length - 1] - trend[trend.length - 2]) + "</span>" : "") + "</span></div>" +
@@ -142,18 +157,38 @@
           favs.map(function (a) {
             return '<button type="button" class="quick" data-run="' + esc(a.id) + '" data-area="' + a.area + '"><span class="tile-icon">' + UI.icon(a.area) + "</span><span>" + esc(a.title) + "</span></button>";
           }).join("") + "</div>" : "";
-        el.innerHTML = toolbar + hero + pinned +
-          section("dashboard", "Health by area", scanned.length + " of " + UI.AREAS.length + ' assessed · <a href="#" id="score-help">How scores work</a>') + tiles +
-          section("performance", "Live system", '<a href="#/performance">Open Performance</a>') + live +
-          section("gauge", "Key figures") + kpis +
-          section("sparkle", "Insights") +
-          '<div class="grid grid-2-1">' + UI.card("Top recommended improvements", UI.recommendations(d.recommendations.slice(0, 6), { showArea: true }),
-            '<a class="btn btn-sm" href="#/recommendations">View all ' + d.open_issues + "</a>") + UI.card("Scores by area", areaScores) + "</div>" +
-          '<div class="grid grid-2-1">' + UI.card("Score trend · key areas", trend) + UI.card("Activity · last 22 weeks", heat) + "</div>" +
-          section("cpu", "System & operations") +
-          '<div class="grid grid-3">' + UI.card("Security & stability", health) + UI.card("Storage", storage) + UI.card("Network latency", network) + "</div>" +
-          '<div class="grid grid-3">' + UI.card("System", info, '<button class="btn btn-sm" type="button" id="copy-info">' + UI.icon("download") + "Copy</button>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
-          UI.card("Recent activity", UI.runsTable(d.runs.slice(0, 6), title), '<a class="btn btn-sm" href="#/history">History</a>', "card-flush") + "</div>";
+        // Today on this PC: what ran since midnight, what failed and how much space was freed.
+        var day = today(), ranToday = (d.activity || []).filter(function (x) { return String(x.started).slice(0, 10) === day; });
+        var failedToday = ranToday.filter(function (x) { return x.status === "error"; }).length;
+        var freedToday = ranToday.reduce(function (s, x) { return s + (x.bytes_freed || 0); }, 0);
+        var todayCard = UI.definition([
+          ["Actions run", String(ranToday.length)], ["Failed", failedToday ? '<span class="badge badge-status-error">' + failedToday + "</span>" : "0"],
+          ["Space freed", freedToday ? esc(UI.formatBytes(freedToday)) : "—"], ["Areas scanned today", String(scanned.filter(function (a) { return String(d.scanned[a]).slice(0, 10) === day; }).length) + " of " + UI.AREAS.length],
+          ["Open improvements", String(d.open_issues)]]);
+        var visit = visitState(), doneCount = VISIT.filter(function (v) { return visit.done[v[0]]; }).length;
+        var checklist = '<div class="visit-progress"><div class="progress"><div style="width:' + Math.round(100 * doneCount / VISIT.length) + '%"></div></div><span class="muted small">' +
+          doneCount + " of " + VISIT.length + '</span></div><ul class="visit-list">' + VISIT.map(function (v) {
+            return '<li><label class="check"><input type="checkbox" data-visit="' + v[0] + '"' + (visit.done[v[0]] ? " checked" : "") + "> " + esc(v[1]) + "</label></li>";
+          }).join("") + "</ul>";
+        var notes = '<textarea id="tech-notes" rows="7" maxlength="4000" placeholder="Notes for this PC: what the customer reported, what you changed, what to check next time…">' +
+          esc(settings.notes || "") + '</textarea><div class="notes-foot"><span class="muted small" id="notes-state">Saved on this device</span>' +
+          '<button class="btn btn-sm btn-primary" type="button" id="notes-save">' + UI.icon("check") + "Save notes</button></div>";
+        var hidden = hiddenSections(), show = function (key, html) { return hidden.indexOf(key) >= 0 ? "" : html; };
+        el.innerHTML = toolbar + hero +
+          show("visit", section("check", "This visit", '<a href="#/settings">Customize the dashboard</a>') + '<div class="grid grid-3">' + UI.card("Today on this PC", todayCard) +
+            UI.card("Visit checklist", checklist, '<button class="btn btn-sm btn-ghost" type="button" id="visit-reset">Reset</button>') + UI.card("Technician notes", notes) + "</div>") +
+          show("favorites", pinned) +
+          show("tiles", section("dashboard", "Health by area", scanned.length + " of " + UI.AREAS.length + ' assessed · <a href="#" id="score-help">How scores work</a>') + tiles) +
+          show("live", section("performance", "Live system", '<a href="#/performance">Open Performance</a>') + live) +
+          show("figures", section("gauge", "Key figures") + kpis) +
+          show("insights", section("sparkle", "Insights") +
+            '<div class="grid grid-2-1">' + UI.card("Top recommended improvements", UI.recommendations(d.recommendations.slice(0, 6), { showArea: true }),
+              '<a class="btn btn-sm" href="#/recommendations">View all ' + d.open_issues + "</a>") + UI.card("Scores by area", areaScores) + "</div>" +
+            '<div class="grid grid-2-1">' + UI.card("Score trend · key areas", trend) + UI.card("Activity · last 22 weeks", heat) + "</div>") +
+          show("operations", section("cpu", "System & operations") +
+            '<div class="grid grid-3">' + UI.card("Security & stability", health) + UI.card("Storage", storage) + UI.card("Network latency", network) + "</div>" +
+            '<div class="grid grid-3">' + UI.card("System", info, '<button class="btn btn-sm" type="button" id="copy-info">' + UI.icon("download") + "Copy</button>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
+            UI.card("Recent activity", UI.runsTable(d.runs.slice(0, 6), title), '<a class="btn btn-sm" href="#/history">History</a>', "card-flush") + "</div>");
 
         el.querySelectorAll("[data-quick]").forEach(function (btn) {
           btn.addEventListener("click", function () {
@@ -168,14 +203,45 @@
             }
           });
         });
-        el.querySelector("#copy-info").addEventListener("click", function () {
+        el.querySelectorAll("[data-rec-area]").forEach(function (s) {
+          s.addEventListener("click", function (e) {
+            e.preventDefault();
+            location.hash = "#/recommendations?area=" + s.getAttribute("data-rec-area");
+          });
+        });
+        el.querySelectorAll("[data-visit]").forEach(function (box) {
+          box.addEventListener("change", function () {
+            var v = visitState();
+            v.done[box.getAttribute("data-visit")] = box.checked;
+            Components.store("visit", v);
+            var n = VISIT.filter(function (x) { return v.done[x[0]]; }).length;
+            el.querySelector(".visit-progress .progress > div").style.width = Math.round(100 * n / VISIT.length) + "%";
+            el.querySelector(".visit-progress .muted").textContent = n + " of " + VISIT.length;
+            if (n === VISIT.length) UI.toast("Visit checklist completed.", "ok");
+          });
+        });
+        var reset = el.querySelector("#visit-reset");
+        if (reset) reset.addEventListener("click", function () { Components.store("visit", null); App.render(); });
+        var notesBox = el.querySelector("#tech-notes");
+        if (notesBox) {
+          notesBox.addEventListener("input", function () { el.querySelector("#notes-state").textContent = "Unsaved changes"; });
+          el.querySelector("#notes-save").addEventListener("click", function () {
+            API.put("/settings", { notes: notesBox.value }).then(function () {
+              el.querySelector("#notes-state").textContent = "Saved " + new Date().toLocaleTimeString();
+              UI.toast("Notes saved.", "ok");
+            }, function (err) { UI.toast(err.message, "error"); });
+          });
+        }
+        var copyInfo = el.querySelector("#copy-info");
+        if (copyInfo) copyInfo.addEventListener("click", function () {
           var text = [App.state.info.hostname + " · " + App.state.info.machine_id, (os.name || "") + " build " + (os.build || ""), "CPU: " + (os.cpu || ""),
             "Board: " + (os.board || "") + " · BIOS " + (os.bios || "") + " " + (os.bios_date || ""), "GPU: " + ((s.gpu || {}).name || ""), "RAM: " + (mem.total_gb || "") + " GB",
             "Overall health: " + d.scores.overall + "/100"].join("\n");
           (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { UI.toast("System information copied.", "ok"); },
             function () { UI.toast("The clipboard is not available in this browser.", "warning"); });
         });
-        el.querySelector("#score-help").addEventListener("click", function (e) {
+        var scoreHelp = el.querySelector("#score-help");
+        if (scoreHelp) scoreHelp.addEventListener("click", function (e) {
           e.preventDefault();
           UI.modal("How scores work", '<p class="modal-text">Every area starts at 100 and loses points for each problem found; the reason of every deduction is listed in its improvements.</p>' +
             UI.checklist([["80 – 100", "ok", "Healthy"], ["60 – 79", "warning", "Needs attention"], ["0 – 59", "error", "Needs maintenance"]]) +
@@ -183,7 +249,7 @@
             "A scan that could not read its data is marked incomplete and capped at 50. Arrows on the tiles show the change since the previous scan.</p>", [{ label: "Close", cls: "btn-primary" }]);
         });
         el.querySelector("#dash-auto").addEventListener("change", function (e) { Components.store("dashAuto", e.target.checked); });
-        startLive(el, App);
+        if (hidden.indexOf("live") < 0) startLive(el, App);
         // App.render stops this page's timers and live loop before drawing it again.
         var timer = setTimeout(function () {
           if (App.isCurrent("dashboard") && Components.store("dashAuto") !== false) App.render();

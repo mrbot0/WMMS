@@ -249,6 +249,9 @@ def assess_performance(data: dict) -> Assessment:
     if ibernazione.get("enabled") and (ibernazione.get("size_gb") or 0) >= 4 and not data.get("battery"):
         racc.append(Recommendation("performance.hibernation", "performance", "Turn off hibernation",
                                    f"hiberfil.sys uses {ibernazione['size_gb']} GB on this desktop PC.", "low", "moderate", "performance.hibernation_off"))
+    if data.get("transparency") is True and (memoria.get("total_gb") or 99) < 8:
+        racc.append(Recommendation("performance.transparency", "performance", "Turn off transparency effects",
+                                   f"Only {memoria.get('total_gb')} GB of RAM: transparency costs GPU and memory.", "low", "moderate", "performance.transparency_off"))
     if data.get("background_apps") is True:
         racc.append(Recommendation("performance.background", "performance", "Stop apps running in the background",
                                    "Store apps can run in the background and use CPU, memory and network.", "low", "moderate", "performance.background_off"))
@@ -419,6 +422,23 @@ def assess_security(data: dict) -> Assessment:
            "Removable drives and discs can start programs automatically.", "low", "moderate", "security.disable_autorun")
     regola(data.get("pua_protection") is False, 5, "security.pua", "Block potentially unwanted apps",
            "Defender does not block adware, bundlers and other unwanted applications.", "low", "moderate", "security.pua_protection")
+    regola(data.get("smb_insecure_guest") is True, 10, "security.smb_guest", "Block insecure guest file sharing",
+           "Windows connects to SMB shares without authentication (guest logons).", "high", "moderate", "security.block_smb_guest")
+    regola(data.get("llmnr_disabled") is False, 3, "security.llmnr", "Disable LLMNR",
+           "Multicast name resolution can be abused to capture network credentials.", "low", "moderate", "security.disable_llmnr")
+
+    def consiglio(condizione: bool, ident: str, titolo: str, motivo: str, rischio: str, azione: str):
+        if condizione:
+            racc.append(Recommendation(ident, "security", titolo, motivo, "low", rischio, azione))
+
+    consiglio(data.get("lsa_protection") is False, "security.lsa", "Protect LSA credentials",
+              "LSA protection (RunAsPPL) keeps credential-stealing tools out of the LSASS process.", "high", "security.lsa_protection")
+    consiglio("telemetry_level" in data and (data["telemetry_level"] is None or data["telemetry_level"] >= 3), "security.telemetry",
+              "Reduce diagnostic data", "Windows sends optional diagnostic data to Microsoft.", "moderate", "security.reduce_telemetry")
+    consiglio(data.get("advertising_id") is True, "security.advertising", "Turn off the advertising ID",
+              "Apps can use the advertising ID to profile the user.", "moderate", "security.disable_advertising_id")
+    consiglio((data.get("recent_items") or 0) > 500, "security.recent", "Clear the recent items list",
+              f"{data.get('recent_items')} shortcuts to recently opened files are stored.", "safe", "security.clear_recent_items")
     regola(data.get("restore_enabled") is False, 10, "security.restore_off", "Turn on System Restore",
            "System Restore is off on the system drive: no restore point can be created.", "high", "safe", "security.enable_restore")
     punti = data.get("restore_points") or []
@@ -456,6 +476,9 @@ def assess_updates(data: dict) -> Assessment:
         racc.append(Recommendation("updates.devices", "updates", "Fix devices with errors",
                                    f"{len(dispositivi)} devices report an error: {', '.join(d.get('name') or '?' for d in dispositivi[:3])}. Check Device Manager.",
                                    "high", "safe", None))
+    if data.get("office_c2r"):
+        racc.append(Recommendation("updates.office", "updates", "Update Microsoft Office",
+                                   "Microsoft 365 / Office Click-to-Run is installed: it updates separately from Windows Update.", "low", "moderate", "updates.office_update"))
     if data.get("winget"):
         racc.append(Recommendation("updates.winget", "updates", "Update installed applications",
                                    "winget is available: it can update most installed desktop apps in one run.", "low", "moderate", "updates.winget_upgrade"))

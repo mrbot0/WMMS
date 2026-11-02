@@ -5,6 +5,7 @@
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
+  var kind = "all";  // filter of the session timeline: all, run or scan
 
   function duration(start, end) {
     var s = Math.max(0, Math.round(((end || Date.now() / 1000) - start)));
@@ -84,9 +85,10 @@
         var recent = a.jobs.filter(function (j) { return !j.active; }).map(function (j) {
           var errors = j.results.filter(function (r) { return r.status === "error"; }).length;
           return { start: j.started, end: j.finished, title: j.titles.length === 1 ? title(App, j.titles[0]) : j.titles.length + " actions · " + title(App, j.titles[0]) + "…",
-            status: errors ? "error" : j.results.some(function (r) { return r.status === "preview"; }) ? "preview" : "ok", sub: (UI.ORIGIN_LABEL[j.origin] || j.origin) + " run" };
+            status: errors ? "error" : j.results.some(function (r) { return r.status === "preview"; }) ? "preview" : "ok", sub: (UI.ORIGIN_LABEL[j.origin] || j.origin) + " run",
+            kind: "run", ids: j.titles };
         }).concat(a.tasks.filter(function (t) { return !t.active; }).map(function (t) {
-          return { start: t.started, end: t.finished, title: t.title, status: t.status, sub: "Scan" };
+          return { start: t.started, end: t.finished, title: t.title, status: t.status, sub: "Scan", kind: "scan" };
         })).sort(function (x, y) { return y.start - x.start; });
         var doneToday = recent.filter(function (r) { return r.start * 1000 >= today.getTime(); });
         var failed = doneToday.filter(function (r) { return r.status === "error"; }).length;
@@ -112,10 +114,15 @@
             start('data-href="#/playbooks"', "integrity", "playbooks", "Open playbooks", "Full maintenance, repair, security…") +
             "</div></section>";
         }
-        var timeline = recent.length ? '<ul class="timeline">' + recent.slice(0, 30).map(function (r) {
+        var filtered = recent.filter(function (r) { return kind === "all" || r.kind === kind; });
+        var timeline = filtered.length ? '<ul class="timeline">' + filtered.slice(0, 30).map(function (r) {
           return "<li>" + UI.statusIcon(r.status === "ok" || r.status === "preview" ? "ok" : r.status === "error" ? "error" : "warning") + '<div><div class="cell-title">' + esc(r.title) +
-            '</div><div class="cell-sub">' + esc(r.sub) + " · " + esc(when(r.start)) + " · took " + duration(r.start, r.end) + "</div></div>" + UI.statusBadge(r.status) + "</li>";
-        }).join("") + "</ul>" : '<p class="empty">No operation in this session yet. Older runs are in History.</p>';
+            '</div><div class="cell-sub">' + esc(r.sub) + " · " + esc(when(r.start)) + " · took " + duration(r.start, r.end) + "</div></div>" + UI.statusBadge(r.status) +
+            (r.ids ? '<button class="btn btn-sm btn-ghost" type="button" data-again="' + esc(r.ids.join(",")) + '" title="Run the same actions again">' + UI.icon("refresh") + "Run again</button>" : "") + "</li>";
+        }).join("") + "</ul>" : '<p class="empty">' + (recent.length ? "No operation of this kind in this session." : "No operation in this session yet. Older runs are in History.") + "</p>";
+        var kinds = '<span class="btn-group" role="group">' + [["all", "All"], ["run", "Runs"], ["scan", "Scans"]].map(function (k) {
+          return '<button type="button" class="btn btn-sm' + (kind === k[0] ? " active" : "") + '" data-kind="' + k[0] + '">' + k[1] + "</button>";
+        }).join("") + "</span>";
         var upcoming = a.schedules.length ? '<ul class="check-list">' + a.schedules.map(function (s) {
           return '<li><span class="status-icon skipped">' + UI.icon("clock") + '</span><span class="grow"><span class="cell-title">' + esc(s.title) + '</span><br><span class="cell-sub">' +
             esc(UI.formatDate(s.next_run)) + "</span></span></li>";
@@ -123,7 +130,13 @@
         el.innerHTML = UI.pageHeader("Activity", "Live: updates every second", '<a class="btn" href="#/history">' + UI.icon("history") + "Open history</a>") + kpis +
           '<div class="section-title">' + UI.icon("performance") + "Running now</div>" + running +
           '<div class="section-title">' + UI.icon("history") + "Recent operations</div>" +
-          '<div class="grid grid-2-1">' + UI.card("This session", '<div class="scroll-area">' + timeline + "</div>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/schedules">Schedules</a>') + "</div>";
+          '<div class="grid grid-2-1">' + UI.card("This session", '<div class="scroll-area">' + timeline + "</div>", kinds) + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/schedules">Schedules</a>') + "</div>";
+        el.querySelectorAll("[data-kind]").forEach(function (b) {
+          b.addEventListener("click", function () { kind = b.getAttribute("data-kind"); shape = ""; structure(a, activeJobs, activeTasks); });
+        });
+        el.querySelectorAll("[data-again]").forEach(function (b) {
+          b.addEventListener("click", function () { App.runActions(b.getAttribute("data-again").split(",")); });
+        });
         var drawerBtn = el.querySelector("[data-open-drawer]");
         if (drawerBtn) drawerBtn.addEventListener("click", App.openDrawer);
         el.querySelectorAll("[data-href]").forEach(function (b) { b.addEventListener("click", function () { location.hash = b.getAttribute("data-href"); }); });
