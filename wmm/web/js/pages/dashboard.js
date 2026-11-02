@@ -72,7 +72,10 @@
           var color = score == null ? "var(--border-strong)" : Charts.scoreTone(score);
           return '<a class="tile" href="#/' + a + '" data-area="' + a + '"><div class="tile-head"><span class="tile-icon">' + UI.icon(a) + '</span><span class="tile-name-wrap"><span class="tile-name">' +
             esc(UI.AREA_LABEL[a]) + '</span><span class="tile-sub">' + (d.scanned[a] ? "Scanned " + esc(UI.relative(d.scanned[a])) : "Not scanned yet") + "</span></span>" +
-            '<span class="tile-score ' + tone + '">' + (score == null ? "—" : Components.num(score)) + "</span></div>" +
+            '<span class="tile-score ' + tone + '">' + (score == null ? "—" : Components.num(score)) +
+            (trend.length > 1 && trend[trend.length - 1] !== trend[trend.length - 2]
+              ? '<span class="delta ' + (trend[trend.length - 1] > trend[trend.length - 2] ? "up" : "down") + '" title="Change since the previous scan">' +
+                (trend[trend.length - 1] > trend[trend.length - 2] ? "▲" : "▼") + Math.abs(trend[trend.length - 1] - trend[trend.length - 2]) + "</span>" : "") + "</span></div>" +
             '<div class="tile-bar"><div style="width:' + (score || 0) + "%;background:" + color + '"></div></div>' +
             '<div class="tile-foot"><span class="tile-issue">' + (issues.length ? esc(issues[0].title) : score == null ? "Scan to assess" : "No open issues") + "</span>" +
             Charts.sparkline(trend, { color: color }) + "</div></a>";
@@ -134,8 +137,13 @@
         }).join("") + "</ul>" : '<p class="empty">No upcoming schedule.</p>';
         var title = function (id) { var a = App.action(id); return a ? a.title : id; };
 
-        el.innerHTML = toolbar + hero +
-          section("dashboard", "Health by area", scanned.length + " of " + UI.AREAS.length + " assessed") + tiles +
+        var favs = (Components.store("favorites") || []).map(function (id) { return App.action(id); }).filter(Boolean);
+        var pinned = favs.length ? section("actions", "Favorite actions", '<a href="#/actions">Manage</a>') + '<div class="quick-grid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:var(--gap)">' +
+          favs.map(function (a) {
+            return '<button type="button" class="quick" data-run="' + esc(a.id) + '" data-area="' + a.area + '"><span class="tile-icon">' + UI.icon(a.area) + "</span><span>" + esc(a.title) + "</span></button>";
+          }).join("") + "</div>" : "";
+        el.innerHTML = toolbar + hero + pinned +
+          section("dashboard", "Health by area", scanned.length + " of " + UI.AREAS.length + ' assessed · <a href="#" id="score-help">How scores work</a>') + tiles +
           section("performance", "Live system", '<a href="#/performance">Open Performance</a>') + live +
           section("gauge", "Key figures") + kpis +
           section("sparkle", "Insights") +
@@ -144,7 +152,7 @@
           '<div class="grid grid-2-1">' + UI.card("Score trend · key areas", trend) + UI.card("Activity · last 22 weeks", heat) + "</div>" +
           section("cpu", "System & operations") +
           '<div class="grid grid-3">' + UI.card("Security & stability", health) + UI.card("Storage", storage) + UI.card("Network latency", network) + "</div>" +
-          '<div class="grid grid-3">' + UI.card("System", info) + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
+          '<div class="grid grid-3">' + UI.card("System", info, '<button class="btn btn-sm" type="button" id="copy-info">' + UI.icon("download") + "Copy</button>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
           UI.card("Recent activity", UI.runsTable(d.runs.slice(0, 6), title), '<a class="btn btn-sm" href="#/history">History</a>', "card-flush") + "</div>";
 
         el.querySelectorAll("[data-quick]").forEach(function (btn) {
@@ -159,6 +167,20 @@
               App.runActions([id]);
             }
           });
+        });
+        el.querySelector("#copy-info").addEventListener("click", function () {
+          var text = [App.state.info.hostname + " · " + App.state.info.machine_id, (os.name || "") + " build " + (os.build || ""), "CPU: " + (os.cpu || ""),
+            "Board: " + (os.board || "") + " · BIOS " + (os.bios || "") + " " + (os.bios_date || ""), "GPU: " + ((s.gpu || {}).name || ""), "RAM: " + (mem.total_gb || "") + " GB",
+            "Overall health: " + d.scores.overall + "/100"].join("\n");
+          (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { UI.toast("System information copied.", "ok"); },
+            function () { UI.toast("The clipboard is not available in this browser.", "warning"); });
+        });
+        el.querySelector("#score-help").addEventListener("click", function (e) {
+          e.preventDefault();
+          UI.modal("How scores work", '<p class="modal-text">Every area starts at 100 and loses points for each problem found; the reason of every deduction is listed in its improvements.</p>' +
+            UI.checklist([["80 – 100", "ok", "Healthy"], ["60 – 79", "warning", "Needs attention"], ["0 – 59", "error", "Needs maintenance"]]) +
+            '<p class="muted small" style="margin-top:12px">The overall score is a weighted average of the scanned areas: Security and System Integrity weigh most. ' +
+            "A scan that could not read its data is marked incomplete and capped at 50. Arrows on the tiles show the change since the previous scan.</p>", [{ label: "Close", cls: "btn-primary" }]);
         });
         el.querySelector("#dash-auto").addEventListener("change", function (e) { Components.store("dashAuto", e.target.checked); });
         startLive(el, App);

@@ -9,7 +9,8 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+import re
+from typing import Callable, Dict, List, Optional, Tuple
 
 import wmm  # noqa: F401
 import ottimizza_pc as op
@@ -76,28 +77,61 @@ def free_bytes() -> int:
         return 0
 
 
+# "45.2%", "45 %": DISM, SFC, CHKDSK, defrag, Defender and winget all print progress like this.
+PERCENT = re.compile(r"(\d{1,3}(?:[.,]\d+)?)\s*%")
+MAX_ESTIMATE = 0.95
+
+
 class Job:
-    def __init__(self, action_ids: List[str], origin: str):
+    def __init__(self, action_ids: List[str], origin: str, minutes: Optional[List[float]] = None,
+                 clock: Callable[[], float] = time.time):
         self.id = uuid.uuid4().hex
         self.action_ids = action_ids
         self.origin = origin
+        self.minutes = minutes or [1.0] * len(action_ids)
+        self.clock = clock
         self.active = True
         self.current: Optional[str] = None
         self.log: List[str] = []
         self.results: List[dict] = []
         self.started = time.time()
         self.finished: Optional[float] = None
+        self.step_percent: Optional[float] = None
+        self.step_started = clock()
+
+    def begin_step(self) -> None:
+        self.step_percent = None
+        self.step_started = self.clock()
 
     def write(self, riga: str) -> None:
         self.log.append(riga)
         if len(self.log) > MAX_LOG_LINES:
             del self.log[: len(self.log) - MAX_LOG_LINES]
+        for valore in reversed(PERCENT.findall(riga)):
+            numero = float(valore.replace(",", "."))
+            if 0 <= numero <= 100:
+                self.step_percent = numero
+                break
+
+    def progress(self) -> Tuple[float, Optional[float], bool]:
+        """Overall percent, percent of the current step, and whether it is an estimate."""
+        fatte, totale = len(self.results), max(1, len(self.action_ids))
+        if not self.active or fatte >= totale:
+            return (100.0 if fatte >= totale else round(100 * fatte / totale, 1)), None, False
+        if self.step_percent is not None:
+            frazione, stimata = self.step_percent / 100, False
+        else:
+            durata = max(1.0, self.minutes[min(fatte, len(self.minutes) - 1)] * 60)
+            frazione, stimata = min(MAX_ESTIMATE, (self.clock() - self.step_started) / durata), True
+        return round(100 * (fatte + frazione) / totale, 1), self.step_percent, stimata
 
     def as_dict(self, log_lines: Optional[int] = None) -> dict:
+        percento, passo, stimata = self.progress()
         return {
             "id": self.id, "origin": self.origin, "active": self.active, "current": self.current,
             "done": len(self.results), "total": len(self.action_ids), "titles": list(self.action_ids),
             "started": self.started, "finished": self.finished,
+            "percent": percento, "step_percent": passo, "estimated": stimata,
             "log": list(self.log if log_lines is None else self.log[-log_lines:]), "results": list(self.results),
         }
 
@@ -180,10 +214,18 @@ class JobManager:
         if not confirmed and any(actions.CATALOG[a].risk != "safe" for a in action_ids):
             raise ConfirmationRequired("Confirmation is required for actions that are not safe.")
         self._acquire()
-        job = Job(list(action_ids), origin)
+        job = Job(list(action_ids), origin, [self._expected_minutes(a) for a in action_ids])
         self._jobs[job.id] = job
         self.current_id = job.id
         return job
+
+    def _expected_minutes(self, action_id: str) -> float:
+        """How long this action took here before, else the catalog estimate."""
+        try:
+            secondi = self.store.average_seconds(self.machine_id, action_id)
+        except sqlite3.Error:
+            secondi = None
+        return max(0.1, secondi / 60) if secondi else actions.CATALOG[action_id].minutes
 
     def start(self, action_ids: List[str], origin: str, confirmed: bool) -> str:
         job = self._prepare(action_ids, origin, confirmed)
@@ -236,6 +278,7 @@ class JobManager:
 
     def _run_action(self, job: Job, ctx: JobContext, action: actions.Action, fermata: str) -> None:
         job.current = action.id
+        job.begin_step()
         try:
             run_id = self.store.open_run(self.machine_id, action.id, job.origin)
         except sqlite3.Error as errore:

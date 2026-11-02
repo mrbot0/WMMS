@@ -13,6 +13,10 @@
     history.replaceState(null, "", location.pathname + location.search + "#/dashboard");
   }
   var BASE = "/api/v1";
+  function setToken(value) {
+    TOKEN = value || "";
+    try { if (TOKEN) sessionStorage.setItem("wmm.token", TOKEN); else sessionStorage.removeItem("wmm.token"); } catch (e) { /* storage unavailable */ }
+  }
 
   function request(method, path, body) {
     var options = { method: method, headers: { "Accept": "application/json" }, credentials: "same-origin" };
@@ -27,8 +31,13 @@
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
         if (!response.ok) {
           var message = (data && data.error) || ("Request failed (" + response.status + ")");
-          if (response.status === 403 && !TOKEN) {
-            message = "This window is view-only. Open the console from the link shown in the Windows Maintenance Manager window to make changes.";
+          // Permission problems open a guided dialog (request access / restart as administrator).
+          if (response.status === 403 && /token/i.test(message)) {
+            setToken("");
+            message = "This window is not connected to the agent. Use Request access to connect it.";
+            window.dispatchEvent(new CustomEvent("wmm-unauthorized"));
+          } else if (response.status === 409 && /administrator rights/i.test(message)) {
+            window.dispatchEvent(new CustomEvent("wmm-need-admin"));
           }
           var error = new Error(message);
           error.status = response.status;
@@ -48,6 +57,7 @@
     put: function (path, body) { return request("PUT", path, body); },
     del: function (path) { return request("DELETE", path); },
     url: function (path) { return BASE + path; },
-    hasToken: function () { return !!TOKEN; }
+    hasToken: function () { return !!TOKEN; },
+    setToken: setToken
   };
 })();

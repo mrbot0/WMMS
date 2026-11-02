@@ -72,7 +72,8 @@
               return '<option value="' + esc(o[0]) + '"' + (state.filters[f.key] === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>";
             }).join("") + "</select>";
           }).join("") + '<span style="flex:1"></span>' + (options.tools || "") +
-          (options.exportName ? '<button class="btn btn-sm" type="button" data-export>' + UI.icon("download") + "CSV</button>" : "") + "</div>";
+          (options.exportName ? '<button class="btn btn-sm" type="button" data-copy title="Copy the filtered rows">Copy</button><button class="btn btn-sm" type="button" data-export>' +
+            UI.icon("download") + "CSV</button>" : "") + "</div>";
       }
       var head = "<thead><tr>" + options.columns.map(function (c) {
         var sortable = c.sortable !== false && c.title;
@@ -128,6 +129,15 @@
       if (th) { sortBy(th); return; }
       var page = e.target.closest("[data-page]");
       if (page) { state.page += Number(page.getAttribute("data-page")); draw(); return; }
+      if (e.target.closest("[data-copy]")) {
+        var cols = options.columns.filter(function (c) { return c.title && c.csv !== false; });
+        var tsv = [cols.map(function (c) { return c.title; }).join("\t")].concat(rows().map(function (row) {
+          return cols.map(function (c) { var v = value(c, row); return v == null ? "" : String(v).replace(/[\t\n]/g, " "); }).join("\t");
+        })).join("\n");
+        (navigator.clipboard ? navigator.clipboard.writeText(tsv) : Promise.reject()).then(function () { UI.toast("Rows copied: paste them in Excel or a ticket.", "ok"); },
+          function () { UI.toast("The clipboard is not available in this browser.", "warning"); });
+        return;
+      }
       if (e.target.closest("[data-export]")) {
         var list = rows();
         var cols = options.columns.filter(function (c) { return c.title && c.csv !== false; });
@@ -299,7 +309,7 @@
   /* ---------- keyboard shortcuts ---------- */
 
   var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services",
-    i: "integrity", e: "security", u: "updates", n: "network", x: "activity", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
+    i: "integrity", e: "security", u: "updates", n: "network", x: "activity", z: "actions", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
   var pendingG = 0;
 
   function shortcutsHelp() {

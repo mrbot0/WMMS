@@ -125,6 +125,20 @@ class Store:
         with self._db() as db:
             return [dict(riga) for riga in db.execute(query, parametri).fetchall()]
 
+    def average_seconds(self, machine_id: str, action_id: str, last: int = 5) -> Optional[float]:
+        """Average duration of the latest completed runs of an action (for progress estimates)."""
+        with self._db() as db:
+            righe = db.execute(
+                "SELECT started, finished FROM runs WHERE machine_id = ? AND action_id = ? AND status IN ('ok', 'warning', 'preview') "
+                "AND finished IS NOT NULL ORDER BY id DESC LIMIT ?", (machine_id, action_id, last)).fetchall()
+        durate = []
+        for riga in righe:
+            try:
+                durate.append((datetime.fromisoformat(riga["finished"]) - datetime.fromisoformat(riga["started"])).total_seconds())
+            except (TypeError, ValueError):
+                continue
+        return round(sum(durate) / len(durate), 1) if durate else None
+
     def run_log(self, run_id: int) -> Optional[str]:
         with self._db() as db:
             riga = db.execute("SELECT log FROM runs WHERE id = ?", (run_id,)).fetchone()
