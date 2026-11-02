@@ -123,6 +123,10 @@ never looks healthy.
   Windows Update reset renames folders instead of deleting them.
 - **One job at a time.** A lock shared with scheduled runs prevents two operations from changing the
   system at the same time.
+- **Power button.** In a console running as administrator (never in preview or read-only), the power
+  button in the top bar stops every Windows Maintenance Manager process on this PC: other consoles,
+  scheduled runs in progress and the commands they started, then the console itself. Interrupted runs
+  are marked as such at the next start; schedules stay registered.
 - **Local only.** The server listens on `127.0.0.1`, checks the `Host` and `Origin` headers, serves only
   known static files, and accepts changes only with the session token that travels in the link the
   launcher opens (never in the served page).

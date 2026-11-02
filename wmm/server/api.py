@@ -12,6 +12,7 @@ import subprocess
 import io
 import json
 import mimetypes
+import os
 import re
 import secrets
 import socket
@@ -31,7 +32,7 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import actions, advisor, autostart, collectors, core, health, inventory, live, scheduler
+from ..agent import actions, advisor, autostart, collectors, core, health, inventory, live, scheduler, shutdown
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 
@@ -309,6 +310,20 @@ class Agent:
         except (RuntimeError, OSError, subprocess.SubprocessError) as errore:
             raise ApiError(500, f"Task Scheduler refused the change: {errore}") from None
         return self.autostart()
+
+    def shutdown(self) -> dict:
+        """Power button: stops every WMM process on this PC, this agent last (after answering)."""
+        if not self.admin or self.preview:
+            raise ApiError(409, "Only a console running as administrator can stop Windows Maintenance Manager.")
+        fermati = shutdown.stop_others(os.getpid())
+        running = self.jobs.busy
+        # Answer the browser first, then end this process and whatever it started.
+        threading.Timer(1.0, self._stop_self).start()
+        return {"stopping": True, "stopped_processes": len(fermati), "run_interrupted": running}
+
+    @staticmethod
+    def _stop_self() -> None:
+        shutdown.stop_self()
 
     def restore_point_on_start(self) -> Optional[str]:
         """Settings › Restore point at every start: one automatic run when the console starts."""
@@ -686,6 +701,9 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(400, str(errore)) from None
         self._json(200, self.agent.store.settings())
 
+    def stop_all(self, query):
+        self._json(200, self.agent.shutdown())
+
     def get_autostart(self, query):
         self._json(200, self.agent.autostart())
 
@@ -724,6 +742,7 @@ ROUTES: List[Route] = [
     _route("POST", "/pair", Handler.pair),
     _route("POST", "/agent/token-check", Handler.token_check),
     _route("POST", "/agent/elevate", Handler.elevate),
+    _route("POST", "/agent/shutdown", Handler.stop_all),
     _route("GET", "/dashboard", Handler.dashboard),
     _route("POST", "/scan", Handler.scan_all),
     _route("GET", f"/areas/{AREA}", Handler.area),

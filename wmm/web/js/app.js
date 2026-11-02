@@ -59,6 +59,8 @@
         bannerBtn("data-elevate", "Restart as administrator") + "</div>";
     }
     document.getElementById("banner").innerHTML = banner;
+    // The power button exists only for a connected administrator console.
+    document.getElementById("btn-power").hidden = !(info.admin && !info.preview && API.hasToken());
     renderStatus();
   }
 
@@ -381,6 +383,36 @@
     }).catch(function (e) { UI.toast(e.message, "error"); });
   }
 
+  /* Power button: stops every WMM process on this PC (other consoles, scheduled runs, this agent). */
+  function powerOff() {
+    var running = state.job && state.job.active;
+    return UI.modal("Stop Windows Maintenance Manager",
+      '<p class="modal-text">Every Windows Maintenance Manager process on this PC is stopped: this console, other open consoles and scheduled runs ' +
+      "in progress, together with the commands they started (DISM, CHKDSK, Windows Update…).</p>" +
+      (running ? '<div class="callout callout-error">' + UI.icon("alert") + "<div><strong>A run is in progress.</strong> It is interrupted where it is: " +
+        "an action stopped halfway may leave its change incomplete. The restore point created before it stays available.</div></div>" : "") +
+      '<div class="callout callout-info">' + UI.icon("info") + "<div>Schedules stay registered in Task Scheduler and run at their time. " +
+      "Start the console again with start_wmm.bat.</div></div>",
+      [{ label: "Cancel", cls: "btn-ghost" }, { label: "Stop everything", cls: "btn-danger", value: function () { return true; } }]
+    ).then(function (ok) {
+      if (!ok) return;
+      return API.post("/agent/shutdown").then(function (r) {
+        state.stopped = true;
+        clearInterval(state.poll);
+        var screen = document.createElement("div");
+        screen.className = "offline";
+        screen.innerHTML = '<section class="card stopped-card"><span class="stopped-icon">' + UI.icon("power") + "</span>" +
+          '<h2 style="margin:14px 0 6px">Windows Maintenance Manager is stopped</h2><p class="muted">' +
+          (r.stopped_processes ? r.stopped_processes + " other process(es) stopped. " : "") +
+          (r.run_interrupted ? "The run in progress was interrupted. " : "") +
+          "You can close this tab. Start the console again with start_wmm.bat.</p></section>";
+        document.body.appendChild(screen);
+        document.title = "Stopped · Windows Maintenance Manager";
+      }, function (e) { UI.toast(e.message, "error"); });
+    });
+  }
+  document.getElementById("btn-power").addEventListener("click", powerOff);
+
   var adminOpen = false;
   function needAdmin() {
     if (adminOpen) return;
@@ -423,6 +455,9 @@
     list.push({ group: "Commands", title: "Collapse or expand all cards", icon: "dashboard", run: toggleCards });
     list.push({ group: "Commands", title: "Copy the machine ID", icon: "download", run: function () { if (state.info) copyText(state.info.machine_id, "Machine ID"); } });
     list.push({ group: "Commands", title: "Open the user guide", icon: "support", keywords: "help faq", run: function () { location.hash = "#/support"; } });
+    if (state.info && state.info.admin && !state.info.preview && API.hasToken()) {
+      list.push({ group: "Commands", title: "Stop Windows Maintenance Manager", icon: "power", keywords: "shutdown quit exit kill power off", run: powerOff });
+    }
     state.playbooks.forEach(function (b) {
       list.push({ group: "Playbooks", title: "Run playbook: " + b.title, sub: b.actions.length + " actions", icon: "playbooks", keywords: b.description,
         run: function () { runActions(b.actions); } });
@@ -522,7 +557,7 @@
     }, function () {
       state.connected = false;
       renderStatus();
-      if (!offline) {
+      if (!offline && !state.stopped) {  // stopped on purpose: the stopped screen stays
         offline = document.createElement("div");
         offline.className = "offline";
         offline.innerHTML = '<section class="card"><span class="spinner" style="width:28px;height:28px"></span><h2 style="margin:14px 0 6px">Agent not reachable</h2>' +
