@@ -98,10 +98,19 @@
         var running = activeJobs.map(function (j) { return '<div class="grid">' + jobCard(App, j) + "</div>"; }).join("") +
           (activeTasks.length ? '<div class="grid grid-2">' + activeTasks.map(taskCard).join("") + "</div>" : "");
         if (!running) {
-          running = '<section class="card"><div class="empty-state" style="padding:36px 20px">' + UI.icon("activity") + "<h2>Nothing is running</h2>" +
-            "<p>Start a playbook, apply an improvement or scan an area: progress appears here step by step.</p>" +
-            '<div class="page-actions" style="justify-content:center"><a class="btn btn-primary" href="#/playbooks">' + UI.icon("playbooks") + 'Open playbooks</a><a class="btn" href="#/actions">' +
-            UI.icon("play") + "Browse actions</a></div></div></section>";
+          var start = function (attr, area, iconName, title, sub) {
+            return '<button type="button" class="start-card" ' + attr + ' data-area="' + area + '"><span class="tile-icon">' + UI.icon(iconName) + "</span><span><b>" +
+              esc(title) + '</b><span class="sub">' + esc(sub) + "</span></span></button>";
+          };
+          running = '<section class="card idle"><div class="idle-art"><div class="idle-ring"><span>' + UI.icon("activity") + "</span></div>" +
+            "<h2>Nothing is running</h2><p>The agent is ready. Start something on the right: every step, its real percentage and the live output appear here.</p>" +
+            '<p class="muted small"><span class="led"></span>Agent idle · ' + (a.schedules.length ? "next schedule " + esc(UI.formatDate(a.schedules[0].next_run)) : "no schedule planned") + "</p></div>" +
+            '<div class="start-grid">' +
+            start('data-start="quick"', "cleanup", "bolt", "Quick tune-up", "Safe cleanup and optimization, no restart") +
+            start('data-start="scan"', "performance", "refresh", "Scan all areas", "Assess the nine areas in about a minute") +
+            start('data-href="#/actions"', "services", "actions", "Browse actions", "All maintenance actions, run or schedule") +
+            start('data-href="#/playbooks"', "integrity", "playbooks", "Open playbooks", "Full maintenance, repair, security…") +
+            "</div></section>";
         }
         var timeline = recent.length ? '<ul class="timeline">' + recent.slice(0, 30).map(function (r) {
           return "<li>" + UI.statusIcon(r.status === "ok" || r.status === "preview" ? "ok" : r.status === "error" ? "error" : "warning") + '<div><div class="cell-title">' + esc(r.title) +
@@ -117,6 +126,16 @@
           '<div class="grid grid-2-1">' + UI.card("This session", '<div class="scroll-area">' + timeline + "</div>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/schedules">Schedules</a>') + "</div>";
         var drawerBtn = el.querySelector("[data-open-drawer]");
         if (drawerBtn) drawerBtn.addEventListener("click", App.openDrawer);
+        el.querySelectorAll("[data-href]").forEach(function (b) { b.addEventListener("click", function () { location.hash = b.getAttribute("data-href"); }); });
+        var scan = el.querySelector('[data-start="scan"]');
+        if (scan) scan.addEventListener("click", App.scanAll);
+        var quick = el.querySelector('[data-start="quick"]');
+        if (quick) quick.addEventListener("click", function () {
+          API.get("/playbooks").then(function (p) {
+            var book = p.playbooks.filter(function (b) { return b.id === "quick"; })[0];
+            if (book) App.runActions(book.actions);
+          });
+        });
       }
 
       function draw(a) {
