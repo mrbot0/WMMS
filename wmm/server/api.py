@@ -31,7 +31,7 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import actions, advisor, collectors, core, health, inventory, live, scheduler
+from ..agent import actions, advisor, autostart, collectors, core, health, inventory, live, scheduler
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 
@@ -285,6 +285,39 @@ class Agent:
             raise ApiError(400, str(errore)) from None
         except RunInProgress as errore:
             raise ApiError(409, str(errore)) from None
+
+    def autostart(self) -> dict:
+        try:
+            attivo = autostart.is_enabled()
+        except (OSError, subprocess.SubprocessError):
+            attivo = False
+        return {"enabled": attivo, "protected": self.installation()["protected"]}
+
+    def set_autostart(self, enabled) -> dict:
+        if not isinstance(enabled, bool):
+            raise ApiError(400, "'enabled' must be true or false.")
+        self._guard_changes()
+        if self.preview:
+            raise ApiError(409, "Start with Windows cannot be changed in preview mode.")
+        try:
+            if enabled:
+                autostart.enable(self.python, self.script, self.port or 8765)
+            else:
+                autostart.disable()
+        except scheduler.UnprotectedProgram as errore:
+            raise ApiError(409, str(errore)) from None
+        except (RuntimeError, OSError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"Task Scheduler refused the change: {errore}") from None
+        return self.autostart()
+
+    def restore_point_on_start(self) -> Optional[str]:
+        """Settings › Restore point at every start: one automatic run when the console starts."""
+        if self.preview or not self.admin or self.store.settings().get("restore_on_start") != "1":
+            return None
+        try:
+            return self.jobs.start(["security.restore_point"], "auto", confirmed=True)
+        except RunInProgress:
+            return None  # a scheduled run holds the lock: it creates its own restore point when needed
 
     # ---------- access ----------
 
@@ -653,6 +686,12 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(400, str(errore)) from None
         self._json(200, self.agent.store.settings())
 
+    def get_autostart(self, query):
+        self._json(200, self.agent.autostart())
+
+    def put_autostart(self, query):
+        self._json(200, self.agent.set_autostart(self._body().get("enabled")))
+
     def toggle_startup(self, query, item_id):
         self._json(200, self.agent.toggle_startup(item_id, self._body().get("enabled")))
 
@@ -704,6 +743,8 @@ ROUTES: List[Route] = [
     _route("GET", "/playbooks", Handler.playbooks),
     _route("GET", "/settings", Handler.get_settings),
     _route("PUT", "/settings", Handler.put_settings),
+    _route("GET", "/agent/autostart", Handler.get_autostart),
+    _route("PUT", "/agent/autostart", Handler.put_autostart),
     _route("POST", r"/startup/([0-9a-f]{16})/toggle", Handler.toggle_startup),
     _route("GET", "/schedules", Handler.list_schedules),
     _route("POST", "/schedules", Handler.create_schedule),

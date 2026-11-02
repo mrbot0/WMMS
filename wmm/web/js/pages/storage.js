@@ -3,6 +3,37 @@
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
+  /* Disk management tools, grouped by what the technician wants to do. */
+  var TOOLS = [
+    ["Diagnose", "search", "Read-only reports: nothing on the disks changes.",
+      ["storage.disk_health", "storage.smart_prediction", "storage.volume_report", "storage.partition_report", "storage.dirty_check",
+        "storage.disk_speed", "storage.shadow_report", "storage.top_folders"]],
+    ["Maintain", "refresh", "Keep drives fast and reachable.",
+      ["storage.rescan_disks", "storage.trim_ssd", "storage.optimize_all", "storage.defrag_hdd", "storage.disks_online", "storage.disk_cleanup"]],
+    ["Space and settings", "storage", "Get space back and tune how Windows uses the drives.",
+      ["storage.limit_restore_storage", "storage.reserved_storage_off", "storage.reserved_storage_on", "storage.hiberfile_reduced",
+        "storage.pagefile_auto", "storage.last_access_off", "storage.compact_os", "storage.delete_oldest_restore_point", "storage.delete_windows_old"]]
+  ];
+
+  function diskTools(App, view) {
+    var last = {};
+    view.actions.forEach(function (a) { last[a.id] = a.last_run; });
+    var grouped = [].concat.apply([], TOOLS.map(function (g) { return g[3]; }));
+    var others = view.actions.map(function (a) { return a.id; }).filter(function (id) { return grouped.indexOf(id) < 0; });
+    return TOOLS.concat(others.length ? [["Clean up", "cleanup", "Caches, logs and reports that are safe to delete.", others]] : []).map(function (group) {
+      var items = group[3].map(function (id) { return App.action(id); }).filter(Boolean);
+      return '<div class="section-title">' + UI.icon(group[1]) + esc(group[0]) + '<span class="extra">' + esc(group[2]) + "</span></div>" +
+        '<div class="action-grid">' + items.map(function (a) {
+          var r = last[a.id];
+          return '<div class="action-card"><div class="action-top"><span class="cell-title grow">' + esc(a.title) + "</span></div>" +
+            '<div class="cell-sub">' + esc(a.description) + "</div>" +
+            '<div class="action-foot">' + UI.riskBadge(a.risk) + '<span class="badge">' + UI.icon("clock") + esc(UI.duration(a.minutes)) + "</span>" +
+            (r ? UI.statusBadge(r.status) + '<span class="cell-sub">' + esc(UI.relative(r.finished || r.started)) + "</span>" : '<span class="cell-sub">Never run</span>') +
+            '<span class="grow"></span><button class="btn btn-sm" data-run="' + esc(a.id) + '">' + UI.icon("play") + 'Run</button><button class="btn btn-sm" data-schedule="' +
+            esc(a.id) + '" title="Schedule">' + UI.icon("clock") + "</button></div></div>";
+        }).join("") + "</div>";
+    }).join("");
+  }
 
   window.Pages.storage = {
     title: "Storage",
@@ -50,7 +81,11 @@
           '<div class="grid grid-2">' + UI.card("Volumes", drives, "", "card-flush") + UI.card("Physical disks", disks, "", "card-flush") + "</div>" +
           '<div class="grid grid-2">' + UI.card("Largest folders in the user profile", folderChart) + UI.card("Caches and reports", catChart) + "</div>" +
           '<div class="grid">' + UI.card("Largest files in the user profile", '<div id="big-files"></div>', "", "card-flush") + "</div>" +
-          '<div class="grid">' + parts.recommendations + "</div>" + '<div class="grid">' + parts.actions + "</div>" +
+          '<div class="grid">' + parts.recommendations + "</div>" +
+          '<section class="card disk-tools"><header class="card-head"><h2>' + UI.icon("storage") + "Disk management</h2>" +
+          '<div class="card-tools"><span class="muted small">Output of every tool in Activity and History</span>' +
+          UI.button("Run all diagnostics", 'id="disk-diagnose"', "btn-sm", "search") + "</div></header>" +
+          '<div class="card-body">' + diskTools(App, v) + "</div></section>" +
           '<div class="grid grid-3">' + UI.card("Restore point storage", shadowTable, "", "card-flush") + parts.trend + UI.card("Score", parts.score) + "</div>" +
           '<div class="grid">' + parts.runs + "</div>";
         Components.dataTable(el.querySelector("#big-files"), {
@@ -61,6 +96,11 @@
               render: function (r) { return '<span class="cell-mono">' + esc(r.path.slice(0, r.path.lastIndexOf("\\"))) + "</span>"; } },
             { key: "bytes", title: "Size", cls: "num", render: function (r) { return esc(UI.formatBytes(r.bytes)); } }
           ]
+        });
+        el.querySelector("#disk-diagnose").addEventListener("click", function () {
+          // The slow ones (speed test, folder sizes) stay separate.
+          App.runActions(["storage.disk_health", "storage.smart_prediction", "storage.volume_report", "storage.partition_report", "storage.dirty_check",
+            "storage.shadow_report"]);
         });
         UI.bindArea(el, "storage", function () { self.render(el, App); });
       });

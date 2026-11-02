@@ -7,8 +7,19 @@
   window.Pages.settings = {
     title: "Settings",
     render: function (el, App) {
-      return Promise.all([API.get("/settings"), API.get("/schedules"), API.get("/health")]).then(function (r) {
-        var s = r[0], inst = r[1].installation || {}, info = App.state.info, hc = r[2];
+      return Promise.all([API.get("/settings"), API.get("/schedules"), API.get("/health"), API.get("/agent/autostart")]).then(function (r) {
+        var s = r[0], inst = r[1].installation || {}, info = App.state.info, hc = r[2], auto = r[3];
+        // Start with Windows runs the console as administrator without a prompt: only from the protected copy.
+        var autoBlocked = info.preview ? "Not available in preview mode." : !info.admin ? "Restart the console as administrator to change it." :
+          !auto.protected ? "Needs the protected installation in Program Files (see This agent)." : "";
+        var startCard = UI.card("Start-up", '<div class="form">' +
+          '<label class="check"><input type="checkbox" id="restore-on-start"' + (s.restore_on_start === "1" ? " checked" : "") + "> " +
+          "Create a restore point every time the console starts</label>" +
+          '<span class="hint">Runs as an automatic action when the console starts as administrator; it shows in Activity and History. ' +
+          "Windows deletes the oldest restore points when their storage is full.</span>" +
+          '<label class="check"><input type="checkbox" id="autostart"' + (auto.enabled ? " checked" : "") + (autoBlocked ? " disabled" : "") + "> " +
+          "Start Windows Maintenance Manager when I sign in to Windows</label>" +
+          '<span class="hint">' + esc(autoBlocked || "The console starts as administrator 30 seconds after sign-in, without a prompt. Open it from the link in its window.") + "</span></div>");
         var healthCard = UI.card("Health check", '<p class="muted" style="margin-top:0">Dependencies and environment verified at start-up · ' + esc(UI.formatDate(hc.checked)) + "</p>" +
           UI.checklist(hc.checks.map(function (c) { return [c.name, c.status === "ok" ? "ok" : c.status === "warning" ? "warning" : "error", c.status === "ok" ? "OK" : c.status === "warning" ? "Warning" : "Failed", c.detail]; })),
           '<span class="badge badge-status-' + (hc.summary.error ? "error" : hc.summary.warning ? "warning" : "ok") + '">' + hc.summary.ok + " OK · " + hc.summary.warning + " warnings · " + hc.summary.error + " failed</span>" +
@@ -20,7 +31,7 @@
             : '<input name="' + key + '" maxlength="200" value="' + esc(s[key]) + '">') + '<span class="hint">' + esc(hint) + "</span></label>";
         };
         el.innerHTML = UI.pageHeader("Settings", "Stored on this device in dati\\wmm.db", "") + '<div class="grid">' + healthCard + "</div>" +
-          '<div class="grid grid-2"><div class="stack">' +
+          '<div class="grid grid-2"><div class="stack">' + startCard +
           UI.card("Report branding", '<form class="form" id="settings-form" onsubmit="return false">' +
             field("company", "Company", "Shown on the report cover, e.g. your IT service company.") +
             field("technician", "Default technician", "Pre-filled in the Reports page.") +
@@ -104,6 +115,20 @@
         el.querySelector("#desktop-notify").addEventListener("change", function (e) {
           Components.store("desktopNotify", e.target.checked);
           if (e.target.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
+        });
+        el.querySelector("#restore-on-start").addEventListener("change", function (e) {
+          var box = e.target;
+          API.put("/settings", { restore_on_start: box.checked ? "1" : "0" }).then(function () {
+            UI.toast(box.checked ? "A restore point is created at every start." : "No restore point at start.", "ok");
+          }, function (err) { box.checked = !box.checked; UI.toast(err.message, "error"); });
+        });
+        el.querySelector("#autostart").addEventListener("change", function (e) {
+          var box = e.target;
+          box.disabled = true;
+          API.put("/agent/autostart", { enabled: box.checked }).then(function (a) {
+            box.checked = a.enabled;
+            UI.toast(a.enabled ? "The console starts when you sign in to Windows." : "The console no longer starts with Windows.", "ok");
+          }, function (err) { box.checked = !box.checked; UI.toast(err.message, "error"); }).then(function () { box.disabled = false; });
         });
         el.querySelectorAll("[data-section]").forEach(function (box) {
           box.addEventListener("change", function () {

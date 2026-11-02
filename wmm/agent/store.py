@@ -34,9 +34,11 @@ CREATE TABLE IF NOT EXISTS schedules (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
-SETTINGS_DEFAULTS = {"technician": "", "company": "", "report_header": "", "report_footer": "", "notes": ""}
+SETTINGS_DEFAULTS = {"technician": "", "company": "", "report_header": "", "report_footer": "", "notes": "",
+                     "restore_on_start": "1"}
 SETTINGS_MAX_LENGTH = 500
 NOTES_MAX_LENGTH = 4000
+FLAG_SETTINGS = {"restore_on_start"}  # "1" on, "0" off
 
 RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed"
 SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run"}
@@ -205,6 +207,8 @@ class Store:
             massimo = NOTES_MAX_LENGTH if chiave == "notes" else SETTINGS_MAX_LENGTH
             if not isinstance(valore, str) or len(valore) > massimo:
                 raise ValueError(f"{chiave} must be text of at most {massimo} characters")
+            if chiave in FLAG_SETTINGS and valore not in ("0", "1"):
+                raise ValueError(f"{chiave} must be \"0\" or \"1\"")
         with self._db() as db:
             db.executemany("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                            [(k, v.strip()) for k, v in values.items()])

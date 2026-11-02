@@ -5,7 +5,7 @@ and works from an enterprise web console that runs **offline** on `127.0.0.1`: i
 the system, proposes improvements, applies them in one click or on a schedule, keeps a history and
 produces customer-ready reports.
 
-- **94 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
+- **114 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
 - **5 playbooks** (Quick tune-up, Full maintenance, Repair Windows, Security hardening, Performance boost)
 - **Live monitor** of CPU, memory, disk, network and processes, refreshed every 2 seconds
 - **Schedules** registered in Windows Task Scheduler, running even when the console is closed
@@ -69,7 +69,7 @@ python wmm.py --preview
 | **Health** | System Integrity · Security · Updates & Drivers · Network |
 | **Operations** | Actions (whole catalog: details, sort, multi-select) · Activity (runs and scans in progress, step by step, run again) · Playbooks · Schedules · History · Reports |
 | **Support** | User guide: getting started, searchable FAQ, risk levels, shortcuts, diagnostics to copy, areas at a glance |
-| **Settings** | Report branding, theme, density, dashboard sections, export / import / reset of console preferences, health check, installation status |
+| **Settings** | Start-up (restore point at every start, start with Windows), report branding, theme, density, dashboard sections, export / import / reset of console preferences, health check, installation status |
 
 Every area page shows a **score from 0 to 100**, charts and descriptive data, the **recommended
 improvements** with *Apply* and *Schedule* buttons and a *Fix recommended* button that applies them all,
@@ -91,7 +91,7 @@ console reopens the last page used and remembers the scroll position of each pag
 |---|---|---|
 | **Performance** | Live CPU/memory/disk/network, top processes, power plan, page file, memory modules, visual effects, Fast Startup, Game DVR, battery health | Power plan High performance / Balanced, visual effects, Fast Startup on/off, Game DVR on/off, transparency on/off, mouse acceleration off, free standby memory, restart Explorer |
 | **Cleanup** | Recoverable space in temp folders, update cache, shader caches, crash dumps, Recycle Bin | Temporary files and caches, obsolete Windows components (DISM), empty Recycle Bin, delete crash dumps |
-| **Storage** | Volumes and disks, largest folders and files of the profile, browser caches, error reports, thumbnails, Windows.old, restore point storage, Storage Sense | Optimize all drives (TRIM/defrag), browser caches, error reports, thumbnail cache, Delivery Optimization cache, legacy Internet Explorer cache, delete the oldest restore point, Storage Sense |
+| **Storage** | Volumes and disks, largest folders and files of the profile, browser caches, error reports, thumbnails, Windows.old, restore point storage, Storage Sense | Optimize all drives (TRIM/defrag), browser caches, error reports, thumbnail cache, Delivery Optimization cache, legacy Internet Explorer cache, delete the oldest restore point, Storage Sense; **disk management**: disk health report, SMART failure prediction, volume and partition reports, dirty bit check, C: speed test, restore point storage report, largest folders on C:, rescan disks, TRIM every SSD, defragment hard disks only, bring offline disks online, limit restore point storage to 8%, reserved storage on/off, reduce the hibernation file, system-managed page file, stop last-access updates, Windows Disk Cleanup, delete Windows.old |
 | **Startup & Apps** | Startup programs (registry and startup folders), installed applications, third-party scheduled tasks | **Optimize startup** (turns off non-essential programs), per-entry on/off switch |
 | **Services** | Start types and states of all services, non-essential services, restore backup | Disable non-essential services, Xbox services, print services, Windows Search on manual, restart Windows Update / Bluetooth services, restore from backup |
 | **System Integrity** | Disk health (SMART), stability events, event log errors (7 days), firmware age, Defender and firewall, last repair checks | DISM RestoreHealth, SFC, SFC verify only, CHKDSK online (system or all drives), disk repair at reboot, TRIM, verify and repair WMI, reset Windows Update components |
@@ -109,6 +109,9 @@ never looks healthy.
   *Moderate* and *high risk* actions always ask for confirmation, also when scheduled.
 - **Restore point first.** Before any action that is not safe, a System Restore point is created; if that
   fails, nothing runs.
+- **Restore point at every start.** When the console starts as administrator it creates a restore point
+  as an automatic action (Settings › Start-up, on by default), lifting Windows' one-per-day limit for that
+  call only.
 - **Protected services.** Defender, Windows Update, firewall, networking, audio, GPU and virtualization
   services are never modified. Changed services are backed up and can be restored.
 - **Reversible by design.** Startup entries are turned off with the same switch as Task Manager;
@@ -135,6 +138,11 @@ refuses to create schedules unless:
 
 The Schedules page and the health check show which of the two is missing. Schedules created from another
 folder show *Program moved* and can be fixed with **Resync**.
+
+**Start with Windows** (Settings › Start-up) registers the task `\WindowsMaintenanceManager\WMM-Autostart`:
+at sign-in it starts the console for that user with the highest rights, without a UAC prompt and without
+opening the browser (the link is in the console window). For the same reason as the schedules it is
+available only from the protected installation.
 
 ## Command line
 

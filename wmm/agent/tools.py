@@ -191,11 +191,50 @@ def disable_smb1(ctx) -> Esito:
     return ctx.comando(powershell_command("Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force; 'SMBv1 server disabled.'"))
 
 
-def create_restore_point(ctx) -> Esito:
+SYSTEM_RESTORE_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore"
+RESTORE_FREQUENCY = "SystemRestorePointCreationFrequency"
+SCRIPT_LAST_RESTORE_POINT = "(Get-ComputerRestorePoint | Select-Object -Last 1 | ForEach-Object { $_.SequenceNumber })"
+
+
+def read_dword(root: str, key: str, name: str) -> Optional[int]:
+    import winreg
     try:
-        return op.punto_ripristino(ctx)
-    except SequenzaFermata as motivo:
-        return Esito(Stato.ERRORE, str(motivo))
+        with winreg.OpenKey(getattr(winreg, root), key) as handle:
+            return int(winreg.QueryValueEx(handle, name)[0])
+    except (OSError, ValueError):
+        return None
+
+
+def delete_value(root: str, key: str, name: str) -> None:
+    import winreg
+    try:
+        with winreg.OpenKey(getattr(winreg, root), key, 0, winreg.KEY_SET_VALUE) as handle:
+            winreg.DeleteValue(handle, name)
+    except OSError:
+        pass  # already absent
+
+
+def create_restore_point(ctx, description: str = "Windows Maintenance Manager") -> Esito:
+    """Creates a restore point now. Windows normally skips a new point when one is less than
+    24 hours old: the limit is lifted for this call only and then put back as it was."""
+    if not ctx.modifica(f"Create a restore point ({description})"):
+        return Esito(Stato.ANTEPRIMA)
+    prima = ctx.powershell(SCRIPT_LAST_RESTORE_POINT)
+    precedente = read_dword("HKEY_LOCAL_MACHINE", SYSTEM_RESTORE_KEY, RESTORE_FREQUENCY)
+    write_dword("HKEY_LOCAL_MACHINE", SYSTEM_RESTORE_KEY, RESTORE_FREQUENCY, 0)
+    try:
+        ctx.powershell("Enable-ComputerRestore -Drive 'C:\\'; "
+                       f"Checkpoint-Computer -Description '{description}' -RestorePointType MODIFY_SETTINGS", timeout=600)
+    finally:
+        if precedente is None:
+            delete_value("HKEY_LOCAL_MACHINE", SYSTEM_RESTORE_KEY, RESTORE_FREQUENCY)
+        else:
+            write_dword("HKEY_LOCAL_MACHINE", SYSTEM_RESTORE_KEY, RESTORE_FREQUENCY, precedente)
+    dopo = ctx.powershell(SCRIPT_LAST_RESTORE_POINT)
+    if not dopo or dopo == prima:
+        return Esito(Stato.ERRORE, "Windows did not create the restore point: turn on System Restore for C: and try again")
+    ctx.scrivi(f"  Restore point #{dopo} created")
+    return Esito(Stato.OK, f"restore point #{dopo} created")
 
 
 def windows_update_scan(ctx) -> Esito:
@@ -606,3 +645,193 @@ def windows_update_install(ctx) -> Esito:
         ctx.riavvio_necessario = True
         esito.nota = "updates installed; a restart may be required"
     return esito
+
+
+# ---------- disk management (iteration 6) ----------
+
+FIXED_VOLUMES = "Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter } | Sort-Object DriveLetter"
+# Volumes on SSDs or on hard disks: PhysicalDisk.DeviceId is the disk number of Get-Partition.
+VOLUMES_ON = ("$disks = @(Get-PhysicalDisk | Where-Object MediaType -eq '{media}' | ForEach-Object {{ [string]$_.DeviceId }}); "
+              "$parts = @(Get-Partition | Where-Object {{ $_.DriveLetter -and ($disks -contains [string]$_.DiskNumber) }}); "
+              "if (-not $parts) {{ 'No {label} volume found.' }}; ")
+
+SCRIPT_DISK_HEALTH = r"""
+Get-PhysicalDisk | Sort-Object { [int]$_.DeviceId } | ForEach-Object {
+  $r = $_ | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+  "== Disk $($_.DeviceId): $($_.FriendlyName) ($($_.MediaType), $($_.BusType), $([math]::Round($_.Size / 1GB)) GB) =="
+  "Health: $($_.HealthStatus) - status: $($_.OperationalStatus)"
+  if ($r) {
+    "Temperature: $($r.Temperature) C (highest $($r.TemperatureMax) C)"
+    "Wear: $($r.Wear) %  - power-on hours: $($r.PowerOnHours)"
+    "Read errors: $($r.ReadErrorsTotal)  - write errors: $($r.WriteErrorsTotal)"
+  } else { 'Reliability counters are not available for this disk.' }
+  if ($_.HealthStatus -ne 'Healthy') { $script:bad = $true }
+}
+if ($script:bad) { exit 1 }
+"""
+
+SCRIPT_SMART = r"""
+$p = @(Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction SilentlyContinue)
+if (-not $p) { 'SMART failure prediction is not exposed by this controller (NVMe or RAID): use the disk health report.'; exit 0 }
+$p | ForEach-Object { "$($_.InstanceName): " + $(if ($_.PredictFailure) { 'FAILURE PREDICTED' } else { 'OK' }) }
+if ($p | Where-Object PredictFailure) { exit 1 }
+"""
+
+SCRIPT_VOLUMES = r"""
+Get-Volume | Where-Object { ($_.DriveType -eq 'Fixed' -or $_.DriveType -eq 'Removable') -and $_.Size } | Sort-Object DriveLetter | ForEach-Object {
+  '{0}  {1,-18} {2,-6} {3,9:N1} GB free of {4,9:N1} GB  ({5:N0} %)  {6}' -f $(if ($_.DriveLetter) { "$($_.DriveLetter):" } else { '--' }),
+    $_.FileSystemLabel, $_.FileSystem, ($_.SizeRemaining / 1GB), ($_.Size / 1GB), (100 * $_.SizeRemaining / $_.Size), $_.HealthStatus
+}
+"""
+
+SCRIPT_PARTITIONS = r"""
+Get-Disk | Sort-Object Number | ForEach-Object {
+  "== Disk $($_.Number): $($_.FriendlyName) - $($_.PartitionStyle) - $($_.BusType) - $([math]::Round($_.Size / 1GB)) GB - $($_.OperationalStatus) =="
+  Get-Partition -DiskNumber $_.Number -ErrorAction SilentlyContinue | ForEach-Object {
+    '  #{0}  {1,-12} {2,9:N1} GB  {3}' -f $_.PartitionNumber, $(if ($_.DriveLetter) { "$($_.DriveLetter):" } else { "$($_.Type)" }), ($_.Size / 1GB),
+      $(if ($_.IsBoot) { 'boot' } elseif ($_.IsSystem) { 'system (EFI)' } else { '' })
+  }
+}
+"""
+
+SCRIPT_DISKS_ONLINE = r"""
+$d = @(Get-Disk | Where-Object { $_.IsOffline -or $_.IsReadOnly })
+if (-not $d) { 'All disks are online and writable.' }
+foreach ($x in $d) {
+  if ($x.IsOffline) { Set-Disk -Number $x.Number -IsOffline $false; "Disk $($x.Number) ($($x.FriendlyName)) is online" }
+  if ($x.IsReadOnly) { Set-Disk -Number $x.Number -IsReadOnly $false; "Disk $($x.Number) ($($x.FriendlyName)) is writable" }
+}
+"""
+
+SCRIPT_RESCAN = "Update-HostStorageCache; 'Disks rescanned:'; Get-Disk | Sort-Object Number | ForEach-Object { \"  Disk $($_.Number): $($_.FriendlyName) - $($_.OperationalStatus)\" }"
+
+
+def _note_on_warning(esito: Esito, nota: str) -> Esito:
+    if esito.stato is Stato.AVVISO:
+        esito.nota = nota
+    return esito
+
+
+def disk_health_report(ctx) -> Esito:
+    return _note_on_warning(ctx.comando(powershell_command(SCRIPT_DISK_HEALTH)), "a disk is not healthy: back up its data")
+
+
+def smart_prediction(ctx) -> Esito:
+    return _note_on_warning(ctx.comando(powershell_command(SCRIPT_SMART)), "a disk predicts a failure: back up its data now")
+
+
+def volume_report(ctx) -> Esito:
+    return ctx.comando(powershell_command(SCRIPT_VOLUMES))
+
+
+def partition_report(ctx) -> Esito:
+    return ctx.comando(powershell_command(SCRIPT_PARTITIONS))
+
+
+def dirty_check(ctx) -> Esito:
+    return ctx.comando(powershell_command(f"{FIXED_VOLUMES} | ForEach-Object {{ fsutil dirty query \"$($_.DriveLetter):\" }}"))
+
+
+def disk_speed(ctx) -> Esito:
+    return ctx.comando(["winsat", "disk", "-drive", "c"])
+
+
+def shadow_storage_report(ctx) -> Esito:
+    return ctx.comando(["vssadmin", "list", "shadowstorage"])
+
+
+def folder_size(root: str) -> int:
+    return sum(peso for _, peso in _files(root, None))
+
+
+def top_folders(ctx, root: str = "C:\\", limit: int = 15) -> Esito:
+    """Read-only: the largest top-level folders of a drive (links and junctions are not followed)."""
+    ctx.scrivi(f"Measuring the folders of {root} (a few minutes on large drives)...")
+    pesi = []
+    try:
+        voci = list(os.scandir(root))
+    except OSError as errore:
+        return Esito(Stato.ERRORE, str(errore))
+    for voce in voci:
+        try:
+            info = voce.stat(follow_symlinks=False)
+        except OSError:
+            continue
+        if voce.is_symlink() or getattr(info, "st_file_attributes", 0) & REPARSE_POINT or not stat.S_ISDIR(info.st_mode):
+            continue
+        pesi.append((folder_size(voce.path), voce.name))
+    pesi.sort(reverse=True)
+    for peso, nome in pesi[:limit]:
+        ctx.scrivi(f"  {op.dimensione(peso):>10}  {nome}")
+    if not pesi:
+        return Esito(Stato.OK, "no folders")
+    return Esito(Stato.OK, f"largest: {pesi[0][1]} ({op.dimensione(pesi[0][0])})")
+
+
+def rescan_disks(ctx) -> Esito:
+    return ctx.comando(powershell_command(SCRIPT_RESCAN))
+
+
+def trim_ssd_volumes(ctx) -> Esito:
+    return ctx.comando(powershell_command(VOLUMES_ON.format(media="SSD", label="SSD") +
+                                          "$parts | ForEach-Object { \"== $($_.DriveLetter): ==\"; Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -Verbose 4>&1 }"))
+
+
+def defrag_hdd_volumes(ctx) -> Esito:
+    return ctx.comando(powershell_command(VOLUMES_ON.format(media="HDD", label="hard disk") +
+                                          "$parts | ForEach-Object { \"== $($_.DriveLetter): ==\"; Optimize-Volume -DriveLetter $_.DriveLetter -Defrag -Verbose 4>&1 }"))
+
+
+def disks_online(ctx) -> Esito:
+    return ctx.comando(powershell_command(SCRIPT_DISKS_ONLINE))
+
+
+def limit_shadow_storage(ctx) -> Esito:
+    esito = ctx.comando(["vssadmin", "resize", "shadowstorage", "/for=C:", "/on=C:", "/maxsize=8%"])
+    if esito.stato is Stato.OK:
+        esito.nota = "restore points limited to 8% of C:"
+    return esito
+
+
+def set_reserved_storage(ctx, enabled: bool) -> Esito:
+    return ctx.comando(["DISM", "/Online", "/Set-ReservedStorageState", "/State:" + ("Enabled" if enabled else "Disabled")])
+
+
+def reduce_hiberfile(ctx) -> Esito:
+    return ctx.comando(["powercfg", "/hibernate", "/type", "reduced"])
+
+
+def pagefile_automatic(ctx) -> Esito:
+    esito = ctx.comando(powershell_command(
+        "$cs = Get-CimInstance Win32_ComputerSystem; Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $true }; "
+        "'The page file is managed by Windows.'"))
+    if esito.stato is Stato.OK:
+        ctx.riavvio_necessario = True
+        esito.nota = "page file managed by Windows; restart to apply"
+    return esito
+
+
+def last_access_off(ctx) -> Esito:
+    return ctx.comando(["fsutil", "behavior", "set", "disablelastaccess", "1"])
+
+
+def disk_cleanup_tool(ctx) -> Esito:
+    return ctx.comando(["cleanmgr", "/verylowdisk", "/d", "C"])
+
+
+def delete_windows_old(ctx) -> Esito:
+    """rd /s /q removes junctions without following them (PowerShell 5 Remove-Item may)."""
+    percorso = os.path.join(os.environ.get("SystemDrive", "C:") + "\\", "Windows.old")
+    if not os.path.isdir(percorso):
+        return Esito(Stato.OK, "there is no Windows.old folder")
+    for comando in (["icacls", percorso, "/setowner", "*S-1-5-32-544", "/T", "/C", "/L", "/Q"],
+                    ["icacls", percorso, "/grant", "*S-1-5-32-544:F", "/T", "/C", "/L", "/Q"]):
+        esito = ctx.comando(comando, validi=(0, 1, 2, 5))
+        if esito.stato is Stato.ANTEPRIMA:
+            break
+    esito = ctx.comando(["cmd.exe", "/d", "/c", "rd", "/s", "/q", percorso])
+    if esito.stato is Stato.ANTEPRIMA:
+        return esito
+    if os.path.isdir(percorso):
+        return Esito(Stato.AVVISO, "some files in Windows.old could not be deleted")
+    return Esito(Stato.OK, "Windows.old deleted")

@@ -20,6 +20,9 @@
     ["Is it safe to apply all safe actions?", "Yes: safe actions never delete personal data or change persistent settings. They clean caches, temporary files and run read-only checks."],
     ["What happens before a risky action?", "A System Restore point is created first. If it cannot be created, the action does not run."],
     ["Can I undo a change?", "Services changed by the suite can be restored from Services › Restore. Startup entries can be turned back on. For anything else use the restore point created before the run."],
+    ["Is a restore point created when the console starts?", "Yes, when it starts as administrator: an automatic action creates one at every start, also when Windows already made one today. Turn it off in Settings › Start-up."],
+    ["Can the console start with Windows?", "Tick Start Windows Maintenance Manager when I sign in to Windows in Settings › Start-up. It needs the protected installation in Program Files, because the console then starts as administrator without a prompt."],
+    ["Which disk tools are there?", "Storage › Disk management groups them: Diagnose (health, SMART, volumes, partitions, dirty bit, speed, largest folders) is read-only; Maintain and Space and settings change the drives and ask for confirmation when they are not safe."],
     ["Why is a percentage marked estimated?", "Some commands print no progress. The estimate uses how long the same action took on this PC before."],
     ["Why is a scan marked incomplete?", "Some data needs administrator rights or a PowerShell module was unavailable. Scan again as administrator; incomplete scans are capped at 50."],
     ["Where is my data stored?", "In the dati folder next to the program: history database, service backup and change log. Nothing is sent over the network except the latency test and Windows Update."],
@@ -28,7 +31,7 @@
   var GLOSSARY = {
     performance: "Live CPU, memory, disk and network, power plan, page file and responsiveness settings.",
     cleanup: "Recoverable space in temporary folders, caches, crash dumps and the Recycle Bin.",
-    storage: "Drives, largest folders and files, browser caches, Windows.old and restore point storage.",
+    storage: "Drives, largest folders and files, caches, Windows.old, restore point storage and the disk management tools.",
     startup: "Programs that start with Windows, installed applications and third-party scheduled tasks.",
     services: "All Windows services, non-essential ones that can be disabled and the restore backup.",
     integrity: "Disk health, stability events, event log errors and Windows image and file repairs.",

@@ -336,8 +336,51 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.agent.store.schedules(), [])
 
 
+    def test_restore_point_on_start(self):
+        with mock.patch.object(self.agent.jobs, "start", return_value="a" * 32) as avvia:
+            self.assertEqual(self.agent.restore_point_on_start(), "a" * 32)
+            avvia.assert_called_once_with(["security.restore_point"], "auto", confirmed=True)
+            self.agent.store.save_settings({"restore_on_start": "0"})
+            self.assertIsNone(self.agent.restore_point_on_start())
+            self.assertEqual(avvia.call_count, 1)
+
+    def test_restore_point_on_start_skips_when_a_run_holds_the_lock(self):
+        with mock.patch.object(self.agent.jobs, "start", side_effect=api.RunInProgress("busy")):
+            self.assertIsNone(self.agent.restore_point_on_start())
+
+    def test_autostart_endpoints(self):
+        with mock.patch.object(api.autostart, "is_enabled", return_value=False), mock.patch.object(api.autostart, "enable") as attiva:
+            stato, dati, _ = self.request("GET", "/api/v1/agent/autostart")
+            self.assertEqual((stato, dati["enabled"], dati["protected"]), (200, False, False))
+            self.assertEqual(self.request("PUT", "/api/v1/agent/autostart", {"enabled": True}, token=False)[0], 403)
+            self.assertEqual(self.request("PUT", "/api/v1/agent/autostart", {"enabled": "yes"})[0], 400)
+            stato, _, _ = self.request("PUT", "/api/v1/agent/autostart", {"enabled": True})
+            self.assertEqual(stato, 200)
+            attiva.assert_called_once_with(self.agent.python, self.agent.script, self.agent.port)
+
+    def test_autostart_unprotected_is_409(self):
+        with mock.patch.object(api.autostart, "is_enabled", return_value=False), \
+                mock.patch.object(api.autostart, "enable", side_effect=api.scheduler.UnprotectedProgram("Writable paths: x")):
+            stato, dati, _ = self.request("PUT", "/api/v1/agent/autostart", {"enabled": True})
+        self.assertEqual(stato, 409)
+        self.assertIn("Writable", dati["error"])
+
+
 class NotAdmin(ApiTests):
     admin = False
+
+    def test_restore_point_on_start(self):
+        with mock.patch.object(self.agent.jobs, "start") as avvia:
+            self.assertIsNone(self.agent.restore_point_on_start())
+        avvia.assert_not_called()
+
+    def test_autostart_endpoints(self):
+        with mock.patch.object(api.autostart, "is_enabled", return_value=False), mock.patch.object(api.autostart, "enable") as attiva:
+            self.assertEqual(self.request("PUT", "/api/v1/agent/autostart", {"enabled": True})[0], 409)
+        attiva.assert_not_called()
+
+    test_restore_point_on_start_skips_when_a_run_holds_the_lock = None
+    test_autostart_unprotected_is_409 = None
 
     def test_not_admin_409(self):
         stato, dati, _ = self.request("POST", "/api/v1/runs", {"actions": ["cleanup.temp"], "confirmed": True})
