@@ -1274,3 +1274,226 @@ def ntfs_memory_usage(ctx) -> Esito:
     if esito.stato is Stato.OK:
         esito.nota = "larger NTFS cache; restart to apply"
     return esito
+
+
+# ---------- forty more tools (iteration 9) ----------
+
+# cleanup
+JAVA_CACHES = [r"%USERPROFILE%\AppData\LocalLow\Sun\Java\Deployment\cache"]
+CHAT_MUSIC_CACHES = [rf"%APPDATA%\{app}\{c}" for app in ("discord", "Slack", "WhatsApp") for c in ("Cache", "Code Cache", "GPUCache")] + \
+                    [r"%LOCALAPPDATA%\Spotify\Data", r"%LOCALAPPDATA%\Spotify\Browser\Cache"]
+GAME_LAUNCHER_CACHES = [r"%LOCALAPPDATA%\EpicGamesLauncher\Saved\webcache*", r"%ProgramFiles(x86)%\Steam\appcache\httpcache",
+                        r"%LOCALAPPDATA%\Steam\htmlcache", r"%LOCALAPPDATA%\Battle.net\BrowserCaches", r"%LOCALAPPDATA%\Ubisoft Game Launcher\cache"]
+EDITOR_CACHES = [rf"%APPDATA%\{app}\{c}" for app in ("Code", "Cursor") for c in ("Cache", "CachedData", "CachedExtensionVSIXs", "Code Cache", "GPUCache", "logs")]
+
+SCRIPT_FONT_CACHE = r"""
+Stop-Service FontCache -Force -ErrorAction SilentlyContinue
+$n = 0
+Get-ChildItem "$env:WinDir\ServiceProfiles\LocalService\AppData\Local\FontCache" -Filter *.dat -ErrorAction SilentlyContinue | ForEach-Object {
+  Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue; if (-not (Test-Path $_.FullName)) { $n++ } }
+Remove-Item "$env:WinDir\System32\FNTCACHE.DAT" -Force -ErrorAction SilentlyContinue
+Start-Service FontCache -ErrorAction SilentlyContinue
+"$n font cache file(s) removed; Windows rebuilds the cache, and fonts are fully re-indexed at the next restart."
+"""
+
+# startup
+SCRIPT_RUN_KEYS = r"""
+$keys = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run', 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce',
+        'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+foreach ($k in $keys) {
+  $p = Get-ItemProperty $k -ErrorAction SilentlyContinue
+  "== $k =="
+  $v = @(if ($p) { $p.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } })
+  if (-not $v) { '  (empty)' }
+  $v | ForEach-Object { '  {0,-34} {1}' -f $_.Name, $_.Value }
+}
+"""
+
+SCRIPT_STARTUP_FOLDERS = r"""
+foreach ($f in [Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup')) {
+  "== $f =="
+  $i = @(Get-ChildItem $f -File -ErrorAction SilentlyContinue | Where-Object Name -ne 'desktop.ini')
+  if (-not $i) { '  (empty)' }
+  $i | ForEach-Object { '  {0,-40} {1:yyyy-MM-dd}' -f $_.Name, $_.LastWriteTime }
+}
+"""
+
+SCRIPT_WINLOGON = r"""
+$w = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+"Shell:    $($w.Shell)"
+"Userinit: $($w.Userinit)"
+$bad = ($w.Shell -notmatch '^explorer\.exe$') -or ($w.Userinit -notmatch '^[a-z]:\\windows\\system32\\userinit\.exe,?$')
+$u = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' -ErrorAction SilentlyContinue
+if ($u -and $u.Shell) { "Shell override for this user: $($u.Shell)"; $bad = $true }
+if ($bad) { 'Non-default values: check them, they are a common place for malware to start with Windows.'; exit 1 }
+'Default shell and user initialization.'
+"""
+
+SCRIPT_WMI_PERSISTENCE = r"""
+$f = @(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction SilentlyContinue)
+$c = @(Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -ErrorAction SilentlyContinue) +
+     @(Get-CimInstance -Namespace root\subscription -ClassName ActiveScriptEventConsumer -ErrorAction SilentlyContinue)
+"Event filters: $($f.Count) - command and script consumers: $($c.Count)"
+$f | ForEach-Object { "  Filter:   $($_.Name) - $($_.Query)" }
+$c | ForEach-Object { "  Consumer: $($_.Name) - $($_.CommandLineTemplate)$($_.ScriptText)" }
+if ($c.Count) { 'Programs started by WMI events: legitimate for some management tools, a known malware technique otherwise.'; exit 1 }
+"""
+
+SCRIPT_IFEO = r"""
+$r = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
+$hits = @(Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object {
+  $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+  if ($p.Debugger) { '{0,-32} Debugger = {1}' -f $_.PSChildName, $p.Debugger } })
+if (-not $hits) { 'No program is redirected to another one (no IFEO debugger).'; exit 0 }
+$hits
+'These programs start something else instead: check every entry.'
+exit 1
+"""
+
+# updates
+SCRIPT_WU_SERVICES = r"""
+'wuauserv', 'bits', 'UsoSvc', 'cryptsvc', 'TrustedInstaller', 'WaaSMedicSvc' | ForEach-Object {
+  $s = Get-Service $_ -ErrorAction SilentlyContinue
+  if ($s) { '{0,-18} {1,-8} {2}' -f $s.Name, $s.Status, $s.StartType }
+}
+if (@(Get-Service wuauserv, bits, cryptsvc -ErrorAction SilentlyContinue | Where-Object StartType -eq 'Disabled').Count) { 'A service Windows Update needs is disabled.'; exit 1 }
+"""
+
+UPDATE_UX = r"HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
+SCRIPT_PAUSE_STATUS = r"""
+$s = Get-ItemProperty '%s' -ErrorAction SilentlyContinue
+$paused = $s -and $s.PauseUpdatesExpiryTime
+if ($paused) { "Updates are paused until $($s.PauseUpdatesExpiryTime)" } else { 'Updates are not paused.' }
+$p = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate', 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -ErrorAction SilentlyContinue
+if ($p) { '== Update policies =='; $p | ForEach-Object { $_.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { "  $($_.Name) = $($_.Value)" } } }
+if ($paused) { exit 1 }
+""" % UPDATE_UX
+
+SCRIPT_RESUME_UPDATES = r"""
+$names = 'PauseUpdatesExpiryTime', 'PauseUpdatesStartTime', 'PauseFeatureUpdatesStartTime', 'PauseFeatureUpdatesEndTime',
+         'PauseQualityUpdatesStartTime', 'PauseQualityUpdatesEndTime'
+Remove-ItemProperty -Path '%s' -Name $names -ErrorAction SilentlyContinue
+'Windows Update is no longer paused.'
+""" % UPDATE_UX
+
+SCRIPT_WINDOWS_VERSION = r"""
+$v = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+$os = Get-CimInstance Win32_OperatingSystem
+"Edition:   $($os.Caption) ($($v.EditionID))"
+"Version:   $($v.DisplayVersion)"
+"Build:     $($v.CurrentBuild).$($v.UBR)"
+"Installed: $(([datetime]'1970-01-01').AddSeconds($v.InstallDate).ToLocalTime().ToString('yyyy-MM-dd'))"
+"Last boot: $($os.LastBootUpTime.ToString('yyyy-MM-dd HH:mm'))"
+"Architecture: $($os.OSArchitecture) - language: $($os.MUILanguages -join ', ')"
+"""
+
+# services
+SCRIPT_PRINT_QUEUE = r"""
+$ErrorActionPreference = 'Stop'
+Stop-Service Spooler -Force
+$f = @(Get-ChildItem "$env:SystemRoot\System32\spool\PRINTERS" -File -ErrorAction SilentlyContinue)
+$f | Remove-Item -Force -ErrorAction SilentlyContinue
+Start-Service Spooler
+"$($f.Count) stuck print job file(s) removed; the print spooler is running again."
+"""
+
+SCRIPT_DISABLED_SERVICES = r"""
+$s = @(Get-CimInstance Win32_Service | Where-Object StartMode -eq 'Disabled' | Sort-Object DisplayName)
+"$($s.Count) disabled services"
+$s | ForEach-Object { '  {0,-44} {1}' -f $_.DisplayName, $_.Name }
+"""
+
+SCRIPT_DELAYED_SERVICES = r"""
+$d = @(Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services -ErrorAction SilentlyContinue | ForEach-Object {
+  $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+  if ($p.Start -eq 2 -and $p.DelayedAutostart -eq 1) { $_.PSChildName } } | Sort-Object)
+"$($d.Count) services start automatically with a delay (after sign-in, to speed up the boot)"
+$d | ForEach-Object { $s = Get-Service $_ -ErrorAction SilentlyContinue; '  {0,-32} {1}' -f $_, $(if ($s) { $s.Status }) }
+"""
+
+# network
+SCRIPT_DNS_CACHE = r"""
+$c = @(Get-DnsClientCache -ErrorAction SilentlyContinue)
+"$($c.Count) records in the DNS cache"
+$c | Group-Object Entry | Sort-Object Count -Descending | Select-Object -First 40 | ForEach-Object { '  ' + $_.Name }
+"""
+
+# integrity
+SCRIPT_RESTORE_POINTS = r"""
+$p = @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue)
+if (-not $p) { 'No restore points: System Restore may be off on C:.'; exit 1 }
+$p | ForEach-Object { '#{0,-5} {1}  {2}' -f $_.SequenceNumber, $_.ConvertToDateTime($_.CreationTime).ToString('yyyy-MM-dd HH:mm'), $_.Description }
+"""
+
+SCRIPT_CRASH_SETTINGS = r"""
+$c = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl'
+$t = @{ 0 = 'None'; 1 = 'Complete'; 2 = 'Kernel'; 3 = 'Small (minidump)'; 7 = 'Automatic' }[[int]$c.CrashDumpEnabled]
+"Dump written on a blue screen: $t"
+"Dump file: $($c.DumpFile)"
+"Minidump folder: $($c.MinidumpDir)"
+"Restart automatically: $(if ($c.AutoReboot) { 'yes' } else { 'no' })"
+"Write to the system log: $(if ($c.LogEvent) { 'yes' } else { 'no' })"
+"""
+
+SCRIPT_APP_CRASHES = r"""
+$e = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000; StartTime = (Get-Date).AddDays(-30) } -ErrorAction SilentlyContinue)
+"$($e.Count) application crashes in the last 30 days"
+$e | ForEach-Object { $_.Properties[0].Value } | Group-Object | Sort-Object Count -Descending | Select-Object -First 15 | ForEach-Object { '{0,5}  {1}' -f $_.Count, $_.Name }
+if ($e.Count -gt 20) { exit 1 }
+"""
+
+# security
+SCRIPT_FIREWALL_RULES = r"""
+$r = @(Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | Where-Object { "$($_.Profile)" -match 'Public|Any' })
+"$($r.Count) inbound allow rules are active on public networks"
+$r | Sort-Object DisplayName | Select-Object -First 80 | ForEach-Object { '  {0,-60} {1}' -f $_.DisplayName, $_.Profile }
+"""
+
+SCRIPT_SHARES = r"""
+$s = @(Get-SmbShare -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^([A-Z]|ADMIN|IPC|print)\$$' })
+if (-not $s) { 'No folder is shared from this PC.'; exit 0 }
+$open = $false
+$s | ForEach-Object {
+  $a = @(Get-SmbShareAccess -Name $_.Name -ErrorAction SilentlyContinue | ForEach-Object { "$($_.AccountName): $($_.AccessRight)" })
+  if ($a -match '^Everyone: Full') { $open = $true }
+  '{0,-20} {1}  [{2}]' -f $_.Name, $_.Path, ($a -join ', ')
+}
+if ($open) { 'A share gives Everyone full control: restrict it.'; exit 1 }
+"""
+
+SCRIPT_AUTOLOGON = r"""
+$w = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+if ("$($w.AutoAdminLogon)" -eq '1') {
+  "Automatic sign-in is ON for $($w.DefaultDomainName)\$($w.DefaultUserName)."
+  if ($w.DefaultPassword) { 'Its password is stored in the registry in plain text: anyone with access to this PC can read it.' }
+  exit 1
+}
+'Automatic sign-in is off.'
+"""
+
+
+def read_string(root: str, key: str, name: str) -> Optional[str]:
+    import winreg
+    try:
+        with winreg.OpenKey(getattr(winreg, root), key) as handle:
+            return str(winreg.QueryValueEx(handle, name)[0])
+    except OSError:
+        return None
+
+
+def onedrive_autostart_off(ctx) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    if read_string(HKCU, chiave, "OneDrive") is None:
+        return Esito(Stato.OK, "OneDrive does not start with Windows for this user")
+    if not ctx.modifica(f"Delete HKCU\\{chiave}\\OneDrive"):
+        return Esito(Stato.ANTEPRIMA)
+    delete_value(HKCU, chiave, "OneDrive")
+    return Esito(Stato.OK, "OneDrive no longer starts with Windows; turn it back on in OneDrive › Settings")
+
+
+def memory_diagnostic(ctx) -> Esito:
+    esito = with_restart(ctx, ctx.comando(["bcdedit", "/bootsequence", "{memdiag}"]))
+    if esito.stato is Stato.OK:
+        esito.nota = "the memory test runs at the next restart (10-20 minutes); the result appears after sign-in"
+    return esito

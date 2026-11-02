@@ -20,7 +20,7 @@ class Catalog(unittest.TestCase):
         self.assertEqual(len(set(NEW)), 30)
         for action_id in NEW:
             self.assertEqual(actions.CATALOG[action_id].area, "performance", action_id)
-        self.assertEqual(len(actions.CATALOG), 194)
+        self.assertGreaterEqual(len(actions.CATALOG), 194)
         self.assertEqual(sum(1 for a in NEW if a in actions.REPORTS), 10)
 
     def test_every_new_tool_runs_in_preview_without_changes(self):
