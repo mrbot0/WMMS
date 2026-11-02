@@ -324,6 +324,145 @@ def reset_windows_update(ctx) -> Esito:
     return ctx.comando(powershell_command(SCRIPT_RESET_WU))
 
 
+# ---------- extended actions (iteration 4) ----------
+
+def write_string(root: str, key: str, name: str, value: str) -> None:
+    import winreg
+    with winreg.CreateKeyEx(getattr(winreg, root), key, 0, winreg.KEY_SET_VALUE) as handle:
+        winreg.SetValueEx(handle, name, 0, winreg.REG_SZ, value)
+
+
+def _registry_action(ctx, descrizione: str, scrivi, nota: str) -> Esito:
+    if not ctx.modifica(descrizione):
+        return Esito(Stato.ANTEPRIMA)
+    scrivi()
+    return Esito(Stato.OK, nota)
+
+
+def power_ultimate(ctx) -> Esito:
+    return ctx.comando(powershell_command(
+        "$o = powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61; "
+        "$g = [regex]::Match(\"$o\", '[0-9a-fA-F-]{36}').Value; if (-not $g) { throw 'Ultimate Performance is not available' }; "
+        "powercfg /setactive $g; \"Ultimate Performance active ($g)\""))
+
+
+def set_hibernation(ctx, enabled: bool) -> Esito:
+    return ctx.comando(["powercfg", "/hibernate", "on" if enabled else "off"])
+
+
+def set_background_apps(ctx, enabled: bool) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications"
+    return _registry_action(ctx, f"Registry HKCU\\{chiave}\\GlobalUserDisabled = {0 if enabled else 1}",
+                            lambda: write_dword("HKEY_CURRENT_USER", chiave, "GlobalUserDisabled", 0 if enabled else 1),
+                            "background apps " + ("allowed" if enabled else "stopped"))
+
+
+def clean_windows_logs(ctx) -> Esito:
+    import time
+    radice = os.path.expandvars(r"%SystemRoot%\Logs")
+    obiettivi = [(os.path.join(radice, "CBS"), "*.log"), (os.path.join(radice, "CBS"), "*.cab"), (os.path.join(radice, "DISM"), "*.log"),
+                 (os.path.join(radice, "MoSetup"), "*.log"), (os.path.join(radice, "WindowsUpdate"), "*.etl")]
+    anteprima = not ctx.modifica("Delete Windows setup and servicing logs older than 7 days")
+    totale, file, saltati = wipe(obiettivi, anteprima, time.time() - 7 * 86400)
+    nota = f"{op.dimensione(totale)} in {file} files" + (f", {saltati} in use" if saltati else "")
+    ctx.scrivi(f"  {nota}")
+    return Esito(Stato.ANTEPRIMA if anteprima else Stato.OK, nota)
+
+
+def compact_os(ctx) -> Esito:
+    return ctx.comando(["compact", "/compactos:always"])
+
+
+def reset_winhttp_proxy(ctx) -> Esito:
+    return ctx.comando(["netsh", "winhttp", "reset", "proxy"])
+
+
+def reset_firewall(ctx) -> Esito:
+    return ctx.comando(["netsh", "advfirewall", "reset"])
+
+
+def smartscreen_on(ctx) -> Esito:
+    chiave = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\SmartScreenEnabled = Warn",
+                            lambda: write_string("HKEY_LOCAL_MACHINE", chiave, "SmartScreenEnabled", "Warn"), "SmartScreen set to warn")
+
+
+def disable_autorun(ctx) -> Esito:
+    chiave = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\NoDriveTypeAutoRun = 255",
+                            lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "NoDriveTypeAutoRun", 255), "AutoRun disabled on all drives")
+
+
+def uac_on(ctx) -> Esito:
+    chiave = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    esito = _registry_action(ctx, f"Registry HKLM\\{chiave}\\EnableLUA = 1",
+                             lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "EnableLUA", 1), "UAC enabled; restart required")
+    if esito.stato is Stato.OK:
+        ctx.riavvio_necessario = True
+    return esito
+
+
+def disable_guest(ctx) -> Esito:
+    return ctx.comando(powershell_command("Get-LocalUser | Where-Object { \"$($_.SID)\" -like '*-501' } | Disable-LocalUser; 'Guest account disabled.'"))
+
+
+def rdp_off(ctx) -> Esito:
+    chiave = r"SYSTEM\CurrentControlSet\Control\Terminal Server"
+    return _registry_action(ctx, f"Registry HKLM\\{chiave}\\fDenyTSConnections = 1",
+                            lambda: write_dword("HKEY_LOCAL_MACHINE", chiave, "fDenyTSConnections", 1), "Remote Desktop disabled")
+
+
+def enable_system_restore(ctx) -> Esito:
+    return ctx.comando(powershell_command("Enable-ComputerRestore -Drive \"$env:SystemDrive\\\"; 'System Restore enabled on the system drive.'"))
+
+
+def pua_protection(ctx) -> Esito:
+    return ctx.comando(powershell_command("Set-MpPreference -PUAProtection Enabled; 'Potentially unwanted app protection enabled.'"))
+
+
+def winget_upgrade(ctx) -> Esito:
+    return ctx.comando(["winget", "upgrade", "--all", "--silent", "--accept-package-agreements", "--accept-source-agreements",
+                        "--disable-interactivity"])
+
+
+def dism_scan(ctx) -> Esito:
+    return ctx.comando(["DISM", "/Online", "/Cleanup-Image", "/ScanHealth"])
+
+
+def rebuild_icon_cache(ctx) -> Esito:
+    esito = ctx.comando(["taskkill", "/f", "/im", "explorer.exe"])
+    if esito.stato is Stato.ANTEPRIMA:
+        return esito
+    cartella = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Explorer")
+    totale, file, _ = wipe([(cartella, "iconcache_*.db"), (os.path.expandvars("%LOCALAPPDATA%"), "IconCache.db")], preview=False)
+    return Esito(Stato.OK, f"{file} cache files removed ({op.dimensione(totale)}); Explorer restarts by itself")
+
+
+def time_sync(ctx) -> Esito:
+    return ctx.comando(powershell_command("Set-Service W32Time -StartupType Automatic; Start-Service W32Time; w32tm /resync /force"))
+
+
+def store_reset(ctx) -> Esito:
+    return ctx.comando(["wsreset.exe", "-i"])
+
+
+def restart_service(ctx, nome: str) -> Esito:
+    return ctx.comando(powershell_command(f"Restart-Service -Name '{nome}' -Force; (Get-Service -Name '{nome}').Status"))
+
+
+def restore_all_startup(ctx) -> Esito:
+    from . import inventory
+    spente = [v for v in inventory.startup_items() if not v["enabled"]]
+    riattivate = 0
+    for voce in spente:
+        if ctx.modifica(f"Enable startup entry {voce['name']}"):
+            inventory.set_startup_enabled(voce, True)
+            riattivate += 1
+    if getattr(ctx, "anteprima", False):
+        return Esito(Stato.ANTEPRIMA, f"{len(spente)} would be turned on")
+    return Esito(Stato.OK, f"{riattivate} startup programs turned on")
+
+
 SCRIPT_INSTALL_UPDATES = r"""
 $session = New-Object -ComObject Microsoft.Update.Session
 $found = $session.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software' and BrowseOnly=0")

@@ -157,6 +157,50 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(dati["jobs"], [])
         self.assertIn("schedules", dati)
 
+    def test_pairing_approved_on_desktop_returns_token(self):
+        with mock.patch.object(self.agent, "_ask_user", return_value=True) as chiedi:
+            stato, dati, _ = self.request("POST", "/api/v1/pair", token=False)
+        self.assertEqual(stato, 200)
+        self.assertEqual(dati["token"], self.agent.token)
+        chiedi.assert_called_once()
+
+    def test_pairing_denied_on_desktop(self):
+        with mock.patch.object(self.agent, "_ask_user", return_value=False):
+            stato, dati, _ = self.request("POST", "/api/v1/pair", token=False)
+        self.assertEqual(stato, 403)
+        self.assertNotIn("token", dati)
+
+    def test_pairing_still_checks_host_and_origin(self):
+        with mock.patch.object(self.agent, "_ask_user", return_value=True) as chiedi:
+            self.assertEqual(self.request("POST", "/api/v1/pair", token=False, headers={"Origin": "http://evil.example"})[0], 403)
+        chiedi.assert_not_called()
+
+    def test_token_check_endpoint(self):
+        self.assertEqual(self.request("POST", "/api/v1/agent/token-check")[0], 200)
+        self.assertEqual(self.request("POST", "/api/v1/agent/token-check", token=False)[0], 403)
+
+    def test_elevate(self):
+        with mock.patch.object(self.agent, "_launch_elevated", return_value=True) as lancia, \
+                mock.patch.object(self.agent, "_schedule_shutdown") as spegni:
+            stato, dati, _ = self.request("POST", "/api/v1/agent/elevate")
+        if self.admin:
+            self.assertEqual(stato, 409)
+            lancia.assert_not_called()
+        else:
+            self.assertEqual(stato, 200)
+            self.assertTrue(dati["restarting"])
+            lancia.assert_called_once()
+            spegni.assert_called_once()
+
+    def test_elevate_declined(self):
+        if self.admin:
+            return
+        with mock.patch.object(self.agent, "_launch_elevated", return_value=False), mock.patch.object(self.agent, "_schedule_shutdown") as spegni:
+            stato, dati, _ = self.request("POST", "/api/v1/agent/elevate")
+        self.assertEqual(stato, 409)
+        self.assertIn("declined", dati["error"])
+        spegni.assert_not_called()
+
     def test_health_endpoint(self):
         voci = [{"id": "python", "name": "Python", "status": "ok", "detail": "3.12", "critical": False},
                 {"id": "admin", "name": "Administrator rights", "status": "warning", "detail": "x", "critical": False}]

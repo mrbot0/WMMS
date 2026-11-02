@@ -6,7 +6,7 @@
     ["Overview", [["dashboard", "Dashboard"], ["recommendations", "Recommendations"]]],
     ["Optimize", [["performance", "Performance"], ["cleanup", "Cleanup"], ["storage", "Storage"], ["startup", "Startup & Apps"], ["services", "Services"]]],
     ["Health", [["integrity", "System Integrity"], ["security", "Security"], ["updates", "Updates & Drivers"], ["network", "Network"]]],
-    ["Operations", [["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
+    ["Operations", [["actions", "Actions"], ["activity", "Activity"], ["playbooks", "Playbooks"], ["schedules", "Schedules"], ["history", "History"], ["reports", "Reports"]]],
     ["", [["settings", "Settings"]]]
   ];
   var PSEUDO_ACTIONS = { "startup.toggle": { id: "startup.toggle", title: "Startup entry changed", area: "startup", risk: "moderate" } };
@@ -46,12 +46,16 @@
       (info.preview ? "Preview mode" : info.admin ? "Administrator" : "Read-only") + "</span>";
     document.getElementById("sidebar-meta").innerHTML = "Version " + esc(info.version) + "<br>Local agent · 127.0.0.1";
     var banner = "";
-    if (info.preview) {
-      banner = '<div class="banner banner-info">' + UI.icon("info") + "<span><strong>Preview mode.</strong> Actions are simulated and nothing on this PC is changed. Schedules are disabled.</span></div>";
-    } else if (!API.hasToken()) {
-      banner = '<div class="banner banner-warning">' + UI.icon("info") + "<span><strong>View-only window.</strong> Open the console from the link shown in the Windows Maintenance Manager window to run or schedule actions.</span></div>";
+    var bannerBtn = function (attr, label) { return '<button class="btn btn-sm" type="button" ' + attr + ' style="margin-left:auto">' + label + "</button>"; };
+    if (!API.hasToken()) {
+      banner = '<div class="banner banner-warning">' + UI.icon("info") + "<span><strong>This window is not connected.</strong> It can show data but cannot run or schedule actions.</span>" +
+        bannerBtn("data-request-access", "Request access") + "</div>";
+    } else if (info.preview) {
+      banner = '<div class="banner banner-info">' + UI.icon("info") + "<span><strong>Preview mode.</strong> Actions are simulated and nothing on this PC is changed. Schedules are disabled.</span>" +
+        bannerBtn("data-elevate", "Restart with full rights") + "</div>";
     } else if (!info.admin) {
-      banner = '<div class="banner banner-warning">' + UI.icon("info") + "<span><strong>Read-only.</strong> Restart Windows Maintenance Manager as administrator to run or schedule actions.</span></div>";
+      banner = '<div class="banner banner-warning">' + UI.icon("info") + "<span><strong>Read-only.</strong> Windows denies changes without administrator rights.</span>" +
+        bannerBtn("data-elevate", "Restart as administrator") + "</div>";
     }
     document.getElementById("banner").innerHTML = banner;
     renderStatus();
@@ -69,7 +73,7 @@
         (state.health.summary.error ? state.health.summary.error + " failed" : state.health.summary.warning ? state.health.summary.warning + " warnings" : "all checks passed") + "</a>" : "") +
       '<span class="st">Oldest area scan: ' + esc(times.length ? UI.relative(times[0]) : "never") + "</span>" +
       (state.scanning ? '<span class="st"><span class="led busy"></span>Scanning all areas…</span>' : "") +
-      (running ? '<span class="st"><span class="led busy"></span>Run in progress (' + state.job.done + "/" + state.job.total + ")</span>" : "") +
+      (running ? '<a class="st" href="#/activity"><span class="led busy"></span>Run in progress · ' + Math.round(state.job.percent || 0) + "% (" + state.job.done + "/" + state.job.total + ")</a>" : "") +
       '<span class="grow"></span><span class="st"><span class="kbd">Ctrl K</span> commands</span><span class="st"><span class="kbd">?</span> shortcuts</span>' +
       '<span class="st">' + esc(info.machine_id || "") + "</span>";
   }
@@ -117,7 +121,7 @@
     var bar = document.getElementById("top-progress");
     var job = state.job && state.job.active ? state.job : null;
     bar.classList.toggle("indeterminate", !job && (state.scanning || state.tasksActive > 0));
-    bar.firstChild.style.width = job ? Math.max(4, Math.round(100 * job.done / Math.max(1, job.total))) + "%" : (state.scanning || state.tasksActive ? "" : "0");
+    bar.firstChild.style.width = job ? Math.max(3, job.percent != null ? job.percent : Math.round(100 * job.done / Math.max(1, job.total))) + "%" : (state.scanning || state.tasksActive ? "" : "0");
   }
 
   function pollActivity() {
@@ -145,13 +149,27 @@
       body.innerHTML = '<p class="empty">No run in this session. Recent runs are listed in History.</p>';
       return;
     }
-    var pct = job.total ? Math.round(100 * job.done / job.total) : 0;
+    var pct = job.percent != null ? job.percent : (job.total ? Math.round(100 * job.done / job.total) : 0);
     var title = job.current && action(job.current) ? action(job.current).title : job.current === "restore_point" ? "Creating a restore point" : "";
+    var shape = (job.id || "") + "|" + job.results.length + "|" + job.active;
+    // Same job and same results: only move the bar and append the log, so the animation keeps gliding.
+    if (body.getAttribute("data-shape") === shape) {
+      body.querySelector(".progress > div").style.width = Math.max(2, pct) + "%";
+      body.querySelector("[data-pct]").innerHTML = pct.toFixed(pct < 10 ? 1 : 0) + "%" + (job.estimated ? "<small>estimated</small>" : "");
+      body.querySelector("[data-current]").textContent = title;
+      var log = body.querySelector(".log"), stickLog = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+      log.textContent = job.log.slice(-400).join("\n");
+      if (stickLog) log.scrollTop = log.scrollHeight;
+      return;
+    }
+    body.setAttribute("data-shape", shape);
     var logEl = body.querySelector(".log");
     var stick = !logEl || logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
     body.innerHTML =
-      '<div class="job-status">' + (job.active ? '<span class="spinner"></span><strong>Running</strong> ' + esc(title) : UI.statusIcon("ok") + "<strong>Completed</strong>") + "</div>" +
-      '<div class="progress"><div style="width:' + pct + '%"></div></div><div class="muted small">' + job.done + " of " + job.total + " actions</div>" +
+      '<div class="job-status">' + (job.active ? '<span class="spinner"></span><strong>Running</strong> <span data-current>' + esc(title) + "</span>" : UI.statusIcon("ok") + "<strong>Completed</strong><span data-current hidden></span>") + "</div>" +
+      '<div class="progress' + (job.active ? "" : " done") + '"><div style="width:' + Math.max(2, pct) + '%"></div></div>' +
+      '<div class="progress-meta"><span class="pct" data-pct>' + pct.toFixed(pct < 10 ? 1 : 0) + "%" + (job.estimated ? "<small>estimated</small>" : "") +
+      '</span><span class="muted small">' + job.done + " of " + job.total + " actions</span></div>" +
       '<ul class="job-results">' + job.results.map(function (r) {
         var a = action(r.action_id);
         return "<li>" + UI.statusBadge(r.status) + "<span>" + esc(a ? a.title : r.action_id) + '</span><span class="muted small">' +
@@ -178,8 +196,9 @@
           var errors = job.results.filter(function (r) { return r.status === "error"; }).length;
           var freed = job.results.reduce(function (a, r) { return a + (r.bytes_freed || 0); }, 0);
           var text = job.results.length + " action(s)" + (freed ? ", " + UI.formatBytes(freed) + " freed" : "") + (errors ? ", " + errors + " failed" : "");
-          UI.toast(errors ? errors + " action(s) failed. See the activity log." : "Run completed.", errors ? "error" : "ok");
+          UI.toast((errors ? errors + " action(s) failed." : "Run completed: " + text + ".") + " Details in Activity.", errors ? "error" : "ok");
           Components.notifications.add(errors ? "Run finished with errors" : "Run completed", text, errors ? "error" : "ok");
+          desktopNotify(errors ? "Run finished with errors" : "Run completed", text);
           refreshAreas(areas || areasOf(job.results.map(function (r) { return r.action_id; })));
         }
       }).catch(function (error) {
@@ -278,10 +297,65 @@
 
   function setSubtitle(text) { document.getElementById("page-sub").textContent = text || ""; }
 
+  /* ---------- access and rights ---------- */
+
+  var accessOpen = false;
+  function requestAccess() {
+    if (accessOpen) return Promise.resolve();
+    accessOpen = true;
+    return UI.modal("Connect this window",
+      '<p class="modal-text">This browser window is not connected to the agent, so it cannot run or schedule actions. ' +
+      "This happens when the console is opened without the link from the Windows Maintenance Manager window, in a new tab or after the agent restarted.</p>" +
+      '<div class="callout callout-info">' + UI.icon("info") + "<div>Click <strong>Request access</strong>: a confirmation appears on the desktop of this PC. Click <strong>Yes</strong> there to connect.</div></div>",
+      [{ label: "Not now", cls: "btn-ghost" }, { label: "Request access", cls: "btn-primary", value: function () { return true; } }]
+    ).then(function (ok) {
+      accessOpen = false;
+      if (!ok) return;
+      UI.toast("Waiting for confirmation on the desktop of this PC…", "info");
+      return API.post("/pair").then(function (r) {
+        API.setToken(r.token);
+        UI.toast("This window is connected.", "ok");
+        renderChrome();
+      }, function (e) { UI.toast(e.message, "error"); });
+    });
+  }
+
+  function restartAsAdmin() {
+    return API.post("/agent/elevate").then(function () {
+      UI.modal("Restarting as administrator",
+        '<p class="modal-text">Approve the Windows prompt (UAC). The console restarts with administrator rights and opens in a new browser tab, already connected.</p>' +
+        '<p class="muted small">You can close this tab afterwards.</p>', [{ label: "OK", cls: "btn-primary" }]);
+    }).catch(function (e) { UI.toast(e.message, "error"); });
+  }
+
+  var adminOpen = false;
+  function needAdmin() {
+    if (adminOpen) return;
+    adminOpen = true;
+    UI.modal("Administrator rights are needed",
+      '<p class="modal-text">The agent runs without administrator rights, so Windows denies the changes this action makes.</p>' +
+      '<div class="callout callout-info">' + UI.icon("shield") + "<div><strong>Restart as administrator</strong> asks Windows for permission (UAC) and reopens the console with full rights.</div></div>",
+      [{ label: "Cancel", cls: "btn-ghost" }, { label: "Restart as administrator", cls: "btn-primary", value: function () { return true; } }]
+    ).then(function (ok) { adminOpen = false; if (ok) restartAsAdmin(); });
+  }
+  window.addEventListener("wmm-unauthorized", requestAccess);
+  window.addEventListener("wmm-need-admin", needAdmin);
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("[data-request-access]")) requestAccess();
+    if (e.target.closest("[data-elevate]")) restartAsAdmin();
+  });
+
   function pageTitle(name) { return window.Pages[name] ? window.Pages[name].title : name; }
 
   function commands() {
     var list = [];
+    (Components.store("recentPages") || []).forEach(function (p) {
+      if (window.Pages[p]) list.push({ group: "Recent pages", title: window.Pages[p].title, icon: p, run: function () { location.hash = "#/" + p; } });
+    });
+    (Components.store("favorites") || []).forEach(function (id) {
+      var a = state.actions[id];
+      if (a) list.push({ group: "Favorite actions", title: a.title, sub: UI.AREA_LABEL[a.area], icon: "play", badge: UI.riskBadge(a.risk), run: function () { runActions([id]); } });
+    });
     NAV.forEach(function (g) {
       g[1].forEach(function (item) {
         list.push({ group: "Pages", title: item[1], icon: item[0], keywords: g[0], run: function () { location.hash = "#/" + item[0]; } });
@@ -332,12 +406,71 @@
   Components.notifications.badge();
 
   var App = window.App = {
-    openDrawer: openDrawer, follow: follow, pollActivity: pollActivity,
+    openDrawer: openDrawer, follow: follow, pollActivity: pollActivity, requestAccess: requestAccess, restartAsAdmin: restartAsAdmin,
     state: state, render: render, isCurrent: isCurrent, onLeave: onLeave, runActions: runActions, runSafe: runSafe, schedule: schedule,
     scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores
   };
 
   setInterval(pollActivity, 4000);
+
+  /* Live CPU/RAM in the top bar (light: one request every 3 s, paused while the tab is hidden). */
+  var liveSince = 0;
+  setInterval(function () {
+    if (document.hidden) return;
+    API.get("/live?since=" + liveSince).then(function (r) {
+      if (!r.samples.length) return;
+      var s = r.samples[r.samples.length - 1];
+      liveSince = s.t;
+      document.getElementById("live-mini").innerHTML = "CPU <b>" + Math.round(s.cpu) + "%</b> RAM <b>" + s.memory_pct + "%</b>";
+    }, function () { /* offline overlay handles it */ });
+  }, 3000);
+
+  /* Connection lost: overlay with automatic reconnection. */
+  var offline = null;
+  function checkConnection() {
+    API.get("/agent/info").then(function (info) {
+      state.info = info; state.connected = true;
+      if (offline) { offline.remove(); offline = null; UI.toast("Agent reachable again.", "ok"); renderChrome(); }
+      renderStatus();
+    }, function () {
+      state.connected = false;
+      renderStatus();
+      if (!offline) {
+        offline = document.createElement("div");
+        offline.className = "offline";
+        offline.innerHTML = '<section class="card"><span class="spinner" style="width:28px;height:28px"></span><h2 style="margin:14px 0 6px">Agent not reachable</h2>' +
+          '<p class="muted">The Windows Maintenance Manager window may be closed or restarting. Reconnecting automatically…</p></section>';
+        document.body.appendChild(offline);
+      }
+    });
+  }
+  setInterval(checkConnection, offline ? 3000 : 10000);
+  setInterval(function () { if (offline) checkConnection(); }, 3000);
+
+  document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
+  document.addEventListener("keydown", function (e) {
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.shiftKey && e.key === "R" && !document.querySelector(".modal-backdrop")) { render(); UI.toast("Page refreshed.", "info"); }
+  });
+
+  /* Recent pages for the command palette. */
+  window.addEventListener("hashchange", function () {
+    var recent = (Components.store("recentPages") || []).filter(function (p) { return p !== current(); });
+    recent.unshift(current());
+    Components.store("recentPages", recent.slice(0, 5));
+  });
+
+  /* Appearance saved in Settings. */
+  (function () {
+    var accent = Components.store("accent"), font = Components.store("fontSize");
+    if (accent && accent !== "blue") document.documentElement.setAttribute("data-accent", accent);
+    if (font && font !== "normal") document.body.classList.add("font-" + font);
+  })();
+
+  function desktopNotify(title, text) {
+    if (!Components.store("desktopNotify") || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
+    try { new Notification(title, { body: text }); } catch (e) { /* not supported */ }
+  }
   setInterval(function () {
     API.get("/agent/info").then(function (info) { state.info = info; state.connected = true; renderStatus(); },
       function () { state.connected = false; renderStatus(); });
@@ -350,6 +483,8 @@
     render();
     refreshScores();
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });
+    // A token from a previous agent run is rejected here: the 403 opens the reconnect dialog.
+    if (API.hasToken()) API.post("/agent/token-check").catch(function () { renderChrome(); });
     return API.get("/runs/current").then(function (r) {
       if (r.active && r.id) follow(r.id);
     });

@@ -140,6 +140,23 @@ class Events(unittest.TestCase):
         self.assertEqual(inventory.summarize_events(None), {"total": 0, "top": []})
 
 
+class Extras(unittest.TestCase):
+    def test_parse_hosts_ignores_comments_and_localhost(self):
+        testo = "# comment\n127.0.0.1 localhost\n::1 localhost\n\n10.0.0.5   intranet.local   # office\n0.0.0.0 ads.example\n"
+        self.assertEqual(inventory.parse_hosts(testo), ["10.0.0.5 intranet.local", "0.0.0.0 ads.example"])
+        self.assertEqual(inventory.parse_hosts(""), [])
+
+    def test_extras_for_area_reads_only_its_keys(self):
+        valori = {("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Internet Settings", "ProxyEnable"): 1,
+                  ("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Internet Settings", "ProxyServer"): "proxy:8080"}
+        with mock.patch.object(inventory, "_reg", side_effect=lambda h, k, n: valori.get((h, k, n))), \
+                mock.patch.object(inventory, "_read_hosts", return_value=["10.0.0.5 intranet"]):
+            dati = inventory.extras_for("network")
+        self.assertEqual(dati["proxy"], {"enabled": True, "server": "proxy:8080"})
+        self.assertEqual(dati["hosts_entries"], ["10.0.0.5 intranet"])
+        self.assertEqual(inventory.extras_for("cleanup"), {})
+
+
 class Battery(unittest.TestCase):
     def test_battery_health(self):
         self.assertEqual(inventory.battery_health(50000, 40000), 80)

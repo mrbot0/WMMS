@@ -26,6 +26,18 @@ class Catalog(unittest.TestCase):
                       "security.full_scan", "security.firewall_on", "updates.store_apps", "integrity.wmi_verify", "integrity.reset_wu"):
             self.assertIn(nuova, actions.CATALOG)
 
+    def test_catalog_has_72_actions(self):
+        nuove = ("performance.power_ultimate", "performance.hibernation_off", "performance.hibernation_on", "performance.background_off",
+                 "performance.background_on", "storage.windows_logs", "storage.compact_os", "network.reset_proxy", "network.reset_firewall",
+                 "security.smartscreen_on", "security.disable_autorun", "security.uac_on", "security.disable_guest", "security.rdp_off",
+                 "security.enable_restore", "security.pua_protection", "updates.winget_upgrade", "integrity.dism_scan",
+                 "integrity.rebuild_icon_cache", "integrity.time_sync", "integrity.store_reset", "services.restart_spooler",
+                 "services.restart_audio", "startup.restore_all")
+        self.assertEqual(len(nuove), 24)
+        for nuova in nuove:
+            self.assertIn(nuova, actions.CATALOG)
+        self.assertGreaterEqual(len(actions.CATALOG), 72)
+
     def test_playbooks_reference_known_actions(self):
         for playbook in actions.PLAYBOOKS:
             for action_id in playbook["actions"]:

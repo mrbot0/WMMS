@@ -65,6 +65,17 @@ class Startup(unittest.TestCase):
             self.assertEqual(cli.main(["--auto-install", "--no-browser"]), 0)
         serve.assert_called_once_with(8765, False, False)
 
+    def test_wait_port_returns_when_free(self):
+        import socket
+        import time
+        prova = socket.socket()
+        prova.bind(("127.0.0.1", 0))
+        porta = prova.getsockname()[1]
+        prova.close()
+        inizio = time.monotonic()
+        cli.wait_for_port(porta, 5)
+        self.assertLess(time.monotonic() - inizio, 1)
+
     def test_accepted_uac_hands_over_to_elevated_process(self):
         with mock.patch.object(cli.core, "is_admin", return_value=False), \
                 mock.patch.object(cli, "restart_as_admin", return_value=True), \

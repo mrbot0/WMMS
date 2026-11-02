@@ -45,6 +45,16 @@ class StoreTests(unittest.TestCase):
         self.store.open_run(M, "services.safe", "schedule")
         self.assertEqual([r["action_id"] for r in self.store.runs(M, area="services")], ["services.safe"])
 
+    def test_average_seconds_from_recent_successful_runs(self):
+        self.assertIsNone(self.store.average_seconds(M, "cleanup.temp"))
+        with self.store._db() as db:
+            db.executemany("INSERT INTO runs (machine_id, action_id, area, origin, started, finished, status) VALUES (?, ?, 'cleanup', 'manual', ?, ?, ?)", [
+                (M, "cleanup.temp", "2026-11-02T10:00:00", "2026-11-02T10:00:30", "ok"),
+                (M, "cleanup.temp", "2026-11-02T11:00:00", "2026-11-02T11:00:50", "preview"),
+                (M, "cleanup.temp", "2026-11-02T12:00:00", "2026-11-02T12:09:00", "error"),
+            ])
+        self.assertEqual(self.store.average_seconds(M, "cleanup.temp"), 40.0)
+
     def test_schedule_crud(self):
         sid = self.store.create_schedule("cleanup.temp", "weekly", "2026-11-05T03:00", "MON,WED", True)
         self.assertEqual(self.store.schedule(sid)["days"], "MON,WED")

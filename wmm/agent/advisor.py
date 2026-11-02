@@ -156,6 +156,11 @@ def assess_integrity(data: dict) -> Assessment:
         punteggio -= 5
         racc.append(Recommendation("integrity.signatures", "integrity", "Update antivirus signatures",
                                    f"Signatures are {sicurezza.get('signature_age_days')} days old.", "medium", "safe", None))
+    if (data.get("time_service") or {}).get("running") is False:
+        punteggio -= 5
+        racc.append(Recommendation("integrity.time", "integrity", "Synchronize the clock",
+                                   "The Windows Time service is stopped: certificates, Kerberos and logs need an accurate clock.",
+                                   "medium", "safe", "integrity.time_sync"))
     registro = data.get("events") or {}
     if (registro.get("total") or 0) > 50:
         punteggio -= 5
@@ -240,6 +245,13 @@ def assess_performance(data: dict) -> Assessment:
         punteggio -= 5
         racc.append(Recommendation("performance.game_dvr", "performance", "Turn off background game recording",
                                    "Game DVR records in the background and costs GPU and disk time.", "low", "moderate", "performance.game_dvr_off"))
+    ibernazione = data.get("hibernation") or {}
+    if ibernazione.get("enabled") and (ibernazione.get("size_gb") or 0) >= 4 and not data.get("battery"):
+        racc.append(Recommendation("performance.hibernation", "performance", "Turn off hibernation",
+                                   f"hiberfil.sys uses {ibernazione['size_gb']} GB on this desktop PC.", "low", "moderate", "performance.hibernation_off"))
+    if data.get("background_apps") is True:
+        racc.append(Recommendation("performance.background", "performance", "Stop apps running in the background",
+                                   "Store apps can run in the background and use CPU, memory and network.", "low", "moderate", "performance.background_off"))
     salute = (data.get("battery_info") or {}).get("health_pct")
     if data.get("battery") and salute is not None and salute < 70:
         punteggio -= 5
@@ -333,6 +345,13 @@ def assess_network(data: dict) -> Assessment:
         punteggio -= 10
         racc.append(Recommendation("network.dns_slow", "network", "Use a faster DNS server",
                                    f"DNS lookups take {data['dns_ms']} ms.", "medium", "moderate", "network.dns_cloudflare"))
+    proxy = data.get("proxy") or {}
+    if proxy.get("enabled"):
+        racc.append(Recommendation("network.proxy", "network", "A proxy server is configured",
+                                   f"Traffic goes through {proxy.get('server') or 'a proxy'}. Check it is expected (malware often sets one).", "low", "safe", None))
+    if data.get("hosts_entries"):
+        racc.append(Recommendation("network.hosts", "network", "Review the hosts file",
+                                   f"{len(data['hosts_entries'])} custom entries, e.g. {data['hosts_entries'][0]}.", "low", "safe", None))
     for scheda in attive:
         velocita = scheda.get("speed_mbps")
         if velocita is not None and velocita < 100:
@@ -378,9 +397,9 @@ def assess_security(data: dict) -> Assessment:
     regola(bool(spenti), 15, "security.firewall", "Turn on the firewall", f"Firewall off on: {', '.join(spenti)}.", "high",
            "moderate", "security.firewall_on")
     regola((data.get("uac") or {}).get("enabled") is False, 25, "security.uac", "Turn on User Account Control",
-           "UAC is disabled: every program runs with full rights.", "high")
+           "UAC is disabled: every program runs with full rights.", "high", "high", "security.uac_on")
     regola(data.get("smartscreen") == "Off", 10, "security.smartscreen", "Turn on SmartScreen",
-           "SmartScreen does not check downloaded applications.", "medium")
+           "SmartScreen does not check downloaded applications.", "medium", "moderate", "security.smartscreen_on")
     regola(data.get("secure_boot") is False, 10, "security.secure_boot", "Enable Secure Boot",
            "Secure Boot is off in the firmware settings.", "medium", "high")
     regola((data.get("tpm") or {}).get("present") is False, 5, "security.tpm", "No TPM detected",
@@ -389,13 +408,19 @@ def assess_security(data: dict) -> Assessment:
     regola(bool(c_volume) and c_volume[0].get("protection") != "On", 5, "security.bitlocker", "Encrypt the system drive",
            "BitLocker protection is off on C:. A lost or stolen disk can be read.", "low", "moderate")
     regola(data.get("rdp_enabled") is True, 5, "security.rdp", "Remote Desktop is enabled",
-           "Disable it if it is not used, or restrict it to the VPN.", "low", "moderate")
+           "Disable it if it is not used, or restrict it to the VPN.", "low", "moderate", "security.rdp_off")
     regola(data.get("smb1") is True, 15, "security.smb1", "Disable SMBv1",
            "The obsolete SMBv1 protocol is enabled (WannaCry attack vector).", "high", "high", "security.disable_smb1")
     regola(len(data.get("admins") or []) > 2, 5, "security.admins", "Too many administrators",
            f"{len(data['admins'])} accounts are local administrators: {', '.join(data['admins'][:5])}.", "medium")
     regola(data.get("guest_enabled") is True, 10, "security.guest", "Disable the Guest account",
-           "The built-in Guest account is enabled.", "medium", "moderate")
+           "The built-in Guest account is enabled.", "medium", "moderate", "security.disable_guest")
+    regola(data.get("autorun_disabled") is False, 5, "security.autorun", "Disable AutoRun",
+           "Removable drives and discs can start programs automatically.", "low", "moderate", "security.disable_autorun")
+    regola(data.get("pua_protection") is False, 5, "security.pua", "Block potentially unwanted apps",
+           "Defender does not block adware, bundlers and other unwanted applications.", "low", "moderate", "security.pua_protection")
+    regola(data.get("restore_enabled") is False, 10, "security.restore_off", "Turn on System Restore",
+           "System Restore is off on the system drive: no restore point can be created.", "high", "safe", "security.enable_restore")
     punti = data.get("restore_points") or []
     recente = punti[0].get("created") if punti else None
     try:
@@ -431,6 +456,9 @@ def assess_updates(data: dict) -> Assessment:
         racc.append(Recommendation("updates.devices", "updates", "Fix devices with errors",
                                    f"{len(dispositivi)} devices report an error: {', '.join(d.get('name') or '?' for d in dispositivi[:3])}. Check Device Manager.",
                                    "high", "safe", None))
+    if data.get("winget"):
+        racc.append(Recommendation("updates.winget", "updates", "Update installed applications",
+                                   "winget is available: it can update most installed desktop apps in one run.", "low", "moderate", "updates.winget_upgrade"))
     vecchi = [d for d in data.get("drivers") or [] if (d.get("age_days") or 0) > 3 * 365]
     if vecchi:
         racc.append(Recommendation("updates.drivers", "updates", "Review old drivers",

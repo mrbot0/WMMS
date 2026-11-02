@@ -5,7 +5,7 @@ and works from an enterprise web console that runs **offline** on `127.0.0.1`: i
 the system, proposes improvements, applies them in one click or on a schedule, keeps a history and
 produces customer-ready reports.
 
-- **48 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*
+- **72 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
 - **5 playbooks** (Quick tune-up, Full maintenance, Repair Windows, Security hardening, Performance boost)
 - **Live monitor** of CPU, memory, disk, network and processes, refreshed every 2 seconds
 - **Schedules** registered in Windows Task Scheduler, running even when the console is closed
@@ -222,8 +222,8 @@ change the system. JavaScript has no build step: edit the files in `wmm/web` and
 |---|---|
 | *Python was not found* | Install Python 3.9+ from python.org with *Add python.exe to PATH* |
 | *Port 8765 is already in use* | Another console is open; close it or start with `--port 9000` |
-| *View-only window* banner | Open the console from the link printed in the Windows Maintenance Manager window |
-| *Read-only* banner | Start from `start_wmm.bat` and accept the UAC prompt |
+| *This window is not connected* / access denied | Click **Request access** and answer **Yes** in the confirmation that appears on the desktop of the PC (or open the link printed in the Windows Maintenance Manager window) |
+| *Read-only* / administrator rights needed | Click **Restart as administrator** in the banner and approve UAC: the console reopens with full rights |
 | Schedules refused | Run from Program Files and install Python for all users (see the health check in Settings) |
 | *Scan incomplete* | Some data needs administrator rights or a PowerShell module was unavailable; scan again as administrator |
 | Very large `%TEMP%` | Sizes are measured for 20 seconds and shown as a minimum |

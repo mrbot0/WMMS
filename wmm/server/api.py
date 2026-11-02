@@ -6,7 +6,9 @@ payload carries machine_id, and /api/v1/agent/info identifies the agent.
 from __future__ import annotations
 
 import csv
+import ctypes
 import hmac
+import subprocess
 import io
 import json
 import mimetypes
@@ -67,6 +69,8 @@ class Agent:
         self._system_time = 0.0
         self._installation: Optional[dict] = None
         self._health: Optional[dict] = None
+        self._pair_lock = threading.Lock()
+        self.server = None
         self.monitor = live.LiveMonitor()
         self.tasks = TaskRegistry()
 
@@ -115,6 +119,10 @@ class Agent:
             "updates": lambda: inventory.collect_updates(ctx),
         }
         dati = raccolta[area]()
+        try:
+            dati.update(inventory.extras_for(area))
+        except Exception as errore:  # optional settings: a warning, never a failed scan
+            dati.setdefault("warnings", []).append(f"Extra settings: {errore}")
         punteggio, raccomandazioni = advisor.assess(area, dati)
         dati["recommendations"] = [r.as_dict() for r in raccomandazioni]
         self.store.save_scan(self.machine_id, area, punteggio, dati)
@@ -277,6 +285,45 @@ class Agent:
             raise ApiError(400, str(errore)) from None
         except RunInProgress as errore:
             raise ApiError(409, str(errore)) from None
+
+    # ---------- access ----------
+
+    def _ask_user(self) -> bool:
+        """Asks the person sitting at this PC; only a click on Yes hands out the session token."""
+        testo = ("A browser window asks to control Windows Maintenance Manager on this PC.\n\n"
+                 "Allow it only if you opened the console yourself.")
+        flags = 0x4 | 0x20 | 0x1000 | 0x10000 | 0x40000  # YESNO | QUESTION | SYSTEMMODAL | SETFOREGROUND | TOPMOST
+        return ctypes.windll.user32.MessageBoxW(None, testo, "Windows Maintenance Manager", flags) == 6  # IDYES
+
+    def pair(self) -> dict:
+        if not self._pair_lock.acquire(blocking=False):
+            raise ApiError(409, "An access request is already waiting for an answer on the desktop of this PC.")
+        try:
+            consentito = self._ask_user()
+        finally:
+            self._pair_lock.release()
+        if not consentito:
+            raise ApiError(403, "Access was denied on the desktop of this PC.")
+        return {"token": self.token}
+
+    def _launch_elevated(self) -> bool:
+        parametri = subprocess.list2cmdline([self.script, "--port", str(self.port), "--wait-port"])
+        return ctypes.windll.shell32.ShellExecuteW(None, "runas", self.python, parametri, str(ROOT), 1) > 32
+
+    def _schedule_shutdown(self) -> None:
+        if self.server is not None:
+            # Answer the browser first, then free the port for the elevated copy.
+            threading.Timer(1.0, self.server.shutdown).start()
+
+    def elevate(self) -> dict:
+        if self.admin and not self.preview:
+            raise ApiError(409, "The console already runs as administrator.")
+        if self.jobs.busy:
+            raise ApiError(409, "Wait for the current run to finish before restarting.")
+        if not self._launch_elevated():
+            raise ApiError(409, "The administrator prompt was declined or failed. Click Restart as administrator to try again.")
+        self._schedule_shutdown()
+        return {"restarting": True}
 
     def set_health(self, checks: List[dict]) -> None:
         self._health = {"checks": checks, "summary": health.summary(checks), "checked": datetime.now().isoformat(timespec="seconds")}
@@ -458,7 +505,8 @@ class Handler(BaseHTTPRequestHandler):
         origine = self.headers.get("Origin")
         if origine and origine not in {f"http://{h}" for h in consentiti}:
             raise ApiError(403, "Forbidden origin.")
-        if self.command not in ("GET", "HEAD"):
+        # Pairing is the one write without a token: it only works after a click on Yes at the PC.
+        if self.command not in ("GET", "HEAD") and urlsplit(self.path).path != "/api/v1/pair":
             token = self.headers.get("X-WMM-Token", "")
             if not hmac.compare_digest(token, self.agent.token):
                 raise ApiError(403, "Missing or invalid token.")
@@ -580,6 +628,15 @@ class Handler(BaseHTTPRequestHandler):
     def activity(self, query):
         self._json(200, self.agent.activity())
 
+    def pair(self, query):
+        self._json(200, self.agent.pair())
+
+    def token_check(self, query):
+        self._json(200, {"ok": True})
+
+    def elevate(self, query):
+        self._json(200, self.agent.elevate())
+
     def health(self, query):
         self._json(200, self.agent.health(query.get("refresh") == "1"))
 
@@ -625,6 +682,9 @@ def _route(metodo: str, schema: str, funzione: Callable) -> Route:
 AREA = r"(cleanup|integrity|services|[^/]+)"
 ROUTES: List[Route] = [
     _route("GET", "/agent/info", Handler.info),
+    _route("POST", "/pair", Handler.pair),
+    _route("POST", "/agent/token-check", Handler.token_check),
+    _route("POST", "/agent/elevate", Handler.elevate),
     _route("GET", "/dashboard", Handler.dashboard),
     _route("POST", "/scan", Handler.scan_all),
     _route("GET", f"/areas/{AREA}", Handler.area),
@@ -658,4 +718,5 @@ def make_server(agent: Agent, port: int) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(("127.0.0.1", port), gestore)
     server.daemon_threads = True
     agent.port = server.server_address[1]
+    agent.server = server
     return server

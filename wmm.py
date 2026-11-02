@@ -42,7 +42,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auto-install", action="store_true",
                         help="install or update the protected copy in Program Files, then start it (used by start_wmm.bat)")
     parser.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--wait-port", action="store_true", help=argparse.SUPPRESS)
     return parser
+
+
+def wait_for_port(port: int, seconds: float = 15.0) -> None:
+    """Used after "Restart as administrator": the old console frees the port a moment later."""
+    import socket
+    import time
+    fine = time.monotonic() + seconds
+    while time.monotonic() < fine:
+        prova = socket.socket()
+        try:
+            prova.bind(("127.0.0.1", port))
+            return
+        except OSError:
+            time.sleep(0.5)
+        finally:
+            prova.close()
 
 
 def installed_target() -> Path:
@@ -141,6 +158,8 @@ def main(argomenti: Optional[Sequence[str]] = None) -> int:
     os.chdir(ROOT)
     if opzioni.run_schedule is not None:
         return run_schedule(opzioni.run_schedule)
+    if opzioni.wait_port:
+        wait_for_port(opzioni.port)
     if opzioni.install:
         if not core.is_admin():
             # The elevated copy opens its own window: --pause keeps it readable.

@@ -461,6 +461,70 @@ def collect_network(ctx) -> dict:
     return dati
 
 
+# ---------- extra settings read from the registry ----------
+
+def _reg(hive: str, key: str, name: str):
+    import winreg
+    try:
+        with winreg.OpenKey(_hive(hive), key, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as chiave:
+            return winreg.QueryValueEx(chiave, name)[0]
+    except OSError:
+        return None
+
+
+def parse_hosts(text: str) -> List[str]:
+    """Active hosts file entries, without comments and the default localhost lines."""
+    voci = []
+    for riga in (text or "").splitlines():
+        riga = riga.split("#", 1)[0].strip()
+        parti = riga.split()
+        if len(parti) < 2 or parti[1].lower() == "localhost":
+            continue
+        voci.append(" ".join(parti[:2]))
+    return voci
+
+
+def _read_hosts() -> List[str]:
+    try:
+        with open(os.path.expandvars(r"%SystemRoot%\System32\drivers\etc\hosts"), encoding="utf-8", errors="replace") as file:
+            return parse_hosts(file.read())
+    except OSError:
+        return []
+
+
+INTERNET_SETTINGS = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+AUTORUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+
+
+def extras_for(area: str) -> dict:
+    """Small settings that complete an area; each is None when it cannot be read."""
+    if area == "network":
+        return {"proxy": {"enabled": bool(_reg("HKCU", INTERNET_SETTINGS, "ProxyEnable")), "server": _reg("HKCU", INTERNET_SETTINGS, "ProxyServer") or ""},
+                "hosts_entries": _read_hosts()}
+    if area == "performance":
+        acceso = _reg("HKLM", r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled")
+        try:
+            dimensione = round(os.stat(os.path.expandvars(r"%SystemDrive%\hiberfil.sys")).st_size / GB, 1)
+        except OSError:
+            dimensione = None
+        spente = _reg("HKCU", r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications", "GlobalUserDisabled")
+        # Without the registry value, an existing hiberfil.sys means hibernation is on.
+        attiva = bool(acceso) if acceso is not None else (True if dimensione else None)
+        return {"hibernation": {"enabled": attiva, "size_gb": dimensione}, "background_apps": spente != 1}
+    if area == "security":
+        autorun = [_reg(h, AUTORUN_KEY, "NoDriveTypeAutoRun") for h in ("HKLM", "HKCU")]
+        intervallo = _reg("HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore", "RPSessionInterval")
+        return {"autorun_disabled": any(v == 255 for v in autorun), "restore_enabled": None if intervallo is None else intervallo != 0}
+    if area == "updates":
+        import shutil
+        return {"winget": bool(shutil.which("winget"))}
+    if area == "integrity":
+        stato = op.Contesto.leggi(["sc", "query", "W32Time"])
+        return {"time_service": {"running": op.servizio_attivo(stato),
+                                 "server": _reg("HKLM", r"SYSTEM\CurrentControlSet\Services\W32Time\Parameters", "NtpServer") or ""}}
+    return {}
+
+
 # ---------- event log ----------
 
 SCRIPT_EVENTS = r"""
@@ -506,6 +570,7 @@ $smb = Get-SmbServerConfiguration
   bitlocker = @(Get-BitLockerVolume | ForEach-Object { [ordered]@{ mount = "$($_.MountPoint)"; protection = "$($_.ProtectionStatus)"; encrypted = $_.EncryptionPercentage } })
   rdp_deny = Reg 'HKLM:\System\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections'
   smb1 = if ($smb) { [bool]$smb.EnableSMB1Protocol } else { $null }
+  pua = (Get-MpPreference -ErrorAction SilentlyContinue).PUAProtection
   admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name)" })
   guest = (Get-LocalUser -ErrorAction SilentlyContinue | Where-Object { "$($_.SID)" -like '*-501' }).Enabled
   restore_points = @(Get-ComputerRestorePoint | ForEach-Object { [ordered]@{ description = $_.Description; created = $_.ConvertToDateTime($_.CreationTime).ToString('s'); type = "$($_.RestorePointType)" } })
@@ -532,6 +597,7 @@ def collect_security(ctx) -> dict:
         "bitlocker": op.come_lista(raw.get("bitlocker")),
         "rdp_enabled": None if rdp is None else rdp == 0,
         "smb1": raw.get("smb1"),
+        "pua_protection": None if raw.get("pua") is None else raw.get("pua") == 1,
         "admins": [str(a) for a in op.come_lista(raw.get("admins"))],
         "guest_enabled": None if ospite is None else bool(ospite),
         "restore_points": sorted(op.come_lista(raw.get("restore_points")), key=lambda r: r.get("created") or "", reverse=True),

@@ -208,6 +208,26 @@ class NewAreas(unittest.TestCase):
         self.assertEqual(punteggio, 95)
         self.assertIn("integrity.events", [r.id for r in racc])
 
+    def test_new_security_controls_have_one_click_fixes(self):
+        dati = security(smartscreen="Off", rdp_enabled=True, guest_enabled=True, autorun_disabled=False, pua_protection=False, restore_enabled=False)
+        punteggio, racc = advisor.assess_security(dati)
+        azioni = {r.action_id for r in racc}
+        for attesa in ("security.smartscreen_on", "security.rdp_off", "security.disable_guest", "security.disable_autorun",
+                       "security.pua_protection", "security.enable_restore"):
+            self.assertIn(attesa, azioni)
+        self.assertEqual(punteggio, 100 - 10 - 5 - 10 - 5 - 5 - 10)
+
+    def test_advice_without_penalty(self):
+        self.assertEqual(advisor.assess_performance(performance(hibernation={"enabled": True, "size_gb": 12}, background_apps=True))[0], 100)
+        _, racc = advisor.assess_performance(performance(hibernation={"enabled": True, "size_gb": 12}, background_apps=True))
+        self.assertTrue({"performance.hibernation_off", "performance.background_off"} <= {r.action_id for r in racc})
+        self.assertIn("updates.winget_upgrade", [r.action_id for r in advisor.assess_updates(updates(winget=True))[1]])
+
+    def test_time_service_stopped(self):
+        punteggio, racc = advisor.assess_integrity(integrity(time_service={"running": False, "server": "time.windows.com"}))
+        self.assertEqual(punteggio, 95)
+        self.assertIn("integrity.time_sync", [r.action_id for r in racc])
+
     def test_updates_pending_and_devices(self):
         dati = updates(pending=[{"title": "Sec", "severity": "Critical"}, {"title": "Other", "severity": ""}],
                        problem_devices=[{"name": "USB"}], reboot_required=True)

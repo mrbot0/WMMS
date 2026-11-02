@@ -163,6 +163,39 @@ class JobTests(unittest.TestCase):
         self.assertLessEqual(len(elenco[0]["log"]), jobs.LIST_LOG_LINES)
         self.assertEqual(elenco[0]["titles"], ["cleanup.ok"])
 
+    def test_percent_from_command_output(self):
+        job = jobs.Job(["a.x", "b.y"], "manual", minutes=[1, 1])
+        job.begin_step()
+        job.write("[=====                      10.0%                           ]")
+        job.write("[===========================50.0%                           ]")
+        stato = job.as_dict()
+        self.assertEqual(stato["step_percent"], 50.0)
+        self.assertEqual(stato["percent"], 25.0)
+        self.assertFalse(stato["estimated"])
+        job.results.append({"status": "ok"})
+        job.begin_step()
+        job.write("Verification 40% complete.")
+        self.assertEqual(job.as_dict()["percent"], 70.0)
+
+    def test_percent_estimated_from_time_when_output_has_none(self):
+        orologio = [1000.0]
+        job = jobs.Job(["a.x"], "manual", minutes=[2], clock=lambda: orologio[0])
+        job.begin_step()
+        job.write("working...")
+        orologio[0] += 60
+        stato = job.as_dict()
+        self.assertTrue(stato["estimated"])
+        self.assertEqual(stato["percent"], 50.0)
+        orologio[0] += 600
+        self.assertEqual(job.as_dict()["percent"], 95.0)
+
+    def test_percent_ignores_out_of_range_values(self):
+        job = jobs.Job(["a.x"], "manual", minutes=[1])
+        job.begin_step()
+        job.write("Disk usage 250%")
+        job.write("Progress: 30 % done")
+        self.assertEqual(job.as_dict()["step_percent"], 30.0)
+
     def test_tasks_registry(self):
         registro = jobs.TaskRegistry()
         tid = registro.start("scan", "Full scan", 3)
