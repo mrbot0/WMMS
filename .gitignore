@@ -1,0 +1,13 @@
+# Machine-specific data: history, reports and service backups of the PC where the suite ran
+dati/
+*.db
+*.lock
+
+# Python
+__pycache__/
+*.pyc
+
+# Local tool state
+.claude/
+.remember/
+.superpowers/

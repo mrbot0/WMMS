@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Windows Maintenance Manager</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F6CBD'/%3E%3Cpath d='M8 9h7v7H8zM17 9h7v7h-7zM8 18h7v7H8zM17 18h7v7h-7z' fill='white'/%3E%3C/svg%3E">
+  <script>
+    // Apply the saved theme before the first paint.
+    try { var t = JSON.parse(localStorage.getItem("wmm.theme") || "null"); if (t && t !== "system") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <a class="sr-only" href="#content">Skip to content</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0F6CBD"/><path d="M8 9h7v7H8zM17 9h7v7h-7zM8 18h7v7H8zM17 18h7v7h-7z" fill="#fff"/></svg>
+        <div><strong>Windows Maintenance</strong><span>MANAGER</span></div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">
+        <div class="meta" id="sidebar-meta"></div>
+        <button class="collapse-btn" id="btn-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <div class="crumbs" id="crumbs"></div>
+          <h1 id="page-title">Dashboard</h1>
+          <span id="page-sub" class="muted"></span>
+        </div>
+        <button class="search-btn" id="btn-search" type="button" aria-label="Open command palette">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span class="label">Search or run a command</span><span class="kbd">Ctrl K</span>
+        </button>
+        <div class="topbar-meta" id="topbar-meta"></div>
+        <div class="topbar-actions">
+          <button class="icon-btn" id="btn-theme" type="button" title="Toggle theme" aria-label="Toggle theme"></button>
+          <button class="icon-btn" id="btn-notif" type="button" title="Notifications" aria-label="Notifications">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            <span class="count" id="notif-count" hidden>0</span>
+          </button>
+          <button class="btn" id="btn-activity" type="button" title="Show activity">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Activity <span class="dot" id="activity-dot" hidden></span>
+          </button>
+          <button class="btn btn-primary" id="btn-scan" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Scan all
+          </button>
+        </div>
+        <div class="top-progress" id="top-progress" aria-hidden="true"><div></div></div>
+      </header>
+      <div class="main-scroll" id="scroller">
+        <div id="banner"></div>
+        <main id="content" class="content" tabindex="-1"></main>
+      </div>
+      <footer class="statusbar" id="statusbar" aria-label="Status"></footer>
+    </div>
+  </div>
+  <div class="popover" id="notif-panel" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Activity" hidden>
+    <div class="drawer-head">
+      <h2>Activity</h2>
+      <button class="btn btn-ghost" id="drawer-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+  <button class="to-top" id="to-top" type="button" title="Back to top" aria-label="Back to top" hidden>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  </button>
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/charts.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/components.js"></script>
+  <script src="/static/js/report.js"></script>
+  <script src="/static/js/pages/dashboard.js"></script>
+  <script src="/static/js/pages/recommendations.js"></script>
+  <script src="/static/js/pages/performance.js"></script>
+  <script src="/static/js/pages/cleanup.js"></script>
+  <script src="/static/js/pages/storage.js"></script>
+  <script src="/static/js/pages/startup.js"></script>
+  <script src="/static/js/pages/services.js"></script>
+  <script src="/static/js/pages/integrity.js"></script>
+  <script src="/static/js/pages/security.js"></script>
+  <script src="/static/js/pages/updates.js"></script>
+  <script src="/static/js/pages/network.js"></script>
+  <script src="/static/js/pages/activity.js"></script>
+  <script src="/static/js/pages/playbooks.js"></script>
+  <script src="/static/js/pages/schedules.js"></script>
+  <script src="/static/js/pages/history.js"></script>
+  <script src="/static/js/pages/reports.js"></script>
+  <script src="/static/js/pages/settings.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
