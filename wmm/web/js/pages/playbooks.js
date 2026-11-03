@@ -5,6 +5,7 @@
   var esc = UI.esc;
   // Playbooks are shown by purpose; one not listed here lands in "More".
   var GROUPS = [
+    ["My playbooks", "user", "Saved from Actions or copied from a playbook below; kept in this browser.", []],
     ["Every visit", "sparkle", "Routine maintenance and updates.", ["quick", "full", "deep_clean", "update_all"]],
     ["Fix a problem", "integrity", "When something does not work.", ["repair", "network_fix", "print_fix"]],
     ["Check (read-only)", "reports", "Reports only: nothing on the PC changes.", ["health_check", "security_audit"]],
@@ -12,11 +13,29 @@
     ["Secure", "security", "Protection for a new or exposed PC.", ["security", "new_pc"]]
   ];
 
+  /* My playbooks: action lists saved in this browser (from Actions, or copied from a built-in playbook). */
+  function mine() { return Components.store("myPlaybooks") || []; }
+  function saveMine(title, actions) {
+    var list = mine().filter(function (p) { return p.title !== title; });
+    list.push({ id: "my-" + Date.now().toString(36), title: title, actions: actions, created: new Date().toISOString() });
+    Components.store("myPlaybooks", list);
+  }
+
   window.Pages.playbooks = {
     title: "Playbooks",
+    saveMine: saveMine,
     render: function (el, App) {
       return Promise.all([API.get("/playbooks"), API.get("/history?limit=500")]).then(function (r) {
         var books = r[0].playbooks, runs = r[1].runs;
+        // Own playbooks get the same shape as the built-in ones; actions removed from the catalog are skipped.
+        var own = mine().map(function (p) {
+          var steps = p.actions.map(function (id) { return App.action(id); }).filter(Boolean);
+          var rank = { safe: 0, moderate: 1, high: 2 };
+          return { id: p.id, own: true, title: p.title, description: "My playbook · saved " + UI.formatDate(p.created, false), actions: steps.map(function (a) { return a.id; }),
+            steps: steps, minutes: steps.reduce(function (s, a) { return s + (a.minutes || 0); }, 0),
+            risk: steps.reduce(function (w, a) { return rank[a.risk] > rank[w] ? a.risk : w; }, "safe") };
+        });
+        books = own.concat(books);
         App.setSubtitle("Ready-made maintenance sequences, ordered and safe by design");
         var card = function (p) {
           var last = runs.filter(function (x) { return p.actions.indexOf(x.action_id) >= 0; })[0];
@@ -32,8 +51,13 @@
             }).join("") + "</ol>" +
             '<div class="page-actions" style="margin-top:14px"><button class="btn btn-primary" data-playbook="' + esc(p.id) + '">' + UI.icon("play") + "Run playbook</button>" +
             '<button class="btn btn-ghost" data-copy-playbook="' + esc(p.id) + '" title="The steps as a checklist, to follow by hand or attach to a ticket">' + UI.icon("copy") + "Copy steps</button>" +
-            '<button class="btn" data-schedule-playbook="' + esc(p.id) + '" title="Run it as a routine: every day, week, month or at startup">' + UI.icon("clock") + "Schedule</button></div></div></section>";
+            (p.own ? '<button class="btn btn-ghost" data-delete-mine="' + esc(p.id) + '">' + UI.icon("trash") + "Delete</button>"
+              : '<button class="btn btn-ghost" data-copy-mine="' + esc(p.id) + '" title="Copy it to My playbooks, then change it from Actions">' + UI.icon("plus") + "Make my copy</button>") +
+            // Own playbooks live in this browser, so Task Scheduler (running as SYSTEM) cannot run them.
+            (p.own ? "" : '<button class="btn" data-schedule-playbook="' + esc(p.id) + '" title="Run it as a routine: every day, week, month or at startup">' + UI.icon("clock") + "Schedule</button>") +
+            "</div></div></section>";
         };
+        GROUPS[0][3] = own.map(function (p) { return p.id; });
         var placed = [].concat.apply([], GROUPS.map(function (g) { return g[3]; }));
         var cards = GROUPS.concat([["More", "playbooks", "", books.map(function (b) { return b.id; }).filter(function (id) { return placed.indexOf(id) < 0; })]])
           .map(function (g) {
@@ -48,6 +72,24 @@
           btn.addEventListener("click", function () {
             var p = books.filter(function (b) { return b.id === btn.getAttribute("data-playbook"); })[0];
             App.runActions(p.actions);
+          });
+        });
+        el.querySelectorAll("[data-copy-mine]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var p = books.filter(function (b) { return b.id === btn.getAttribute("data-copy-mine"); })[0];
+            saveMine(p.title + " (my copy)", p.actions.slice());
+            UI.toast("Copied to My playbooks.", "ok");
+            App.render();
+          });
+        });
+        el.querySelectorAll("[data-delete-mine]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var id = btn.getAttribute("data-delete-mine");
+            UI.confirm("Delete this playbook?", "It is removed from My playbooks. Nothing on the PC changes.", { ok: "Delete", danger: true }).then(function (ok) {
+              if (!ok) return;
+              Components.store("myPlaybooks", mine().filter(function (p) { return p.id !== id; }));
+              App.render();
+            });
           });
         });
         el.querySelectorAll("[data-copy-playbook]").forEach(function (btn) {

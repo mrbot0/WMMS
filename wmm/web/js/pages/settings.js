@@ -18,6 +18,17 @@
   ];
 
   function store(k, v) { return Components.store(k, v); }
+  /* The preferences of each section, for “Reset this section”. */
+  var SECTION_KEYS = {
+    appearance: ["accent", "fontSize", "density", "corners", "contrast", "cbSafe", "noBlur", "wideText", "underlineLinks", "hideLiveMini", "sidebar",
+      "sidebarWidth", "shadows", "typeface", "pageWidth", "hideStatusbar", "noTips"],
+    behaviour: ["startPage", "dashInterval", "pageSize", "toastSpeed", "confirmSafe", "warnOnClose", "noKeyShortcuts", "paletteActions", "pageTabs", "autoScanDays",
+      "liveInterval", "toastLevel", "timeFormat", "dateStyle", "sizeUnits"],
+    notifications: ["sound", "soundVolume", "desktopNotify", "notifyProblemsOnly", "titleProgress", "flashTitle", "speak", "scheduleNotice", "quietHours"],
+    maintenance: ["defaultTime", "defaultDelay", "batteryWarn", "autoOpenReports", "autoDrawer", "longRunMinutes", "tempAlert", "sensorInterval"],
+    dashboard: ["dashHidden", "pinnedPages"],
+    data: ["privacy", "hideDevice", "idleLock"]
+  };
   function group(name, options, current) {
     return '<span class="btn-group" role="group">' + options.map(function (o) {
       return '<button type="button" class="btn btn-sm' + (String(current) === String(o[0]) ? " active" : "") + '" data-pref="' + name + '" data-value="' + esc(o[0]) + '">' + esc(o[1]) + "</button>";
@@ -66,6 +77,13 @@
             "<label>Text size" + group("fontSize", [["small", "Small"], ["normal", "Normal"], ["large", "Large"]], store("fontSize") || "normal") + "</label>" +
             "<label>Density" + group("density", [["comfortable", "Comfortable"], ["compact", "Compact"]], Components.density.get()) + "</label>" +
             "<label>Corners" + group("corners", [["rounded", "Rounded"], ["square", "Square"]], store("corners") || "rounded") + "</label>" +
+            "<label>Menu width" + group("sidebarWidth", [["narrow", "Narrow"], ["normal", "Normal"], ["wide", "Wide"]], store("sidebarWidth") || "normal") + "</label>" +
+            "<label>Shadows" + group("shadows", [["none", "None"], ["soft", "Soft"], ["strong", "Strong"]], store("shadows") || "soft") + "</label>" +
+            "<label>Typeface" + group("typeface", [["system", "Segoe UI"], ["readable", "Verdana (more legible)"], ["rounded", "Rounded"]], store("typeface") || "system") + "</label>" +
+            "<label>Page width" + group("pageWidth", [["full", "Full screen"], ["centered", "Centered (1400 px)"]], store("pageWidth") || "full") +
+            '<span class="hint">Centered keeps lines short on very wide monitors.</span></label>' +
+            check("hide-statusbar", store("hideStatusbar"), "Hide the status bar at the bottom") +
+            check("no-tips", store("noTips"), "Turn off hover tooltips", "Titles of buttons and values stay available to screen readers.") +
             check("contrast", store("contrast"), "High contrast", "Stronger borders and text for bright rooms and low vision.") +
             check("cb-safe", store("cbSafe"), "Color-blind friendly status colors", "Blue for good and orange for problems instead of green and red; icons stay the same.") +
             check("no-blur", store("noBlur"), "Reduce transparency", "Solid top bar, menus and dialogs: easier to read and lighter on old graphics cards.") +
@@ -88,7 +106,13 @@
             '<span class="hint">How long notifications stay on screen. Hovering one always pauses it.</span></label>' +
             check("confirm-safe", store("confirmSafe"), "Ask before running safe actions too", "Every run shows its steps and asks for confirmation first.") +
             check("warn-close", store("warnOnClose") !== false, "Ask before closing the tab while a run is in progress", "The run goes on in the agent anyway; this only avoids closing the view by mistake.") +
-            check("no-keys", store("noKeyShortcuts"), "Turn off single-key shortcuts", "G then a letter, /, ? and Shift shortcuts stop working; Ctrl K still opens search. Useful with screen readers or speech input.") + "</div>") +
+            check("no-keys", store("noKeyShortcuts"), "Turn off single-key shortcuts", "G then a letter, /, ? and Shift shortcuts stop working; Ctrl K still opens search. Useful with screen readers or speech input.") +
+            check("page-tabs", store("pageTabs") !== false, "Split long pages into tabs", "Dashboard, area pages, Hardware and Schedules show one group at a time: overview first, details after.") +
+            check("palette-actions", store("paletteActions") !== false, "List actions in the search (Ctrl K)", "Off: the search shows pages, commands and settings only, without the 200+ tools.") +
+            "<label>Scan at start when the last scan is older than" + group("autoScanDays", [[0, "Never"], [1, "1 day"], [3, "3 days"], [7, "1 week"]], store("autoScanDays") || 0) +
+            '<span class="hint">Only when the console runs as administrator; the scan changes nothing on the PC.</span></label>' +
+            "<label>Live CPU and memory in the top bar" + group("liveInterval", [[3, "Every 3 s"], [10, "Every 10 s"], [30, "Every 30 s"], [0, "Off"]], store("liveInterval") != null ? store("liveInterval") : 3) + "</label>" +
+            "<label>Messages shown" + group("toastLevel", [["all", "All"], ["problems", "Only warnings and errors"]], store("toastLevel") || "all") + "</label></div>") +
             UI.card("Formats", '<div class="form">' +
               "<label>Time" + group("timeFormat", [["system", "Like Windows"], ["24", "24-hour"], ["12", "12-hour"]], store("timeFormat") || "system") + "</label>" +
               "<label>Dates" + group("dateStyle", [["short", "02 Nov 2026"], ["numeric", "02/11/2026"], ["iso", "2026-11-02"]], store("dateStyle") || "short") + "</label>" +
@@ -101,7 +125,11 @@
             '<button type="button" class="btn btn-sm btn-ghost" id="sound-test" style="align-self:flex-start">' + UI.icon("play") + "Test</button></label>" +
             check("desktop-notify", store("desktopNotify"), "Desktop notification when a run finishes in the background") +
             check("problems-only", store("notifyProblemsOnly"), "Only for runs with warnings or errors", "Successful runs show in the console but stay silent on the desktop.") +
-            check("title-progress", store("titleProgress") !== false, "Show the run percentage in the browser tab", "Title and icon of the tab show the progress, visible from other tabs.") + "</div>") +
+            check("title-progress", store("titleProgress") !== false, "Show the run percentage in the browser tab", "Title and icon of the tab show the progress, visible from other tabs.") +
+            check("flash-title", store("flashTitle"), "Blink the tab title when a run finishes in the background", "Until you look at the console again.") +
+            check("speak", store("speak"), "Read the result aloud", "Uses the Windows voice: “Run completed” or “Run finished with errors”.") +
+            '<button type="button" class="btn btn-sm btn-ghost" id="speak-test" style="align-self:flex-start">' + UI.icon("play") + "Test the voice</button>" +
+            check("schedule-notice", store("scheduleNotice") !== false, "On the dashboard, report the scheduled runs since the last visit", "How many ran and how many failed while the console was closed.") + "</div>") +
             UI.card("Quiet hours", '<div class="form">' + check("quiet-on", quiet.on, "No sounds or desktop notifications during these hours") +
               '<div class="form-row"><label>From<input type="time" id="quiet-from" value="' + esc(quiet.from) + '"></label><label>To<input type="time" id="quiet-to" value="' + esc(quiet.to) + '"></label></div>' +
               '<span class="hint">The hours may span midnight, for example 22:00 to 07:00. Runs still finish and appear in Activity and History.</span></div>'),
@@ -113,7 +141,13 @@
             '<span class="hint">Pre-filled for “At every startup” and “At every sign-in”, so the PC can finish starting first.</span></label></div>') +
             UI.card("Runs", '<div class="form">' +
               check("battery-warn", store("batteryWarn"), "Ask before long runs on battery", "Runs of 10 minutes or more ask first when a laptop is not plugged in.") +
-              check("auto-reports", store("autoOpenReports") !== false, "Open the output of diagnostic reports when they finish", "Off: the output stays one click away in Activity and History.") + "</div>"),
+              check("auto-reports", store("autoOpenReports") !== false, "Open the output of diagnostic reports when they finish", "Off: the output stays one click away in Activity and History.") +
+              check("auto-drawer", store("autoDrawer") !== false, "Open the Activity panel when a run starts", "Off: progress stays in the top line and in the tab title.") +
+              "<label>Ask before runs longer than" + group("longRunMinutes", [[0, "Never"], [30, "30 min"], [60, "1 hour"]], store("longRunMinutes") || 0) + "</label></div>") +
+            UI.card("Hardware sensors", '<div class="form">' +
+              "<label>Temperature alert for processor and graphics" + group("tempAlert", [[80, "80 °C"], [85, "85 °C"], [90, "90 °C"], [95, "95 °C"]], store("tempAlert") || 90) +
+              '<span class="hint">Disks alert 20 °C lower. The Hardware page warns once every 10 minutes per sensor.</span></label>' +
+              "<label>Sensor refresh" + group("sensorInterval", [[2, "2 s"], [5, "5 s"], [10, "10 s"], [30, "30 s"]], store("sensorInterval") || 5) + "</label></div>"),
 
           dashboard: UI.card("Dashboard sections", '<p class="muted" style="margin-top:0">Choose what the dashboard shows. The overall health and quick actions are always visible.</p><div class="form">' +
             window.Pages.dashboard.sections.map(function (sct) {
@@ -125,12 +159,16 @@
               "Runs as an automatic action when the console starts as administrator; it shows in Activity and History.") +
             '<label class="check"><input type="checkbox" id="autostart"' + (auto.enabled ? " checked" : "") + (autoBlocked ? " disabled" : "") + "> " +
             "Start Windows Maintenance Manager when I sign in to Windows</label>" +
-            '<span class="hint">' + esc(autoBlocked || "The console starts as administrator 30 seconds after sign-in, without a prompt.") + "</span></div>"),
+            '<span class="hint">' + esc(autoBlocked || "30 seconds after sign-in the console opens in your browser, as administrator and without a prompt. " +
+              "No window stays open: stop it from the search (Ctrl K › Stop Windows Maintenance Manager). Turn it off and on again to update an existing task.") + "</span></div>"),
 
           data: UI.card("Privacy", '<div class="form">' +
             check("privacy", store("privacy"), "Privacy mode: hide serial numbers, MAC addresses and IDs on screen",
               "For screen sharing and remote sessions. Hover a hidden value to read it. Shortcut: Shift P.") +
+            check("hide-device", store("hideDevice"), "Hide the device name in the top bar", "For screenshots and screen sharing; reports still name the PC.") +
             '<button class="btn btn-sm" type="button" id="clear-recent" style="align-self:flex-start">' + UI.icon("x") + "Clear recent commands and pages</button>" +
+            '<button class="btn btn-sm" type="button" id="forget-recs" style="align-self:flex-start">' + UI.icon("refresh") + "Show hidden and snoozed improvements again</button>" +
+            '<button class="btn btn-sm" type="button" id="reset-filters" style="align-self:flex-start">' + UI.icon("x") + "Reset the filters of every page</button>" +
             '<span class="hint">Forgets what the search (Ctrl K) lists under Recent pages and recent commands.</span></div>') +
             UI.card("Inactivity", '<div class="form"><label>Disconnect this window after' +
             group("idleLock", [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hour"]], store("idleLock") || 0) +
@@ -170,7 +208,9 @@
             return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
               UI.icon(x[2]) + '<span><strong>' + esc(x[1]) + '</strong><span class="cell-sub">' + esc(x[3]) + "</span></span></button>";
           }).join("") + "</nav>" + '<div class="settings-panels">' + SECTIONS.map(function (x) {
-            return '<section class="settings-panel stack" data-panel="' + x[0] + '"' + (x[0] === active ? "" : " hidden") + ">" + body[x[0]] + "</section>";
+            var reset = SECTION_KEYS[x[0]] ? '<div class="section-reset"><button type="button" class="btn btn-sm btn-ghost" data-reset-section="' + x[0] + '" data-title="' + esc(x[1]) + '">' +
+              UI.icon("refresh") + "Reset this section</button></div>" : "";
+            return '<section class="settings-panel stack" data-panel="' + x[0] + '"' + (x[0] === active ? "" : " hidden") + ">" + body[x[0]] + reset + "</section>";
           }).join("") + "</div></div>";
 
         /* ---------- side menu ---------- */
@@ -201,7 +241,20 @@
           dateStyle: function (v) { store("dateStyle", v); UI.toast("Dates now look like " + UI.formatDate(new Date().toISOString(), false) + ".", "ok"); },
           sizeUnits: function (v) { store("sizeUnits", v); UI.toast("500 GB disks now show as " + UI.formatBytes(500e9) + ".", "ok"); },
           soundVolume: function (v) { store("soundVolume", v); },
-          defaultDelay: function (v) { store("defaultDelay", Number(v)); UI.toast(Number(v) ? "Startup and sign-in schedules wait " + v + " minutes by default." : "No default wait.", "ok"); }
+          defaultDelay: function (v) { store("defaultDelay", Number(v)); UI.toast(Number(v) ? "Startup and sign-in schedules wait " + v + " minutes by default." : "No default wait.", "ok"); },
+          sidebarWidth: function (v) { store("sidebarWidth", v); App.applyLook(); },
+          shadows: function (v) { store("shadows", v); App.applyLook(); },
+          typeface: function (v) { store("typeface", v); App.applyLook(); },
+          pageWidth: function (v) { store("pageWidth", v); App.applyLook(); },
+          autoScanDays: function (v) { store("autoScanDays", Number(v)); UI.toast(Number(v) ? "The console scans at start when the last scan is older than " + v + " day(s)." : "No scan at start.", "ok"); },
+          liveInterval: function (v) {
+            store("liveInterval", Number(v));
+            if (!Number(v)) document.getElementById("live-mini").textContent = "";
+          },
+          toastLevel: function (v) { store("toastLevel", v); if (v === "all") UI.toast("All messages are shown.", "ok"); },
+          longRunMinutes: function (v) { store("longRunMinutes", Number(v)); },
+          tempAlert: function (v) { store("tempAlert", Number(v)); UI.toast("Processor and graphics alert at " + v + " °C, disks at " + (v - 20) + " °C.", "ok"); },
+          sensorInterval: function (v) { store("sensorInterval", Number(v)); }
         };
         el.querySelector(".settings-panels").addEventListener("click", function (e) {  // not on #content: it is shared by every page
           var b = e.target.closest("[data-pref]");
@@ -225,6 +278,43 @@
           on(p[0], function (v) { store(p[1], v); App.applyLook(); });
         });
         on("warn-close", function (v) { store("warnOnClose", v); });
+        [["hide-statusbar", "hideStatusbar"], ["no-tips", "noTips"], ["hide-device", "hideDevice"]].forEach(function (p) {
+          on(p[0], function (v) { store(p[1], v); App.applyLook(); });
+        });
+        on("palette-actions", function (v) { store("paletteActions", v); });
+        on("page-tabs", function (v) { store("pageTabs", v); UI.toast(v ? "Long pages are split into tabs." : "Long pages show everything at once.", "ok"); });
+        on("flash-title", function (v) { store("flashTitle", v); });
+        on("speak", function (v) { store("speak", v); if (v && !window.speechSynthesis) UI.toast("This browser has no voice: nothing will be read.", "warning"); });
+        on("schedule-notice", function (v) { store("scheduleNotice", v); });
+        on("auto-drawer", function (v) { store("autoDrawer", v); });
+        el.querySelector("#speak-test").addEventListener("click", function () {
+          var was = store("speak");
+          store("speak", true);
+          App.speak("Run completed.");
+          store("speak", was);
+        });
+        el.querySelector("#forget-recs").addEventListener("click", function () {
+          store("recDismissed", null);
+          store("recSnoozed", null);
+          UI.toast("Every hidden or snoozed improvement shows again in Recommendations.", "ok");
+        });
+        el.querySelector("#reset-filters").addEventListener("click", function () {
+          // Views and filters only: saved event filters, bookmarks and favorites are kept.
+          ["toolbox", "events", "routineTab", "taskmgr", "scriptsView", "recView", "hwView"].forEach(function (k) { store(k, null); });
+          UI.toast("Page filters reset: every page opens with its default view.", "ok");
+        });
+        /* ---------- reset one section ---------- */
+        el.querySelector(".settings-panels").addEventListener("click", function (e) {
+          var b = e.target.closest("[data-reset-section]");
+          if (!b) return;
+          var id = b.getAttribute("data-reset-section"), keys = SECTION_KEYS[id];
+          UI.confirm("Reset " + b.getAttribute("data-title") + "?", "The options of this section go back to their defaults. Other sections and the data on this PC are not touched.",
+            { ok: "Reset", danger: true }).then(function (ok) {
+            if (!ok) return;
+            keys.forEach(function (k) { try { localStorage.removeItem("wmm." + k); } catch (err) { /* storage unavailable */ } });
+            location.reload();
+          });
+        });
         on("no-keys", function (v) { store("noKeyShortcuts", v); UI.toast(v ? "Single-key shortcuts are off. Ctrl K still opens search." : "Keyboard shortcuts are on.", "info"); });
         on("problems-only", function (v) { store("notifyProblemsOnly", v); });
         on("title-progress", function (v) { store("titleProgress", v); });

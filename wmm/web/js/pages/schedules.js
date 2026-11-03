@@ -185,6 +185,7 @@
               s.last_run ? UI.statusBadge(s.last_status) + ' <span class="cell-sub">' + esc(UI.relative(s.last_run)) + "</span>" : '<span class="cell-sub">Not run yet</span>',
               '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>",
               '<button class="btn btn-sm" data-run-now="' + s.id + '" title="Run it now in this console, without waiting for its time">' + UI.icon("play") + "Run now</button>" +
+                '<button class="btn btn-sm btn-ghost" data-dup="' + s.id + '" title="A second schedule of the same action or routine, at another time">' + UI.icon("plus") + "</button>" +
                 (s.sync !== "ok" ? '<button class="btn btn-sm" data-resync="' + s.id + '">' + UI.icon("refresh") + "Resync</button>" : "") +
                 '<button class="btn btn-sm" data-delete="' + s.id + '">' + UI.icon("trash") + "Delete</button>"
             ];
@@ -202,7 +203,7 @@
           UI.button("New schedule", 'id="new-schedule"', "btn-primary", "clock")) + install + kpis +
           '<div class="grid">' + UI.card("Suggested routines", routinesBody(cat, tab),
             '<span class="muted small">' + cat.routines.length + " routines · " + cat.playbooks.length + " playbooks</span>", "routines-card") + "</div>" +
-          '<div class="grid grid-2-1">' + UI.card("Scheduled actions and routines", table) +
+          '<div class="grid grid-2-1">' + UI.card("Scheduled actions and routines", table, list.length ? '<button type="button" class="btn btn-sm" id="sched-csv">' + UI.icon("download") + "CSV</button>" : "") +
           UI.card("Schedules by area", '<div class="chart-row">' + Charts.donut(byArea, { center: list.length, sub: "schedules", empty: "No schedules" }) + Charts.legend(byArea) + "</div>" +
             '<div class="callout">' + UI.icon("info") + "<div>Scheduled runs use the SYSTEM account, so they work when nobody is signed in. A startup routine runs before anyone signs in; a sign-in routine runs for every user.</div></div>") + "</div>" +
           '<div class="grid">' + UI.card("Next 7 days", agenda(list, scriptList)) + "</div>" +
@@ -210,6 +211,15 @@
             '<span class="muted small">' + scriptList.filter(function (s) { return s.schedule; }).length + " of " + scriptList.length + " scripts</span>" +
             '<a class="btn btn-sm" href="#/scripts">' + UI.icon("scripts") + "Scripts</a>", "card-flush") + "</div>";
 
+        // Tabs: what to schedule (routines), what is scheduled, when it runs, and the scripts; figures and warnings stay above.
+        if (Components.store("pageTabs") !== false) {
+          UI.pageTabs(el, "schedules", [
+            { id: "routines", label: "Routines", icon: "playbooks", match: UI.hasCard("Suggested routines") },
+            { id: "scheduled", label: "Scheduled", icon: "clock", match: UI.hasCard("Scheduled actions and routines") },
+            { id: "calendar", label: "Next 7 days", icon: "calendar", match: UI.hasCard("Next 7 days") },
+            { id: "scripts", label: "Scripts", icon: "scripts", match: UI.hasCard("Scheduled scripts") }
+          ], { sharedHead: true });
+        }
         var routinesEl = el.querySelector('[data-card$="|Suggested routines"] .card-body') || el.querySelector('[data-card$="|Suggested routines"]');
         routinesEl.addEventListener("click", function (e) {
           var t = e.target.closest("[data-routine-tab]");
@@ -274,6 +284,28 @@
             var r = cat.routines.concat(cat.playbooks).filter(function (x) { return x.ref === s.action_id; })[0];
             var ids = r ? r.actions.map(function (a) { return a.id; }) : [s.action_id];
             App.runActions(App.order(ids));
+          });
+        });
+        var csv = el.querySelector("#sched-csv");
+        if (csv) csv.addEventListener("click", function () {
+          var cell = function (v) { v = String(v == null ? "" : v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+          var rows = [["title", "runs", "frequency", "enabled", "next_run", "last_run", "last_status", "task_scheduler"]].concat(list.map(function (s) {
+            return [s.title, s.action_id, when(s), s.enabled ? "yes" : "no", s.next_run || "", s.last_run || "", s.last_status || "", s.sync];
+          }));
+          Components.downloadText("wmm-schedules.csv", String.fromCharCode(0xFEFF) + rows.map(function (r) { return r.map(cell).join(","); }).join("\n"), "text/csv;charset=utf-8");
+        });
+        el.querySelectorAll("[data-dup]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var s = list.filter(function (x) { return String(x.id) === btn.getAttribute("data-dup"); })[0];
+            if (!s) return;
+            UI.scheduleDialog({ label: "Duplicate schedule", title: s.title, description: "Same " + (s.routine ? "routine" : "action") + ", a new time. Now: " + when(s) + ".",
+              risk: s.risk, suggested: { kind: s.kind, time: s.at.slice(11, 16), days: s.days, delay: s.delay } }).then(function (v) {
+              if (!v) return;
+              if (s.risk !== "safe" && !v.confirmed) { UI.toast("Tick the confirmation box to schedule something that is not safe.", "warning"); return; }
+              if (v.kind === "weekly" && !v.days) { UI.toast("Choose at least one day.", "warning"); return; }
+              v.action_id = s.action_id;
+              API.post("/schedules", v).then(function () { UI.toast("Second schedule created: " + when(v) + ".", "ok"); rerender(); }, function (er) { UI.toast(er.message, "error"); });
+            });
           });
         });
         var pause = el.querySelector("#pause-all");

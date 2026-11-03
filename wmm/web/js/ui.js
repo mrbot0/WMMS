@@ -238,6 +238,8 @@
 
   var TOAST_ICON = { ok: "check", error: "x", warning: "alert", info: "info" };
   function toast(message, toneName) {
+    // Settings › Behaviour › Messages: "problems" keeps only warnings and errors on screen.
+    if (pref("toastLevel") === "problems" && (toneName === "ok" || toneName === "info" || !toneName)) return;
     var root = document.getElementById("toasts");
     var el = document.createElement("div");
     el.className = "toast toast-" + (toneName || "info");
@@ -457,8 +459,12 @@
     var ageDays = view.created ? (Date.now() - new Date(view.created).getTime()) / 86400e3 : 0;
     var stale = ageDays >= STALE_DAYS ? '<div class="callout callout-warning stale-scan">' + icon("clock") + "<div><strong>This scan is " + Math.floor(ageDays) +
       " days old.</strong> The figures below may no longer match the PC.</div>" + button("Scan now", 'data-scan-area="' + area + '"', "btn-sm btn-primary", "refresh") + "</div>" : "";
-    var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created),
+    // Change since the previous scan, from the score trend.
+    var tr = view.trend || [], delta = tr.length > 1 ? tr[tr.length - 1].score - tr[tr.length - 2].score : 0;
+    var change = delta ? " · " + (delta > 0 ? "▲ +" : "▼ ") + delta + " since the previous scan" : "";
+    var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created) + change,
       button("Copy summary", 'data-copy-area="' + area + '" title="Score, improvements and recent runs as text, for a ticket"', "", "copy") +
+      button("", 'data-save-area="' + area + '" title="Download the summary as a .txt file" aria-label="Download the summary"', "", "download") +
       button("Scan", 'data-scan-area="' + area + '"', "", "refresh") +
       (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '" title="Runs every safe fix of this area at once; reports and risky actions are left out"', "", "bolt") : "") +
       button("Export report", 'data-export-area="' + area + '"', "btn-primary", "download"));
@@ -505,7 +511,77 @@
     return lines.join("\n");
   }
 
+  /* Tabs for long pages: the page's blocks are grouped in order (overview first, detail last) and one group is shown.
+     groups: [{id, label, icon, match(node) -> bool}]. A block that matches no group stays in the group before it;
+     with options.sharedHead the blocks before the first match (figures, warnings) stay visible above the tabs.
+     Children of an element marked data-tab-host are grouped one by one; data-tab-group="id" assigns a block directly. */
+  function pageTabs(container, key, groups, options) {
+    options = options || {};
+    if (!container || window.matchMedia("print").matches) return;
+    // Drawn again (a page that reloads part of itself): the old bar goes, the blocks are grouped afresh.
+    Array.prototype.slice.call(container.querySelectorAll(".page-tabs")).forEach(function (b) { b.remove(); });
+    var nodes = [];
+    Array.prototype.forEach.call(container.children, function (n) {
+      if (n.classList.contains("page-head") || n.classList.contains("page-pager") || n.classList.contains("page-tabs")) return;
+      if (n.hasAttribute("data-tab-host")) Array.prototype.forEach.call(n.children, function (c) { nodes.push(c); }); else nodes.push(n);
+    });
+    var current = options.sharedHead ? null : groups[0].id, owner = [], anchor = null;
+    nodes.forEach(function (n) {
+      var direct = n.getAttribute("data-tab-group");
+      var hit = direct ? direct : (groups.filter(function (g) { return g.match && g.match(n); })[0] || {}).id;
+      if (hit) current = hit;
+      if (!current && !anchor) return;  // shared head: stays above the tabs
+      if (!anchor) anchor = n;
+      owner.push([n, current || groups[0].id]);
+    });
+    if (!owner.length) return;
+    var used = groups.filter(function (g) { return owner.some(function (o) { return o[1] === g.id; }); });
+    if (used.length < 2) return;  // one group only: no tabs needed
+    var active = pref("tab." + key);
+    if (!used.some(function (g) { return g.id === active; })) active = used[0].id;
+    var bar = document.createElement("div");
+    bar.className = "tabs page-tabs";
+    bar.setAttribute("role", "tablist");
+    bar.innerHTML = used.map(function (g) {
+      return '<button type="button" role="tab" class="tab" data-page-tab="' + g.id + '" aria-selected="' + (g.id === active) + '" tabindex="' + (g.id === active ? 0 : -1) + '">' +
+        (g.icon ? icon(g.icon) : "") + "<span>" + esc(g.label) + "</span></button>";
+    }).join("");
+    anchor.parentNode.insertBefore(bar, anchor);
+    function show(id) {
+      active = id;
+      try { localStorage.setItem("wmm.tab." + key, JSON.stringify(id)); } catch (e) { /* storage unavailable */ }
+      owner.forEach(function (o) { o[0].classList.toggle("tab-hidden", o[1] !== id); });
+      bar.querySelectorAll("[data-page-tab]").forEach(function (b) {
+        var on = b.getAttribute("data-page-tab") === id;
+        b.setAttribute("aria-selected", String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      if (window.FX && FX.pageEnter) owner.forEach(function (o) { if (o[1] === id) FX.pageEnter(o[0]); });
+    }
+    bar.addEventListener("click", function (e) { var b = e.target.closest("[data-page-tab]"); if (b) show(b.getAttribute("data-page-tab")); });
+    bar.addEventListener("keydown", function (e) {
+      var tabs = Array.prototype.slice.call(bar.querySelectorAll("[data-page-tab]")), i = tabs.indexOf(document.activeElement);
+      var next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : null;
+      if (i < 0 || next == null) return;
+      e.preventDefault();
+      var t = tabs[(next + tabs.length) % tabs.length];
+      t.focus();
+      show(t.getAttribute("data-page-tab"));
+    });
+    show(active);
+    return { show: show };
+  }
+  function hasCard(title) { return function (n) { return !!n.querySelector('[data-card$="|' + title + '"]') || (n.getAttribute("data-card") || "").slice(-title.length - 1) === "|" + title; }; }
+  /* The tabs of every area page: what the area looks like, what to improve, the tools, what happened. */
+  var AREA_TABS = [
+    { id: "overview", label: "Overview", icon: "dashboard" },
+    { id: "improve", label: "Improvements", icon: "recommendations", match: hasCard("Recommended improvements") },
+    { id: "tools", label: "Tools", icon: "toolbox", match: hasCard("Optimization actions") },
+    { id: "history", label: "History", icon: "history", match: function (n) { return hasCard("Score trend")(n) || hasCard("Recent activity")(n); } }
+  ];
+
   function bindArea(el, area, rerender) {
+    if (pref("pageTabs") !== false) pageTabs(el, "area", AREA_TABS);
     el.querySelectorAll("[data-scan-area]").forEach(function (scan) {
       scan.addEventListener("click", function () {
         scan.disabled = true;
@@ -516,6 +592,10 @@
     });
     var copy = el.querySelector("[data-copy-area]");
     if (copy) copy.addEventListener("click", function () { App.copyText(areaSummary(area), AREA_LABEL[area] + " summary"); });
+    var save = el.querySelector("[data-save-area]");
+    if (save) save.addEventListener("click", function () {
+      App.saveText(areaSummary(area), "wmm-" + area + "-" + new Date().toISOString().slice(0, 10) + ".txt");
+    });
     var safe = el.querySelector("[data-safe-area]");
     if (safe) safe.addEventListener("click", function () { App.runSafe(area); });
     var exp = el.querySelector("[data-export-area]");
@@ -524,6 +604,7 @@
 
   window.UI = {
     runsTable: runsTable, areaParts: areaParts, bindArea: bindArea, areaSummary: areaSummary, ORIGIN_LABEL: ORIGIN_LABEL, pref: pref,
+    pageTabs: pageTabs, hasCard: hasCard,
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,

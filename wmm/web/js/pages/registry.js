@@ -19,6 +19,20 @@
 
   function typeIcon(t) { return /SZ$/.test(t) ? "ab" : t === "REG_BINARY" ? "01" : "#"; }
 
+  /* One value in .reg syntax, with the key header, ready to paste into a .reg file. */
+  var LONG_ROOT = { HKCR: "HKEY_CLASSES_ROOT", HKCU: "HKEY_CURRENT_USER", HKLM: "HKEY_LOCAL_MACHINE", HKU: "HKEY_USERS", HKCC: "HKEY_CURRENT_CONFIG" };
+  function regQuote(s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+  function regLine(path, v) {
+    var root = path.split("\\")[0].toUpperCase(), key = (LONG_ROOT[root] || root) + path.slice(root.length);
+    var name = v.name ? regQuote(v.name) : "@", data = null;
+    if (v.type === "REG_SZ") data = regQuote(v.data);
+    else if (v.type === "REG_DWORD") data = "dword:" + ("00000000" + (Number(v.data) >>> 0).toString(16)).slice(-8);
+    var head = "Windows Registry Editor Version 5.00\r\n\r\n[" + key + "]\r\n";
+    // The other types are byte lists: a comment with the readable data, the exact bytes come from Export .reg.
+    if (data == null) return head + "; " + (v.name || "(Default)") + " (" + v.type + "): " + v.display + "\r\n; Use Export .reg for the exact bytes of this value.\r\n";
+    return head + name + "=" + data + "\r\n";
+  }
+
   window.Pages.registry = {
     title: "Registry",
     render: function (el, App) {
@@ -46,9 +60,12 @@
       /* ---------- favorites ---------- */
       function drawFavs() {
         var all = FAVORITES.concat(bookmarks().map(function (b) { return [b.split("\\").pop() + " ★", b]; }));
+        var recent = (Components.store("regRecent") || []).filter(function (p) { return p !== state.path; }).slice(0, 8);
         el.querySelector("#rg-favs").innerHTML = all.map(function (f) {
           return '<button type="button" class="rg-fav" data-go="' + esc(f[1]) + '" title="' + esc(f[1]) + '">' + esc(f[0]) + "</button>";
-        }).join("");
+        }).join("") + (recent.length ? '<div class="log-head rg-recent">Recent</div>' + recent.map(function (p) {
+          return '<button type="button" class="rg-fav" data-go="' + esc(p) + '" title="' + esc(p) + '">' + esc(p.split("\\").pop() || p) + "</button>";
+        }).join("") : "");
         el.querySelector("#rg-star").classList.toggle("on", bookmarks().indexOf(state.path) >= 0);
       }
 
@@ -88,6 +105,7 @@
           state.data = r;
           input.value = r.path;
           Components.store("regPath", r.path);
+          Components.store("regRecent", [r.path].concat((Components.store("regRecent") || []).filter(function (p) { return p !== r.path; })).slice(0, 12));
           expandTo(r.path);
           drawKey();
           drawFavs();
@@ -127,9 +145,10 @@
             { key: "display", title: "Data", render: function (v) { return '<span class="cell-mono rg-data" title="' + esc(v.display) + '">' + esc(v.display) + "</span>"; } },
             { key: "_act", title: "", sortable: false, csv: false, cls: "actions", render: function (v) {
               var key = esc(JSON.stringify(v.name));
+              var regLine = '<button class="btn btn-sm btn-ghost" data-regline="' + key + '" title="Copy as a .reg line, to paste into a .reg file">.reg</button>';
               return canWrite ? '<span class="tm-actions"><button class="btn btn-sm" data-edit="' + key + '"' + (v.editable ? "" : " disabled") + ">Edit</button>" +
-                '<button class="btn btn-sm" data-rename="' + key + '">Rename</button><button class="btn btn-sm" data-delval="' + key + '" aria-label="Delete">' + UI.icon("trash") + "</button></span>"
-                : '<button class="btn btn-sm" data-copyval="' + key + '">Copy</button>';
+                '<button class="btn btn-sm" data-rename="' + key + '">Rename</button>' + regLine + '<button class="btn btn-sm" data-delval="' + key + '" aria-label="Delete">' + UI.icon("trash") + "</button></span>"
+                : '<span class="tm-actions"><button class="btn btn-sm" data-copyval="' + key + '">Copy</button>' + regLine + "</span>";
             } }
           ]
         });
@@ -175,13 +194,14 @@
 
       main.addEventListener("click", function (e) {
         if (e.target.closest("[data-clear-results]")) { main.querySelector("#rg-results").innerHTML = ""; return; }
-        var t = e.target.closest("[data-edit],[data-rename],[data-delval],[data-copyval]");
+        var t = e.target.closest("[data-edit],[data-rename],[data-delval],[data-copyval],[data-regline]");
         if (t) {
-          var attr = ["data-edit", "data-rename", "data-delval", "data-copyval"].filter(function (a) { return t.hasAttribute(a); })[0];
+          var attr = ["data-edit", "data-rename", "data-delval", "data-copyval", "data-regline"].filter(function (a) { return t.hasAttribute(a); })[0];
           var v = valueByName(JSON.parse(t.getAttribute(attr)));
           if (!v) return;
           if (attr === "data-edit") editValue(v);
           if (attr === "data-copyval") App.copyText(v.display, "Value");
+          if (attr === "data-regline") App.copyText(regLine(state.path, v), ".reg line");
           if (attr === "data-delval") {
             UI.confirm("Delete " + (v.name || "(Default)") + "?", "The value is removed from " + state.path + ". A .reg backup of the key is made first.", { ok: "Delete", danger: true })
               .then(function (ok) { if (ok) change("delete-value", { path: state.path, name: v.name }, "Value deleted.").then(function () { open(state.path); }, function () {}); });

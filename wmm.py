@@ -41,9 +41,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", metavar="FOLDER", help="installation folder for --install")
     parser.add_argument("--auto-install", action="store_true",
                         help="install or update the protected copy in Program Files, then start it (used by start_wmm.bat)")
+    parser.add_argument("--hidden", action="store_true",
+                        help="no console window: messages go to dati\\wmm-console.log (used when starting with Windows)")
     parser.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--wait-port", action="store_true", help=argparse.SUPPRESS)
     return parser
+
+
+CONSOLE_LOG = DATA_DIR / "wmm-console.log"
+CONSOLE_LOG_MAX = 2 * 1024 * 1024  # one previous log is kept as wmm-console.old.log
+CREATE_NO_WINDOW = 0x08000000
+
+
+def windowless_python(python: str) -> str:
+    """pythonw.exe next to python.exe: the same interpreter without a console window."""
+    candidato = Path(python).with_name("pythonw.exe")
+    return str(candidato) if candidato.is_file() else python
+
+
+def go_hidden() -> None:
+    """Runs the console without a window: output goes to a log file and child programs open no console."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        if CONSOLE_LOG.exists() and CONSOLE_LOG.stat().st_size > CONSOLE_LOG_MAX:
+            os.replace(CONSOLE_LOG, CONSOLE_LOG.with_name("wmm-console.old.log"))
+    except OSError:
+        pass
+    log = open(CONSOLE_LOG, "a", encoding="utf-8", errors="replace", buffering=1)
+    sys.stdout = sys.stderr = log
+    if os.name == "nt":
+        finestra = ctypes.windll.kernel32.GetConsoleWindow()
+        if finestra:
+            ctypes.windll.user32.ShowWindow(finestra, 0)  # SW_HIDE: started with python.exe
+        # Without a console of our own, every console program we start (PowerShell, schtasks, DISM...) would open a window.
+        originale = subprocess.Popen.__init__
+
+        def senza_finestra(self, *args, **kwargs):
+            if not kwargs.get("creationflags"):
+                kwargs["creationflags"] = CREATE_NO_WINDOW
+            originale(self, *args, **kwargs)
+        subprocess.Popen.__init__ = senza_finestra
 
 
 def wait_for_port(port: int, seconds: float = 15.0) -> None:
@@ -155,7 +192,10 @@ def serve(port: int, preview: bool, open_browser: bool) -> int:
 
 def main(argomenti: Optional[Sequence[str]] = None) -> int:
     opzioni = build_parser().parse_args(argomenti)
-    if hasattr(sys.stdout, "reconfigure"):
+    # pythonw.exe has no stdout at all: hidden mode gives it the log file.
+    if opzioni.hidden or sys.stdout is None:
+        go_hidden()
+    elif hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     os.chdir(ROOT)
     if opzioni.run_schedule is not None:
@@ -165,7 +205,8 @@ def main(argomenti: Optional[Sequence[str]] = None) -> int:
     preferito = runtime.configured(ROOT)
     if preferito and not runtime.same_file(preferito, sys.executable) and not os.environ.get(runtime.HANDOVER_ENV):
         inoltrati = list(argomenti) if argomenti is not None else sys.argv[1:]
-        return subprocess.call([preferito, str(Path(__file__).resolve()), *inoltrati], env=dict(os.environ, **{runtime.HANDOVER_ENV: "1"}))
+        interprete = windowless_python(preferito) if opzioni.hidden else preferito
+        return subprocess.call([interprete, str(Path(__file__).resolve()), *inoltrati], env=dict(os.environ, **{runtime.HANDOVER_ENV: "1"}))
     if opzioni.wait_port:
         wait_for_port(opzioni.port)
     if opzioni.install:

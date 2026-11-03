@@ -3,6 +3,33 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.9.0 — 2026-11-03
+
+**47 new tools, tabs on long pages, a better script editor and a hidden start with Windows.**
+
+- **Toolbox** (`wmm/agent/tools_extra.py`, 281 tools in total): 40 read-only reports and 7 fixes.
+  - Power and start: energy analysis (`powercfg /energy`), sleep study, what keeps the PC awake and why it wakes, uptime,
+    startup impact.
+  - Drivers and updates: third-party and old drivers, USB devices, .NET and VC++ runtimes, failed updates, optional
+    features, update sharing.
+  - Network: speed test (Cloudflare), public IP, proxy, hosts, TCP auto-tuning, network profiles, mapped drives.
+  - Security: UAC, SMB, RDP/NLA, Defender exclusions, antivirus products, core isolation, local accounts, expiring
+    certificates, Secure Boot 2023 certificates, browser extensions.
+  - Errors and disk: unexpected shutdowns, disk and WHEA errors, last CHKDSK, frozen programs, failed services, large
+    files, Storage Sense, empty folders, old installers.
+  - Fixes: wake timers, update sharing, TCP auto-tuning, ARP cache, Defender cloud protection, RDP NLA, clipboard.
+  - Ideas cross-checked with PDQ's list of PowerShell admin checks.
+- **Tabs** (`UI.pageTabs`): area pages (Overview, Improvements, Tools, History), dashboard, Hardware and Schedules;
+  remembered per page, can be turned off in Settings.
+- **Script editor**: visible Edit button, snippets, line and column, warnings for format, rd /s, diskpart, bcdedit and
+  similar, Ctrl S, Save and run, Add and edit for ready-made scripts.
+- **Start with Windows** runs `pythonw.exe … --hidden`:
+  - no console window, and the console opens in the browser;
+  - output goes to `dati\wmm-console.log` (rotated at 2 MB);
+  - child programs start with `CREATE_NO_WINDOW`;
+  - an existing task is updated by turning the option off and on again.
+- **21 settings and 40 page functions** more (see the release notes in the console).
+
 ## 1.8.0 — 2026-11-03
 
 **20 new settings and 40 new functions across the pages.** Everything is in the console; the agent API is unchanged.

@@ -3,7 +3,8 @@
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
-  var SENSOR_MS = 5000;
+  function sensorMs() { return (Components.store("sensorInterval") || 5) * 1000; }  // Settings › Maintenance › Hardware sensors
+  var OLD_DRIVER_YEARS = 3;
   var MEMORY_TYPE = { 20: "DDR", 21: "DDR2", 24: "DDR3", 26: "DDR4", 34: "DDR5", 35: "LPDDR5" };
   var CLASS_LABEL = { DISPLAY: "Display adapters", NET: "Network", MEDIA: "Sound and video", USB: "USB", HIDCLASS: "Human interface", KEYBOARD: "Keyboards",
     MOUSE: "Mice", MONITOR: "Monitors", DISKDRIVE: "Disk drives", SCSIADAPTER: "Storage controllers", HDC: "Storage controllers", SYSTEM: "System devices",
@@ -47,7 +48,8 @@
       var key = t.group + "|" + t.name, list = history[key] = history[key] || [];
       list.push(t.celsius);
       if (list.length > HISTORY) list.shift();
-      if (t.state === "error" && Date.now() - (alerted[key] || 0) > ALERT_MINUTES * 60000) {
+      var limit = (Components.store("tempAlert") || 90) - (t.group === "Disks" ? 20 : 0);
+      if (t.celsius >= limit && Date.now() - (alerted[key] || 0) > ALERT_MINUTES * 60000) {
         alerted[key] = Date.now();
         UI.toast(t.name + " is at " + Math.round(t.celsius) + " °C: check the cooling and what is using it.", "warning");
         App.desktopNotify("High temperature", t.name + " is at " + Math.round(t.celsius) + " °C.");
@@ -224,9 +226,9 @@
         UI.button("Copy summary", 'id="hw-copy"', "", "copy") + UI.button("JSON", 'id="hw-json" title="Download the whole inventory as JSON, to compare PCs or keep a record"', "", "download") +
         UI.button("Read again", 'id="hw-refresh"', "", "refresh")) +
         '<div id="hw-kpis" class="grid grid-4">' + Components.skeleton() + "</div>" +
-        '<div class="grid">' + UI.card("Temperatures and fans", '<div id="hw-sensors">' + Components.skeleton() + "</div>",
+        '<div class="grid" data-tab-group="sensors">' + UI.card("Temperatures and fans", '<div id="hw-sensors">' + Components.skeleton() + "</div>",
           '<span class="muted small" id="hw-sensor-time"></span><button class="btn btn-sm" type="button" id="hw-pause">' + UI.icon("clock") + "Pause</button>", "hw-sensor-card") + "</div>" +
-        '<div id="hw-body">' + Components.skeleton() + "</div></div>";
+        '<div id="hw-body" data-tab-host>' + Components.skeleton() + "</div></div>";
 
       function kpis() {
         var k = el.querySelector("#hw-kpis");
@@ -240,7 +242,7 @@
           UI.kpi("Memory", esc(gb(total)), data.memory.length + " module" + (data.memory.length === 1 ? "" : "s") + ((data.memory_slots || {}).slots ? " of " + data.memory_slots.slots + " slots" : ""), "info") +
           UI.kpi("Graphics", esc(gpu.name || "—"), gpu.vram ? gb(gpu.vram) + " video memory" : "", "info") +
           (problems ? UI.kpi("Devices with problems", String(problems), "All devices › Any status › Problems", "warning")
-            : UI.kpi("Hottest sensor", hot != null ? Math.round(hot) + " °C" : "—", hot != null ? "Live, every " + SENSOR_MS / 1000 + " s" : "No readable sensor yet", hotTone));
+            : UI.kpi("Hottest sensor", hot != null ? Math.round(hot) + " °C" : "—", hot != null ? "Live, every " + sensorMs() / 1000 + " s" : "No readable sensor yet", hotTone));
       }
       function drawSensors() {
         var box = el.querySelector("#hw-sensors");
@@ -250,7 +252,7 @@
         if (t) t.textContent = paused ? "Paused" : "Updated " + sensors.read_at.slice(11);
         kpis();
       }
-      function schedule() { if (!stopped) timer = setTimeout(function () { pollSensors(false); }, SENSOR_MS); }
+      function schedule() { if (!stopped) timer = setTimeout(function () { pollSensors(false); }, sensorMs()); }
       function pollSensors(fresh) {
         if (stopped) return;
         clearTimeout(timer);
@@ -266,26 +268,38 @@
         var parts = sections(data);
         var problems = data.devices.filter(function (x) { return x.error; }).length;
         var body = el.querySelector("#hw-body");
-        body.innerHTML = '<div class="grid grid-2">' + UI.card("System and motherboard", parts.system) + UI.card("Processor", parts.cpu || '<p class="empty">No processor reported.</p>') + "</div>" +
+        body.innerHTML = '<div class="grid grid-2" data-tab-group="components">' + UI.card("System and motherboard", parts.system) + UI.card("Processor", parts.cpu || '<p class="empty">No processor reported.</p>') + "</div>" +
           '<div class="grid">' + UI.card("Memory", parts.memory) + "</div>" +
           '<div class="grid grid-2">' + UI.card("Graphics", parts.gpu || '<p class="empty">No graphics adapter.</p>') + UI.card("Disks", parts.disks || '<p class="empty">No disk.</p>') + "</div>" +
           '<div class="grid grid-2">' + UI.card("Network adapters", parts.network || '<p class="empty">No physical adapter.</p>') +
           UI.card("Monitors", parts.monitors || '<p class="empty">No monitor reports its identity.</p>') + "</div>" +
           '<div class="grid grid-2">' + UI.card("Audio", parts.audio || '<p class="empty">No sound device.</p>') + (parts.battery ? UI.card("Battery", parts.battery) : "") + "</div>" +
-          '<div class="grid">' + UI.card("All devices", '<div id="hw-devices"></div>', '<span class="muted small">' + data.devices.length + " devices" +
-            (problems ? ' · <span class="badge badge-status-warning">' + problems + " with problems</span>" : "") + " · read in " + data.seconds + " s</span>", "card-flush") + "</div>";
-        var classes = {};
-        data.devices.forEach(function (x) { x.problem = x.error ? "yes" : "no"; x.hwid = x.ids.search || x.device; if (x.class) classes[x.class] = 1; });
+          '<div class="grid" data-tab-group="devices">' + UI.card("All devices", '<div id="hw-devices"></div>', '<span class="muted small">' + data.devices.length + " devices" +
+            (problems ? ' · <span class="badge badge-status-warning">' + problems + " with problems</span>" : "") + " · read in " + data.seconds + " s</span>" +
+            (problems ? '<button type="button" class="btn btn-sm" id="hw-copy-problems" title="Name and hardware IDs of every device with a problem">' + UI.icon("copy") + "Problem IDs</button>" : "") +
+            '<button type="button" class="btn btn-sm" id="hw-snap" title="Remember the devices and drivers of today, to see later what changed">' + UI.icon("check") + "Save snapshot</button>" +
+            (Components.store("hwSnapshot") ? '<button type="button" class="btn btn-sm" id="hw-compare">' + UI.icon("compare") + "Compare</button>" : ""), "card-flush") + "</div>";
+        var classes = {}, oldLimit = new Date(Date.now() - OLD_DRIVER_YEARS * 365 * 86400e3).toISOString().slice(0, 10);
+        data.devices.forEach(function (x) {
+          x.problem = x.error ? "yes" : "no";
+          x.hwid = x.ids.search || x.device;
+          // Third-party drivers older than three years are worth an update check; Microsoft's own are left alone.
+          x.oldDriver = x.driver_date && x.driver_date < oldLimit && !/microsoft/i.test(x.driver_provider || "") ? "yes" : "no";
+          if (x.class) classes[x.class] = 1;
+        });
         Components.dataTable(body.querySelector("#hw-devices"), {
           rows: data.devices, sort: "class", exportName: "hardware-devices", placeholder: "Search name, vendor, hardware ID or driver…",
           filters: [{ key: "class", label: "All classes", options: Object.keys(classes).sort().map(function (c) { return [c, classLabel(c)]; }).sort(function (a, b) { return a[1].localeCompare(b[1]); }) },
-            { key: "problem", label: "Any status", options: [["yes", "Problems"], ["no", "Working"]] }],
+            { key: "problem", label: "Any status", options: [["yes", "Problems"], ["no", "Working"]] },
+            { key: "oldDriver", label: "Any driver age", options: [["yes", "Drivers older than " + OLD_DRIVER_YEARS + " years"], ["no", "Recent drivers"]] }],
           columns: [
             { key: "name", title: "Device", render: function (x) { return '<button type="button" class="link-btn cell-title" data-device="' + esc(x.device) + '">' + esc(x.name || "Unknown device") + "</button>" +
               '<div class="cell-sub">' + esc(x.vendor || x.ids.vendor || "") + "</div>"; } },
             { key: "class", title: "Class", value: function (x) { return classLabel(x.class); } },
             { key: "hwid", title: "Hardware ID", render: function (x) { return copyable(x.hwid); } },
-            { key: "driver", title: "Driver", render: function (x) { return x.driver ? esc(x.driver) + '<div class="cell-sub">' + esc([x.driver_date, x.driver_provider].filter(Boolean).join(" · ")) + "</div>" : '<span class="cell-sub">—</span>'; },
+            { key: "driver", title: "Driver", render: function (x) {
+              return x.driver ? esc(x.driver) + '<div class="cell-sub">' + (x.oldDriver === "yes" ? '<span class="hw-old" title="Older than ' + OLD_DRIVER_YEARS + ' years: look for an update">Old · </span>' : "") +
+                esc([x.driver_date, x.driver_provider].filter(Boolean).join(" · ")) + "</div>" : '<span class="cell-sub">—</span>'; },
               value: function (x) { return (x.driver || "") + " " + (x.driver_provider || ""); } },
             { key: "status", title: "Status", render: function (x) { return x.error ? '<span class="badge badge-status-warning">Code ' + esc(x.error) + "</span>" : UI.statusBadge(x.status === "OK" ? "ok" : x.status ? "warning" : "skipped"); },
               value: function (x) { return x.error ? "Code " + x.error : x.status; } },
@@ -293,6 +307,14 @@
           ]
         });
         kpis();
+        // Tabs: live sensors, then the components, then the full device list; the summary figures stay above.
+        if (Components.store("pageTabs") !== false) {
+          UI.pageTabs(el.querySelector(".hw-page"), "hardware", [
+            { id: "sensors", label: "Temperatures and fans", icon: "thermometer" },
+            { id: "components", label: "Components", icon: "hardware" },
+            { id: "devices", label: "All devices", icon: "search" }
+          ], { sharedHead: true });
+        }
       }
       function load(fresh) {
         var body = el.querySelector("#hw-body");
@@ -339,6 +361,32 @@
           return;
         }
         if (e.target.closest("#hw-refresh")) { load(true); pollSensors(true); return; }
+        if (e.target.closest("#hw-copy-problems") && data) {
+          copy(data.devices.filter(function (x) { return x.error; }).map(function (x) {
+            return x.name + " (code " + x.error + ")\n  " + (x.hardware_ids.length ? x.hardware_ids.join("\n  ") : x.device);
+          }).join("\n\n"), "Hardware IDs of the devices with problems copied.");
+          return;
+        }
+        if (e.target.closest("#hw-snap") && data) {
+          Components.store("hwSnapshot", { at: new Date().toISOString(), devices: data.devices.map(function (x) { return { device: x.device, name: x.name, driver: x.driver || "" }; }) });
+          UI.toast("Snapshot saved: use Compare after a change (new hardware, driver updates, Windows update).", "ok");
+          load(false);
+          return;
+        }
+        if (e.target.closest("#hw-compare") && data) {
+          var snap = Components.store("hwSnapshot"), before = {}, now = {};
+          snap.devices.forEach(function (x) { before[x.device] = x; });
+          data.devices.forEach(function (x) { now[x.device] = x; });
+          var added = data.devices.filter(function (x) { return !before[x.device]; });
+          var removed = snap.devices.filter(function (x) { return !now[x.device]; });
+          var updated = data.devices.filter(function (x) { return before[x.device] && x.driver && before[x.device].driver && before[x.device].driver !== x.driver; });
+          var li = function (cls, text) { return '<li class="' + cls + '">' + esc(text) + "</li>"; };
+          UI.modal("Changes since " + UI.formatDate(snap.at), (added.length + removed.length + updated.length ? '<ul class="hw-diff">' +
+            added.map(function (x) { return li("added", "+ " + x.name); }).join("") + removed.map(function (x) { return li("removed", "− " + x.name); }).join("") +
+            updated.map(function (x) { return li("", "↻ " + x.name + ": driver " + before[x.device].driver + " → " + x.driver); }).join("") + "</ul>"
+            : '<p class="modal-text">No device was added or removed and no driver changed.</p>'), [{ label: "Close", cls: "btn-primary" }]);
+          return;
+        }
         if (e.target.closest("#hw-json") && data) {
           var name = "hardware-" + ((App.state.info || {}).hostname || "pc") + "-" + new Date().toISOString().slice(0, 10) + ".json";
           Components.downloadText(name, JSON.stringify({ kind: "wmm-hardware", read_at: data.read_at, inventory: data, sensors: sensors }, null, 2), "application/json");

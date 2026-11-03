@@ -4,6 +4,34 @@
   window.Pages = window.Pages || {};
   var esc = UI.esc;
   var PRESETS = [5, 15, 30, 60, 90, 120, 240];
+  /* Building blocks for the editor: the usual lines of a maintenance .bat. */
+  var SNIPPETS = [
+    ["Quiet start (@echo off, UTF-8)", "@echo off\nchcp 65001 >nul\nsetlocal"],
+    ["Stop unless run as administrator", "net session >nul 2>&1 || (echo Run this script as administrator. & exit /b 1)"],
+    ["Write a log next to the script", "set LOG=%~dp0%~n0.log\necho [%date% %time%] Started>>\"%LOG%\""],
+    ["Wait N seconds", "timeout /t 30 /nobreak >nul"],
+    ["Only if a file exists", "if exist \"C:\\path\\file.txt\" (\n    echo Found\n) else (\n    echo Missing\n)"],
+    ["Loop over the files of a folder", "for %%F in (\"C:\\folder\\*.log\") do (\n    echo %%~nxF\n)"],
+    ["Stop on error", "if errorlevel 1 (\n    echo Failed with code %errorlevel%\n    exit /b %errorlevel%\n)"],
+    ["Close a program", "taskkill /im notepad.exe /f >nul 2>&1"],
+    ["Start a program and wait", "start \"\" /wait \"C:\\Program Files\\App\\app.exe\""],
+    ["Copy a folder (robocopy)", "robocopy \"C:\\source\" \"D:\\backup\" /e /r:1 /w:1 /np"],
+    ["Run PowerShell", "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-Date\""],
+    ["Flush DNS", "ipconfig /flushdns"],
+    ["Exit with success", "exit /b 0"]
+  ];
+  /* Commands that can destroy data or stop Windows from starting: the editor warns, it never blocks. */
+  var DANGER = [
+    [/\bformat\s+[a-z]:/i, "format erases a drive"],
+    [/\b(del|erase)\b[^\r\n]*\/s[^\r\n]*\b[a-z]:\\(\s|\*|"|$)/i, "del /s on the root of a drive"],
+    [/\b(rd|rmdir)\b[^\r\n]*\/s/i, "rd /s deletes whole folders"],
+    [/\bdiskpart\b/i, "diskpart changes partitions"],
+    [/\bbcdedit\b/i, "bcdedit changes how Windows starts"],
+    [/\breg\s+delete\s+HK(LM|EY_LOCAL_MACHINE)/i, "reg delete on HKLM"],
+    [/\bcipher\s+\/w/i, "cipher /w wipes free space and takes hours"],
+    [/\bvssadmin\s+delete\b/i, "vssadmin delete removes restore points"],
+    [/\bshutdown\b[^\r\n]*\/(s|r)\b/i, "shutdown turns the PC off or restarts it"]
+  ];
 
   function clock(seconds) {
     var h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
@@ -74,8 +102,21 @@
 
       /* ---------- my scripts ---------- */
       function scriptsCard() {
-        var rows = data.scripts;
-        var body = rows.length ? '<div class="script-list">' + rows.map(function (s) {
+        var sv = Components.store("scriptsView") || { sort: "name" };
+        var lastOf = function (s) { return (s.last_run && (s.last_run.finished || s.last_run.started)) || ""; };
+        var SORT = {
+          name: function (a, b) { return a.name.localeCompare(b.name); },
+          recent: function (a, b) { return lastOf(b) < lastOf(a) ? -1 : lastOf(b) > lastOf(a) ? 1 : 0; },
+          scheduled: function (a, b) { return (!!b.schedule - !!a.schedule) || a.name.localeCompare(b.name); },
+          newest: function (a, b) { return (b.created || "") < (a.created || "") ? -1 : 1; }
+        };
+        var rows = data.scripts.slice().sort(SORT[sv.sort] || SORT.name);
+        var tools = rows.length > 1 ? '<div class="script-tools"><label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search scripts</span>' +
+          '<input type="search" data-script-q placeholder="Search scripts by name or file…"></label><label class="tb-sort">Sort<select data-script-sort>' +
+          [["name", "Name"], ["recent", "Last run"], ["scheduled", "Scheduled first"], ["newest", "Newest"]].map(function (o) {
+            return '<option value="' + o[0] + '"' + (sv.sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+          }).join("") + "</select></label></div>" : "";
+        var body = rows.length ? tools + '<div class="script-list">' + rows.map(function (s) {
           var last = s.last_run, running = last && last.status === "running";
           return '<div class="script-row" data-id="' + s.id + '"><span class="script-icon">' + UI.icon("scripts") + "</span>" +
             '<div class="grow"><button type="button" class="link-btn cell-title" data-edit>' + esc(s.name) + '</button><div class="cell-sub">' +
@@ -84,6 +125,7 @@
               : last ? UI.statusBadge(last.status) + '<span class="cell-sub">' + esc(UI.relative(last.finished)) + " · exit " + esc(last.exit) + "</span>" : '<span class="cell-sub">Never run</span>') +
             (s.schedule ? '<span class="badge badge-status-info">' + UI.icon("clock") + "Scheduled</span>" : "") + "</div></div>" +
             '<div class="tm-actions">' + UI.button("Run", "data-run-script" + (running || !data.can_change ? " disabled" : ""), "btn-sm btn-primary", "play") +
+            UI.button("Edit", 'data-edit title="Open the editor"', "btn-sm", "scripts") +
             UI.button(s.schedule ? "Unschedule" : "Schedule", s.schedule ? "data-unschedule" : "data-schedule-script", "btn-sm", "clock") +
             (last && last.output ? UI.button("Output", "data-output-script", "btn-sm btn-ghost", "reports") : "") +
             UI.button("", 'data-copy-script title="Copy the content" aria-label="Copy the content of ' + esc(s.name) + '"', "btn-sm btn-ghost", "copy") +
@@ -106,7 +148,8 @@
               esc(t.title) + '</span></div><div class="cell-sub">' + esc(t.description) + "</div>" + t.params.map(function (p) {
                 return '<label class="template-param">' + esc(p.label) + '<input name="' + esc(p.name) + '" type="' + esc(p.type) + '" value="' + esc(p.default) + '"' +
                   (p.min ? ' min="' + p.min + '" max="' + p.max + '"' : "") + "></label>";
-              }).join("") + '<div class="action-foot"><span class="grow"></span>' + UI.button("Add to my scripts", "data-add-template", "btn-sm", "play") + "</div></div>";
+              }).join("") + '<div class="action-foot"><span class="grow"></span>' + UI.button("Add and edit", 'data-add-template data-then-edit title="Add it to My scripts and open it in the editor to adapt it"', "btn-sm btn-ghost", "scripts") +
+                UI.button("Add to my scripts", "data-add-template", "btn-sm", "play") + "</div></div>";
           }).join("") + "</div>";
         }).join(""), '<span class="muted small">Add one, then run it or schedule it</span>');
       }
@@ -127,26 +170,67 @@
       function editor(s) {
         var get = s ? API.get("/scripts/" + s.id) : Promise.resolve({ name: "", content: "@echo off\r\nrem Your commands here\r\n" });
         get.then(function (full) {
-          UI.modal(s ? "Edit " + s.name : "New script", '<form class="form" onsubmit="return false"><label>Name<input name="name" maxlength="80" value="' + esc(full.name) +
-            '"></label><label>Commands (.bat)<textarea name="content" rows="14" spellcheck="false" class="cell-mono script-editor">' + esc(full.content) + "</textarea></label>" +
-            '<p class="muted small" style="margin:0">Runs with cmd.exe as administrator (SYSTEM when scheduled). Test it with Run before scheduling it.</p></form>',
-            [{ label: "Cancel", cls: "btn-ghost" }, { label: "Save", cls: "btn-primary", value: function (w) {
-              var f = w.querySelector("form");
-              return { name: f.name.value.trim(), content: f.content.value };
-            } }]).then(function (v) {
+          var original = full.content;
+          var done = UI.modal(s ? "Edit " + s.name : "New script", '<form class="form" onsubmit="return false"><label>Name<input name="name" maxlength="80" value="' + esc(full.name) +
+            '"></label><div class="editor-bar"><label class="tb-sort">Insert<select data-snippet><option value="">Snippet…</option>' + SNIPPETS.map(function (sn, i) {
+              return '<option value="' + i + '">' + esc(sn[0]) + "</option>";
+            }).join("") + '</select></label><span class="grow"></span><span class="muted small" data-pos>Line 1, column 1</span></div>' +
+            '<label class="sr-only" for="script-content">Commands (.bat)</label><textarea id="script-content" name="content" rows="16" spellcheck="false" class="cell-mono script-editor">' + esc(full.content) + "</textarea>" +
+            '<div class="callout callout-warning" data-danger hidden>' + UI.icon("alert") + "<div></div></div>" +
+            '<p class="muted small" style="margin:0">Runs with cmd.exe as administrator (SYSTEM when scheduled). Ctrl S saves. Test it with Run before scheduling it.</p></form>',
+            [{ label: "Cancel", cls: "btn-ghost" },
+              { label: "Save and run", cls: "", value: function (w) { var f = w.querySelector("form"); return { name: f.name.value.trim(), content: f.content.value, run: true }; } },
+              { label: "Save", cls: "btn-primary", value: function (w) { var f = w.querySelector("form"); return { name: f.name.value.trim(), content: f.content.value }; } }]);
+          done.then(function (v) {
             if (!v) return;
-            (s ? API.post("/scripts/" + s.id + "/save", v) : API.post("/scripts", { name: v.name || "New script", content: v.content, filename: "script.bat" }))
-              .then(function () { UI.toast("Script saved.", "ok"); load(); }, function (e) { UI.toast(e.message, "error"); });
+            var body = { name: v.name, content: v.content };
+            (s ? API.post("/scripts/" + s.id + "/save", body) : API.post("/scripts", { name: v.name || "New script", content: v.content, filename: "script.bat" }))
+              .then(function (r) {
+                UI.toast(v.content === original && s ? "Saved (no changes to the commands)." : "Script saved.", "ok");
+                load();
+                var saved = s || r;
+                if (v.run && saved && saved.id) {
+                  API.post("/scripts/" + saved.id + "/run").then(function (x) {
+                    if (x.preview) { UI.toast("Preview mode: the script did not run (recorded in History).", "info"); return; }
+                    UI.toast((saved.name || v.name) + " is running…", "info");
+                    waitForRun(saved);
+                  }, function (er) { UI.toast(er.message, "error"); });
+                }
+              }, function (e) { UI.toast(e.message, "error"); });
           });
           var area = document.querySelector("#modal-root .script-editor");
-          if (area) {
-            area.closest(".modal").classList.add("modal-wide");
-            area.addEventListener("keydown", function (e) {  // Tab inserts spaces instead of leaving the editor
-              if (e.key !== "Tab") return;
+          if (!area) return;
+          var form = area.closest("form"), pos = form.querySelector("[data-pos]"), danger = form.querySelector("[data-danger]");
+          area.closest(".modal").classList.add("modal-wide");
+          var status = function () {
+            var before = area.value.slice(0, area.selectionStart), line = before.split("\n").length, col = before.length - before.lastIndexOf("\n");
+            pos.textContent = "Line " + line + ", column " + col + " · " + area.value.split("\n").length + " lines";
+            var hits = DANGER.filter(function (d) { return d[0].test(area.value); }).map(function (d) { return d[1]; });
+            danger.hidden = !hits.length;
+            danger.querySelector("div").textContent = hits.length ? "Careful: " + hits.join("; ") + ". Check the paths before running it." : "";
+          };
+          ["input", "click", "keyup"].forEach(function (ev) { area.addEventListener(ev, status); });
+          status();
+          area.addEventListener("keydown", function (e) {
+            if (e.key === "Tab") {  // Tab inserts spaces instead of leaving the editor
               e.preventDefault();
               area.setRangeText("    ", area.selectionStart, area.selectionEnd, "end");
-            });
-          }
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+              e.preventDefault();
+              var save = Array.prototype.filter.call(document.querySelectorAll("#modal-root .modal-actions button, #modal-root footer button"), function (b) { return b.textContent.trim() === "Save"; })[0];
+              if (save) save.click();
+            }
+          });
+          form.querySelector("[data-snippet]").addEventListener("change", function (e) {
+            var sn = SNIPPETS[Number(e.target.value)];
+            e.target.value = "";
+            if (!sn) return;
+            var at = area.selectionStart, before = area.value.slice(0, at), lead = before && !/\n$/.test(before) ? "\r\n" : "";
+            area.setRangeText(lead + sn[1].replace(/\n/g, "\r\n") + "\r\n", at, area.selectionEnd, "end");
+            area.focus();
+            status();
+          });
         }, function (e) { UI.toast(e.message, "error"); });
       }
       function waitForRun(s) {
@@ -195,6 +279,7 @@
             UI.toast("Added to My scripts: " + r.name + ".", "ok");
             FX.burst(b);
             load();
+            if (b.hasAttribute("data-then-edit")) editor(r);
           }, function (er) { UI.toast(er.message, "error"); });
           return;
         }
@@ -246,7 +331,13 @@
           });
         }
       });
+      host.addEventListener("input", function (e) {
+        if (!e.target.hasAttribute("data-script-q")) return;
+        var q = e.target.value.toLowerCase().trim();
+        host.querySelectorAll(".script-row").forEach(function (row) { row.hidden = !!q && row.textContent.toLowerCase().indexOf(q) < 0; });
+      });
       host.addEventListener("change", function (e) {
+        if (e.target.hasAttribute("data-script-sort")) { Components.store("scriptsView", { sort: e.target.value }); load(); return; }
         if (!e.target.hasAttribute("data-script-file")) return;
         var files = Array.prototype.slice.call(e.target.files);
         Promise.all(files.map(function (f) {

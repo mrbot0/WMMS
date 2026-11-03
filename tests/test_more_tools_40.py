@@ -22,7 +22,7 @@ class Catalog(unittest.TestCase):
     def test_forty_new_tools(self):
         self.assertEqual(len(set(NEW)), 40)
         self.assertTrue(set(NEW) <= set(actions.CATALOG))
-        self.assertEqual(len(actions.CATALOG), 234)
+        self.assertGreaterEqual(len(actions.CATALOG), 234)  # later iterations add more tools
         self.assertEqual(sum(1 for a in NEW if a in actions.REPORTS), 22)
         self.assertEqual(Counter(a.split(".")[0] for a in NEW),
                          Counter(cleanup=6, startup=6, updates=6, services=5, network=6, integrity=5, security=6))

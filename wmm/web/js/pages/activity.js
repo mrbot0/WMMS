@@ -99,7 +99,9 @@
           UI.kpi("In progress", String(activeJobs.length + activeTasks.length), activeJobs.length + " run(s), " + activeTasks.length + " scan(s)", activeJobs.length + activeTasks.length ? "info" : "ok") +
           UI.kpi("Completed today", String(doneToday.length - failed), "Runs and scans", "ok") +
           UI.kpi("Failed today", String(failed), failed ? "Open History for details" : "No failures", failed ? "error" : "ok") +
-          UI.kpi("Next schedule", a.schedules.length ? esc(UI.formatDate(a.schedules[0].next_run)) : "—", a.schedules.length ? esc(a.schedules[0].title) : "Nothing planned", "info") + "</div>";
+          UI.kpi("Next schedule", a.schedules.length ? esc(UI.formatDate(a.schedules[0].next_run)) : "—", a.schedules.length ? esc(a.schedules[0].title) : "Nothing planned", "info") + "</div>" +
+          (recent.length ? '<div class="page-actions" style="justify-content:flex-end;margin:-6px 0 12px"><button type="button" class="btn btn-sm" data-copy-session title="Runs and scans of this session with times and results, as text">' +
+            UI.icon("copy") + "Copy session summary</button></div>" : "");
         var running = activeJobs.map(function (j) { return '<div class="grid">' + jobCard(App, j) + "</div>"; }).join("") +
           (activeTasks.length ? '<div class="grid grid-2">' + activeTasks.map(taskCard).join("") + "</div>" : "");
         if (!running) {
@@ -139,6 +141,12 @@
         });
         el.querySelectorAll("[data-again]").forEach(function (b) {
           b.addEventListener("click", function () { App.runActions(b.getAttribute("data-again").split(",")); });
+        });
+        var copySession = el.querySelector("[data-copy-session]");
+        if (copySession) copySession.addEventListener("click", function () {
+          App.copyText(["Session on " + ((App.state.info || {}).hostname || "this PC") + ":"].concat(recent.map(function (r) {
+            return "- " + when(r.start) + " · " + r.title + " · " + r.sub + " · " + (UI.STATUS_LABEL[r.status] || r.status) + (r.end ? " · " + duration(r.start, r.end) : "");
+          })).join("\n"), "Session summary");
         });
         var drawerBtn = el.querySelector("[data-open-drawer]");
         if (drawerBtn) drawerBtn.addEventListener("click", App.openDrawer);

@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import tools
+from . import tools, tools_extra
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -739,8 +739,124 @@ _ACTIONS += (
            "The PowerShell event log grows faster."),
 )
 
+_X = tools_extra
+_ACTIONS += (
+    # More toolbox tools (iteration 12): the checks technicians run by hand with powercfg, netsh, PowerShell and WMI.
+    # performance and power
+    Action("performance.energy_report", "performance", "Energy efficiency analysis", "Traces the PC for 20 seconds with powercfg /energy and counts the problems that waste power or block sleep.",
+           "safe", 0.5, lambda ctx: _R(ctx, _X.SCRIPT_ENERGY, "power problems found: open the full report")),
+    Action("performance.sleep_study", "performance", "Sleep study (laptops)", "Battery used in standby over the last 7 days and what kept the PC awake (Modern Standby).",
+           "safe", 0.3, lambda ctx: _R(ctx, _X.SCRIPT_SLEEP_STUDY)),
+    Action("performance.power_requests", "performance", "What keeps the PC awake", "Programs and drivers that stop the screen or the PC from going to sleep right now.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_POWER_REQUESTS, "something is blocking sleep")),
+    Action("performance.wake_report", "performance", "Why the PC wakes up", "Last wake source, devices allowed to wake the PC and scheduled wake timers.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_WAKE)),
+    Action("performance.uptime_report", "performance", "Uptime and fast startup", "When Windows last started for real and whether fast startup keeps the old session.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_UPTIME, "no restart for more than two weeks")),
+    Action("performance.wake_timers_off", "performance", "Turn off wake timers", "Stops scheduled tasks and updates from waking the PC at night (current power plan).",
+           "moderate", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_WAKE_TIMERS_OFF), "Maintenance tasks then run at the next start instead of at night."),
+    Action("performance.startup_impact", "performance", "What slows down the start", "Programs, drivers and services Windows measured as delaying the start or the sign-in.",
+           "safe", 0.3, lambda ctx: _R(ctx, _X.SCRIPT_STARTUP_IMPACT, "some items slow down the start")),
+    # updates, drivers, runtimes
+    Action("updates.drivers_report", "updates", "Third-party drivers", "Every driver not made by Microsoft, with provider, version and date.",
+           "safe", 0.4, lambda ctx: _R(ctx, _X.SCRIPT_DRIVERS)),
+    Action("updates.old_drivers_report", "updates", "Drivers older than three years", "Third-party drivers worth checking for an update, with their hardware IDs.",
+           "safe", 0.4, lambda ctx: _R(ctx, _X.SCRIPT_OLD_DRIVERS, "old drivers found")),
+    Action("updates.usb_report", "updates", "USB devices", "Every USB device connected now, with its class, status and vendor/product ID.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_USB)),
+    Action("updates.runtimes_report", "updates", ".NET and Visual C++ runtimes", "Installed .NET Framework, .NET runtimes and Visual C++ Redistributables (needed by many programs and games).",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_RUNTIMES)),
+    Action("updates.failures_report", "updates", "Failed updates", "Update installations that failed in the last 60 days, with their error codes.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_UPDATE_FAILURES, "some updates failed to install")),
+    Action("updates.optional_features_report", "updates", "Optional Windows features", "Features turned on in Windows, flagging outdated ones such as SMB1 or PowerShell 2.",
+           "safe", 0.4, lambda ctx: _R(ctx, _X.SCRIPT_OPTIONAL_FEATURES, "outdated features are on")),
+    Action("updates.delivery_report", "updates", "Update sharing (Delivery Optimization)", "Whether the PC shares updates with other PCs on the internet, and how much it uploaded this month.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_DELIVERY_PEERS, "updates are uploaded to the internet")),
+    Action("updates.delivery_lan_only", "updates", "Share updates only on this network", "Keeps Delivery Optimization from uploading updates to PCs on the internet.",
+           "safe", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_DELIVERY_LAN_ONLY)),
+    # network
+    Action("network.speed_test", "network", "Internet speed test", "Downloads 25 MB from Cloudflare and measures the speed and the latency.",
+           "safe", 0.5, lambda ctx: _R(ctx, _X.SCRIPT_SPEED, "slow or unreachable connection")),
+    Action("network.public_ip_report", "network", "Public IP address", "The address the internet sees for this connection (IPv4 and IPv6).",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_PUBLIC_IP, "the public address could not be read")),
+    Action("network.proxy_report", "network", "Proxy settings", "System and user proxy settings; an unexpected proxy is a sign of adware.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_PROXY, "a proxy is set")),
+    Action("network.hosts_report", "network", "Hosts file entries", "Active lines of the hosts file, which can redirect or block websites.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_HOSTS, "the hosts file has active entries")),
+    Action("network.tcp_report", "network", "TCP settings", "Global TCP settings, checking that receive window auto-tuning is normal.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_TCP, "auto-tuning is not normal")),
+    Action("network.autotuning_normal", "network", "Restore TCP auto-tuning", "Sets receive window auto-tuning back to normal, for full download speed on fast lines.",
+           "safe", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_AUTOTUNING)),
+    Action("network.clear_arp", "network", "Clear the ARP cache", "Forgets the hardware addresses of the devices on the network, after a router or printer change.",
+           "safe", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_CLEAR_ARP)),
+    Action("network.profiles_report", "network", "Network profiles", "Whether each network is Public or Private; public places should be Public.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_NETWORK_PROFILES, "a public-looking network is Private")),
+    # security
+    Action("security.uac_report", "security", "User Account Control level", "Whether UAC is on and how it asks administrators before changes.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_UAC, "UAC is off or never asks")),
+    Action("security.smb_report", "security", "File sharing security (SMB)", "SMB1, signing, encryption and guest access of file sharing.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_SMB, "insecure file sharing settings")),
+    Action("security.rdp_report", "security", "Remote Desktop status", "Whether Remote Desktop is on, its port and whether it requires Network Level Authentication.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_RDP, "Remote Desktop without NLA")),
+    Action("security.defender_exclusions_report", "security", "Antivirus exclusions", "Folders, programs and file types Microsoft Defender does not scan; malware often adds itself here.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_DEFENDER_EXCLUSIONS, "Defender has exclusions: check them")),
+    Action("security.antivirus_report", "security", "Installed antivirus products", "Every antivirus registered with Windows, whether it is active and its signatures are up to date.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_AV_PRODUCTS, "no antivirus registered")),
+    Action("security.vbs_report", "security", "Core isolation (VBS, memory integrity)", "Virtualization-based security, Credential Guard and memory integrity status.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_DEVICE_GUARD)),
+    Action("security.users_report", "security", "Local accounts", "Every local account with last sign-in, password expiry and accounts without a password.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_USERS, "accounts without a password")),
+    Action("security.certificates_report", "security", "Expiring certificates", "Personal certificates (VPN, Wi-Fi, e-mail signature) expired or expiring within 30 days.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_CERTIFICATES, "certificates expire soon")),
+    Action("security.defender_cloud_on", "security", "Defender cloud protection", "Turns on cloud-delivered protection, automatic safe sample submission and a high cloud block level.",
+           "moderate", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_DEFENDER_CLOUD), "Unknown files may be held a few seconds while the cloud checks them."),
+    Action("security.rdp_nla_on", "security", "Require NLA for Remote Desktop", "Remote Desktop asks for the password before opening a session, blocking many attacks.",
+           "moderate", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_RDP_NLA_ON), "Very old Remote Desktop clients can no longer connect."),
+    Action("security.secure_boot_2023", "security", "Secure Boot certificates 2023", "Checks that the firmware has the new Microsoft Secure Boot certificate, needed as the 2011 ones expire in 2026.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_SECURE_BOOT_2023, "the 2023 Secure Boot certificate is missing")),
+    Action("security.browser_extensions", "security", "Browser extensions", "Extensions installed in Chrome, Edge, Brave and Firefox; adware often arrives as one.",
+           "safe", 0.3, lambda ctx: _R(ctx, _X.SCRIPT_BROWSER_EXTENSIONS)),
+    Action("network.mapped_drives", "network", "Mapped network drives", "Network drives mapped for this user and their connection state.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_MAPPED_DRIVES)),
+    # system integrity
+    Action("integrity.unexpected_shutdowns", "integrity", "Unexpected shutdowns", "Power losses and crashes without a clean shutdown in the last 30 days.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_UNEXPECTED_SHUTDOWNS, "unexpected shutdowns found")),
+    Action("integrity.disk_events", "integrity", "Disk errors in the event log", "Bad blocks, controller resets and file-system errors of the last 30 days.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_DISK_EVENTS, "disk errors found: back up and check SMART")),
+    Action("integrity.whea_report", "integrity", "Hardware errors (WHEA)", "Errors reported by the processor, memory and buses in the last 60 days.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_WHEA, "hardware errors found")),
+    Action("integrity.chkdsk_result", "integrity", "Last disk check result", "The result of the last CHKDSK run at startup.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_CHKDSK_RESULT, "the last disk check found problems")),
+    Action("integrity.app_hangs", "integrity", "Programs that froze", "Programs that stopped responding in the last 30 days, most frequent first.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_APP_HANGS, "programs froze")),
+    Action("services.failed_report", "services", "Services that failed", "Services that failed to start or crashed since the last start.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_FAILED_SERVICES, "some services failed")),
+    # storage and cleanup
+    Action("storage.large_files", "storage", "Files larger than 1 GB", "The biggest files in your user folder: videos, disk images, old installers and backups.",
+           "safe", 2, lambda ctx: _R(ctx, _X.SCRIPT_LARGE_FILES)),
+    Action("storage.storage_sense_report", "storage", "Storage Sense settings", "Whether Windows cleans temporary files, the Recycle Bin and Downloads by itself.",
+           "safe", 0.1, lambda ctx: _R(ctx, _X.SCRIPT_STORAGE_SENSE, "Storage Sense is off")),
+    Action("storage.empty_folders", "storage", "Empty folders", "Empty folders in Documents, Downloads and Desktop, often left by uninstalled programs.",
+           "safe", 0.5, lambda ctx: _R(ctx, _X.SCRIPT_EMPTY_FOLDERS)),
+    Action("storage.old_installers", "storage", "Old installers in Downloads", "Installers and archives downloaded more than 30 days ago, with their size.",
+           "safe", 0.2, lambda ctx: _R(ctx, _X.SCRIPT_OLD_INSTALLERS)),
+    # Moderate, not safe: "Apply safe actions" must never throw away what the user has just copied.
+    Action("cleanup.clipboard", "cleanup", "Clear the clipboard and its history", "Removes copied text and images, including passwords, from the clipboard and its history.",
+           "moderate", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_CLIPBOARD), "Whatever is copied now, and the clipboard history, is lost."),
+)
+EXTRA_REPORTS = {
+    "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
+    "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
+    "updates.failures_report", "updates.optional_features_report", "updates.delivery_report", "network.speed_test", "network.public_ip_report",
+    "network.proxy_report", "network.hosts_report", "network.tcp_report", "network.profiles_report", "security.uac_report", "security.smb_report",
+    "security.rdp_report", "security.defender_exclusions_report", "security.antivirus_report", "security.vbs_report", "security.users_report",
+    "security.certificates_report", "integrity.unexpected_shutdowns", "integrity.disk_events", "integrity.whea_report", "integrity.chkdsk_result",
+    "integrity.app_hangs", "services.failed_report", "storage.large_files", "storage.storage_sense_report", "storage.empty_folders", "storage.old_installers",
+    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives",
+}
+
 # Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.
-REPORTS = frozenset({
+REPORTS = frozenset(EXTRA_REPORTS | {
     "cleanup.installer_report", "startup.run_keys_report", "startup.startup_folders_report", "startup.winlogon_report",
     "startup.wmi_persistence_report", "startup.ifeo_report", "updates.wu_services_report", "updates.pause_status_report",
     "updates.windows_version_report", "services.disabled_report", "services.delayed_start_report", "network.arp_report",

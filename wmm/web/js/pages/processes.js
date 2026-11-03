@@ -128,6 +128,7 @@
         '<label class="tb-sort">Refresh<select id="tm-interval">' + [[1000, "1 s"], [2000, "2 s"], [5000, "5 s"], [10000, "10 s"]].map(function (o) {
           return '<option value="' + o[0] + '"' + (view.interval === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
         }).join("") + "</select></label>" + UI.button(view.paused ? "Resume" : "Pause", 'id="tm-pause"', "", view.paused ? "play" : "clock") +
+        UI.button("Copy top 10", 'id="tm-top" title="The 10 processes using the most CPU and memory, as text for a ticket"', "", "copy") +
         UI.button("Start new process", 'id="tm-start"', "btn-primary", "play")) +
         '<div class="tabs" role="tablist"><button type="button" role="tab" class="tab" data-tab="processes" aria-selected="' + (view.tab === "processes") + '">' + UI.icon("cpu") +
         '<span>Processes</span><span class="tab-count" id="tm-pcount">…</span></button><button type="button" role="tab" class="tab" data-tab="services" aria-selected="' +
@@ -352,6 +353,13 @@
       el.querySelector("#tm-interval").addEventListener("change", function (e) { view.interval = Number(e.target.value); save(); loop(); });
       el.querySelector("#tm-pause").addEventListener("click", function () { view.paused = !view.paused; save(); App.render(); });
       el.querySelector("#tm-start").addEventListener("click", startDialog);
+      el.querySelector("#tm-top").addEventListener("click", function () {
+        if (!rows.length) { UI.toast("Open the Processes tab first.", "info"); return; }
+        var line = function (p) { return "- " + p.name + " (PID " + p.pid + "): CPU " + p.cpu + "%, memory " + p.memory_mb + " MB" + (p.company ? " · " + p.company : ""); };
+        var byCpu = rows.slice().sort(function (a, b) { return b.cpu - a.cpu; }).slice(0, 10);
+        var byMem = rows.slice().sort(function (a, b) { return b.memory_mb - a.memory_mb; }).slice(0, 10);
+        App.copyText(["Top 10 by CPU (" + new Date().toLocaleTimeString() + "):"].concat(byCpu.map(line), ["", "Top 10 by memory:"], byMem.map(line)).join("\n"), "Top processes");
+      });
       App.onLeave(function () { clearInterval(timer); });
       loop();
       if (view.tab === "processes") loadServices(false).catch(function () { /* only the tab count */ });

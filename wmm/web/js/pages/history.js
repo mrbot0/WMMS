@@ -24,7 +24,16 @@
       return API.get("/history?limit=5000" + (filters.area ? "&area=" + filters.area : "")).then(function (h) {
         var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
         var since = filters.days === "today" ? midnight.getTime() : filters.days ? Date.now() - Number(filters.days) * 86400e3 : 0;
-        var runs = h.runs.filter(function (r) { return new Date(r.started).getTime() >= since; });
+        var runs = h.runs.filter(function (r) { return new Date(r.started).getTime() >= since && (!filters.failed || r.status === "error" || r.status === "warning"); });
+        // The actions run most often in the period, for "what keeps needing a fix?".
+        var counts = {};
+        runs.forEach(function (r) { counts[r.action_id] = (counts[r.action_id] || 0) + 1; });
+        var top = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 6);
+        var topMax = top.length ? counts[top[0]] : 1;
+        var topCard = top.length ? '<ul class="top-actions">' + top.map(function (id) {
+          return '<li><span class="cell-title" style="width:46%">' + esc(App.action(id) ? App.action(id).title : id) + '</span><div class="bar-inline"><div style="width:' +
+            Math.round(100 * counts[id] / topMax) + '%;background:var(--accent)"></div></div><span class="legend-value">' + counts[id] + "×</span></li>";
+        }).join("") + "</ul>" : '<p class="empty">No runs in this period.</p>';
         var title = function (id) { var a = App.action(id); return a ? a.title : id; };
         var freed = runs.reduce(function (a, r) { return a + (r.bytes_freed || 0); }, 0);
         var ok = runs.filter(function (r) { return r.status === "ok" || r.status === "preview"; }).length;
@@ -59,8 +68,8 @@
         var perDay = Charts.stacked(days, stacks) + '<div class="series-key">' + STATUS_COLORS.map(function (s) {
           return '<span><span class="swatch" style="background:' + s[2] + '"></span>' + s[1] + "</span>";
         }).join("") + "</div>";
-        var counts = {};
-        h.runs.forEach(function (r) { var k = isoDay(r.started); counts[k] = (counts[k] || 0) + 1; });
+        var perDayCounts = {};
+        h.runs.forEach(function (r) { var k = isoDay(r.started); perDayCounts[k] = (perDayCounts[k] || 0) + 1; });
 
         // Before/after: the latest score of each area at two moments.
         var dates = [];
@@ -78,13 +87,21 @@
             return '<option value="' + a + '"' + (filters.area === a ? " selected" : "") + ">" + esc(UI.AREA_LABEL[a]) + "</option>";
           }).join("") + '</select></label><label>Period<select data-filter="days">' + [["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["", "All time"]].map(function (o) {
             return '<option value="' + o[0] + '"' + (filters.days === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-          }).join("") + "</select></label></div>") + "</div>" + kpis +
+          }).join("") + "</select></label>" +
+            '<label class="check"><input type="checkbox" id="hist-failed"' + (filters.failed ? " checked" : "") + "> Only warnings and errors</label>" +
+            UI.button("Reset", 'id="hist-reset"' + (filters.area || filters.failed || filters.days !== "30" ? "" : " disabled"), "btn-sm btn-ghost", "x") + "</div>") + "</div>" + kpis +
           '<div class="grid grid-2">' + UI.card("Score trend", trend) + UI.card("Runs per day", perDay) + "</div>" +
-          '<div class="grid grid-2-1">' + UI.card("Before / after", compare) + UI.card("Activity calendar", Charts.heatmap(counts, { weeks: 20 })) + "</div>" +
+          '<div class="grid grid-2-1">' + UI.card("Before / after", compare) + UI.card("Activity calendar", Charts.heatmap(perDayCounts, { weeks: 20 })) + "</div>" +
+          '<div class="grid">' + UI.card("Most run actions", topCard, '<span class="muted small">In the selected period</span>') + "</div>" +
           '<div class="grid">' + UI.card("Runs", '<div id="runs-table"></div>', "", "card-flush") + "</div>";
 
         el.querySelectorAll("[data-filter]").forEach(function (select) {
           select.addEventListener("change", function () { filters[select.getAttribute("data-filter")] = select.value; self.render(el, App); });
+        });
+        el.querySelector("#hist-failed").addEventListener("change", function (e) { filters.failed = e.target.checked; self.render(el, App); });
+        el.querySelector("#hist-reset").addEventListener("click", function () {
+          filters.area = ""; filters.days = "30"; filters.failed = false;
+          if (/[?&]area=/.test(location.hash)) location.hash = "#/history"; else self.render(el, App);
         });
         function drawCompare() {
           var box = el.querySelector("#cmp-table");

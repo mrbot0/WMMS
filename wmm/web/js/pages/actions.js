@@ -49,6 +49,7 @@
         };
         el.innerHTML = UI.pageHeader("Actions", "Select several actions to run them as one job, in a safe order",
           '<span class="muted small" id="pick-info">Nothing selected</span>' + UI.button("Select visible", 'id="pick-visible"', "", "check") + UI.button("Clear", 'id="pick-clear" disabled', "", "x") +
+          UI.button("Save as playbook", 'id="pick-save" disabled title="Keep the selection as one of My playbooks, to run it again with one click"', "", "playbooks") +
           UI.button("Run selected", 'id="pick-run" disabled', "btn-primary", "play")) + kpis +
           '<div class="grid">' + UI.card("Filters", '<div class="filters"><label>Search<input type="search" data-v="query" value="' + esc(view.query) + '" placeholder="Search actions…"></label>' +
             sel("area", "Area", UI.AREAS.map(function (a) { return [a, UI.AREA_LABEL[a]]; })) +
@@ -89,7 +90,18 @@
           el.querySelector("#pick-info").textContent = ids.length ? ids.length + " selected · " + minutes(total) + (risky ? " · " + risky + " need confirmation" : "") : "Nothing selected";
           el.querySelector("#pick-run").disabled = !ids.length;
           el.querySelector("#pick-clear").disabled = !ids.length;
+          el.querySelector("#pick-save").disabled = !ids.length;
         }
+        el.querySelector("#pick-save").addEventListener("click", function () {
+          var ids = order(Object.keys(picked));
+          UI.modal("Save as playbook", '<form class="form" onsubmit="return false"><label>Name<input name="n" maxlength="60" placeholder="e.g. Monthly visit at the office" required></label>' +
+            '<p class="muted small" style="margin:0">' + ids.length + " actions, in a safe order. It appears in Playbooks › My playbooks.</p></form>",
+            [{ label: "Cancel", cls: "btn-ghost" }, { label: "Save", cls: "btn-primary", value: function (w) { return w.querySelector("input").value.trim(); } }]).then(function (name) {
+            if (!name) return;
+            Pages.playbooks.saveMine(name, ids);
+            UI.toast("Saved in Playbooks › My playbooks.", "ok");
+          });
+        });
         list.addEventListener("change", function (e) {
           if (!e.target.hasAttribute("data-pick")) return;
           var card = e.target.closest("[data-id]"), id = card.getAttribute("data-id");

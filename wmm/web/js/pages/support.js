@@ -75,9 +75,14 @@
         el.innerHTML = UI.pageHeader("Support", "Everything a technician needs to use Windows Maintenance Manager",
           UI.button("Copy diagnostic info", 'id="copy-diag"', "", "download") +
           UI.button("Copy PC specifications", 'id="copy-specs" title="Processor, memory, graphics, disks and Windows, without serial numbers"', "", "hardware") +
+          UI.button("Report a problem", 'id="copy-report" title="A ready-to-fill problem report with the version, mode and health check"', "", "alert") +
           UI.button("Health check", 'id="go-health"', "", "shield")) +
           '<div class="grid grid-2-1"><div class="stack">' + UI.card("Getting started", steps) + UI.card("Frequently asked questions", faq) + "</div>" +
           '<div class="stack">' + UI.card("Risk levels", risks) + UI.card("Keyboard shortcuts", keys) + UI.card("Diagnostics", diag) + "</div></div>" +
+          '<div class="grid">' + UI.card("Windows settings", '<p class="muted" style="margin-top:0">Open the Windows Settings page you need directly, without searching for it.</p>' +
+            '<div class="win-links">' + App.windowsSettings().map(function (w) {
+              return '<a href="ms-settings:' + esc(w[0]) + '">' + UI.icon("settings") + esc(w[1]) + "</a>";
+            }).join("") + "</div>") + "</div>" +
           '<div class="grid">' + UI.card("Areas at a glance", glossary) + "</div>";
 
         el.querySelector("#faq-search").addEventListener("input", function (e) {
@@ -90,6 +95,14 @@
           el.querySelector("#faq-empty").hidden = shown > 0;
         });
         el.querySelector("#go-health").addEventListener("click", function () { location.hash = "#/settings"; });
+        el.querySelector("#copy-report").addEventListener("click", function () {
+          var failed = hc.checks.filter(function (c) { return c.status !== "ok"; });
+          App.copyText(["## Problem report · Windows Maintenance Manager " + info.version, "",
+            "**What happened:** ", "**What I expected:** ", "**Steps to reproduce:**", "1. ", "2. ", "",
+            "**Page:** " + ((Components.store("recentPages") || [])[1] || ""), "**Mode:** " + (info.preview ? "preview" : info.admin ? "administrator" : "read-only"),
+            "**Browser:** " + navigator.userAgent.replace(/^.*?\) /, ""), "**Health check:** " + hc.summary.ok + " OK, " + hc.summary.warning + " warnings, " + hc.summary.error + " failed"]
+            .concat(failed.map(function (c) { return "- [" + c.status.toUpperCase() + "] " + c.name + ": " + c.detail; })).join("\n"), "Problem report");
+        });
         el.querySelector("#copy-specs").addEventListener("click", function (e) {
           var b = e.currentTarget;
           b.disabled = true;

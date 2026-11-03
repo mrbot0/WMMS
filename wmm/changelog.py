@@ -2,6 +2,34 @@
 
 CHANGELOG = [
     {
+        "version": "1.9.0",
+        "date": "2026-11-03",
+        "title": "47 new tools, tabs on long pages, a better script editor and a hidden start with Windows",
+        "highlights": [
+            "47 new toolbox tools (281 in total): energy and sleep analysis, speed test, drivers, runtimes, Secure Boot 2023, Defender exclusions, unexpected shutdowns and more.",
+            "Long pages are split into tabs: the area pages, the dashboard, Hardware and Schedules show the overview first and the details after.",
+            "Script editor: Edit button, snippets, line and column, warnings for dangerous commands, Ctrl S and Save and run.",
+            "Start with Windows opens the console in the browser and keeps the Python window hidden.",
+            "21 more settings and 40 more functions across the pages.",
+        ],
+        "changes": [
+            "Appearance: menu width, shadows, typeface, centered page, hide the status bar, no hover tooltips.",
+            "Behaviour: split long pages into tabs, actions in the search, scan at start, live figures refresh, only warnings and errors as messages.",
+            "Notifications: blinking tab title, the result read aloud, scheduled runs since the last visit.",
+            "Maintenance: Activity panel at the start of a run, ask before long runs, temperature alert and sensor refresh.",
+            "Data: hide the device name, show hidden improvements again, reset page filters; Reset this section in every section.",
+            "Dashboard: weakest area, copy the visit checklist, time stamp in the notes. Recommendations: group by area, snooze for 7 days.",
+            "Area pages: score change since the previous scan, summary as .txt. History: only failures, most run actions, reset filters.",
+            "Event Viewer: saved filters, copy sources. Task Manager: copy the top 10. Registry: recent keys, copy a value as a .reg line.",
+            "Hardware: snapshot and compare, old drivers flagged and filtered, copy the IDs of devices with problems.",
+            "Schedules: duplicate a schedule, CSV export. Scripts: search and sort, Add and edit for ready-made scripts.",
+            "My playbooks: save a selection from Actions, copy any playbook and delete your own. Toolbox: list view, copy the selection.",
+            "Activity: copy the session summary. Reports: notes saved as a draft, common phrases. Support: Windows settings shortcuts, problem report.",
+            "Category pages: weakest page and copy summary. Focus mode (F), [ and ] for the previous and next page, recent runs and Windows settings in the search.",
+            "The console can run hidden (--hidden): output goes to dati\\wmm-console.log and the programs it starts open no window.",
+        ],
+    },
+    {
         "version": "1.8.0",
         "date": "2026-11-03",
         "title": "20 new settings and 40 new functions across the pages",

@@ -64,7 +64,7 @@
     var info = state.info;
     if (!info) return;
     document.getElementById("topbar-meta").innerHTML =
-      '<span class="meta-item" title="Machine ID: ' + esc(info.machine_id) + '"><span class="meta-label">Device</span>' + esc(info.hostname) + "</span>" +
+      '<span class="meta-item device-name" title="Machine ID: ' + esc(info.machine_id) + '"><span class="meta-label">Device</span>' + esc(info.hostname) + "</span>" +
       '<span class="pill ' + (info.preview ? "pill-info" : info.admin ? "pill-ok" : "pill-warning") + '">' +
       (info.preview ? "Preview mode" : info.admin ? "Administrator" : "Read-only") + "</span>";
     document.getElementById("sidebar-meta").innerHTML = '<button type="button" class="version-link" data-whatsnew title="What\'s new">Version ' + esc(info.version) +
@@ -295,7 +295,7 @@
   function follow(jobId, areas) {
     clearInterval(state.poll);
     document.getElementById("activity-dot").hidden = false;
-    openDrawer();
+    if (Components.store("autoDrawer") !== false) openDrawer();
     state.poll = setInterval(function () {
       API.get("/runs/" + jobId).then(function (job) {
         state.job = job;
@@ -320,6 +320,8 @@
               "Finished " + UI.formatDate(new Date().toISOString()) + (state.info ? " on " + state.info.hostname : ""));
           } else if (!errors) FX.confetti();
           chime(!errors);
+          speak(errors ? "Run finished with " + errors + " errors." : "Run completed.");
+          flashTitle(errors ? "Errors" : "Done");
           refreshAreas(areas || areasOf(job.results.map(function (r) { return r.action_id; })));
         }
       }).catch(function (error) {
@@ -404,7 +406,7 @@
     // Safe actions start at once; anything else, or a batch, is confirmed with its steps.
     var ask = risky.length || list.length > 2 || Components.store("confirmSafe") ? confirmRun(list, risky) : Promise.resolve(true);
     var minutes = list.reduce(function (s, a) { return s + (a.minutes || 0); }, 0);
-    return ask.then(function (ok) { return ok && batteryCheck(minutes); }).then(function (ok) {
+    return ask.then(function (ok) { return ok && batteryCheck(minutes); }).then(function (ok) { return ok && longRunCheck(minutes); }).then(function (ok) {
       if (!ok) return null;
       return API.post("/runs", { actions: ids, confirmed: risky.length > 0 }).then(function (r) {
         state.job = { active: true, done: 0, total: ids.length, results: [], log: [], current: null };
@@ -423,6 +425,30 @@
       return UI.confirm("Running on battery", "This run takes about " + Math.round(minutes) + " minutes and the PC is not plugged in (" + Math.round(b.level * 100) +
         "% left). If the battery runs out, a repair can stop halfway. Plug in the charger or run it anyway.", { ok: "Run anyway" });
     }, function () { return true; });
+  }
+
+  /* Settings › Maintenance: runs longer than the chosen minutes ask first, so a long repair never starts by mistake. */
+  function longRunCheck(minutes) {
+    var limit = Components.store("longRunMinutes");
+    if (!limit || minutes < limit) return Promise.resolve(true);
+    return UI.confirm("Long run", "This run takes about " + Math.round(minutes) + " minutes (more than the " + limit + " minutes set in Settings). The PC stays usable, " +
+      "but some steps may slow it down.", { ok: "Start it" });
+  }
+
+  /* Settings › Notifications: the result read aloud, for runs followed from across the room. */
+  function speak(text) {
+    if (!Components.store("speak") || quiet() || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch (e) { /* speech not available */ }
+  }
+  /* Settings › Notifications: the tab title blinks until the console is looked at again. */
+  var flashTimer = null;
+  function flashTitle(word) {
+    if (!Components.store("flashTitle") || !document.hidden) return;
+    var original = document.title, on = false;
+    clearInterval(flashTimer);
+    flashTimer = setInterval(function () { on = !on; document.title = on ? "● " + word + " · Windows Maintenance Manager" : original; }, 1000);
+    var stop = function () { if (document.hidden) return; clearInterval(flashTimer); document.title = original; document.removeEventListener("visibilitychange", stop); };
+    document.addEventListener("visibilitychange", stop);
   }
 
   /* Settings › Notifications: no sounds or desktop notifications between the two times (they may span midnight). */
@@ -605,6 +631,12 @@
 
   function pageTitle(name) { return window.Pages[name] ? window.Pages[name].title : name; }
 
+  /* Windows Settings pages that open from the console (ms-settings: links, also on the Support page). */
+  var WINDOWS_SETTINGS = [["windowsupdate", "Windows Update", "updates patches"], ["storagesense", "Storage", "disk space cleanup"],
+    ["appsfeatures", "Installed apps", "uninstall programs"], ["startupapps", "Startup apps", "boot autostart"], ["powersleep", "Power and sleep", "battery energy"],
+    ["display", "Display", "screen resolution monitor"], ["network-status", "Network status", "internet wifi ethernet"], ["windowsdefender", "Windows Security", "antivirus defender"],
+    ["privacy", "Privacy", "permissions telemetry"], ["troubleshoot", "Troubleshoot", "fix problems"], ["recovery", "Recovery", "reset restore"], ["about", "About this PC", "system info"]];
+
   function commands() {
     var list = [];
     (Components.store("recentPages") || []).forEach(function (p) {
@@ -650,6 +682,18 @@
     list.push({ group: "Preferences", title: "Privacy mode (hide serial numbers and IDs)", icon: "shield", keywords: "screen share mask blur serial mac", run: togglePrivacy });
     list.push({ group: "Preferences", title: "Clear recent commands and pages", icon: "x", keywords: "history palette forget",
       run: function () { Components.store("recentCommands", null); Components.store("recentPages", null); UI.toast("Recent commands and pages cleared.", "ok"); } });
+    list.push({ group: "Commands", title: "Focus mode (hide the menu)", icon: "explorer", keywords: "fullscreen distraction sidebar hide F", run: function () { toggleFocus(); } });
+    list.push({ group: "Commands", title: "Copy this page as text", icon: "copy", keywords: "clipboard content text export",
+      run: function () { copyText(document.getElementById("content").innerText.replace(/\n{3,}/g, "\n\n").trim(), pageTitle(here)); } });
+    (state.recentRuns || []).forEach(function (r) {
+      var a = action(r.action_id);
+      list.push({ group: "Recent runs", title: (a ? a.title : r.action_id), sub: UI.formatDate(r.started) + " · " + (UI.STATUS_LABEL[r.status] || r.status), icon: "history",
+        keywords: "output log result", run: function () { Components.showRunOutput(r.id, a ? a.title : r.action_id); } });
+    });
+    WINDOWS_SETTINGS.forEach(function (w) {
+      list.push({ group: "Windows settings", title: "Windows: " + w[1], icon: "settings", keywords: "ms-settings control panel " + w[2],
+        run: function () { location.href = "ms-settings:" + w[0]; } });
+    });
     ((window.Pages.settings || {}).sections || []).forEach(function (sct) {
       list.push({ group: "Settings", title: "Settings › " + sct[1], sub: sct[3], icon: sct[2], keywords: "preferences options " + sct[3],
         run: function () { Components.store("settingsSection", sct[0]); location.hash = "#/settings?s=" + sct[0]; if (current() === "settings") render(); } });
@@ -688,6 +732,8 @@
       Components.store("dashAuto", on);
       UI.toast("Dashboard auto-refresh: " + (on ? "on" : "off") + ".", "info");
     } });
+    // Settings › Behaviour: the search can list pages and commands only, without the 200+ actions.
+    if (Components.store("paletteActions") === false) return list;
     Object.keys(state.actions).forEach(function (id) {
       var a = state.actions[id];
       list.push({ group: "Run an action", title: a.title, sub: UI.AREA_LABEL[a.area] + (a.kind === "report" ? " · report" : ""), icon: a.kind === "report" ? "reports" : "play",
@@ -738,15 +784,30 @@
     scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores,
     order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards, actionDetail: actionDetail,
     favorites: favorites, toggleFavorite: toggleFavorite, applyLook: function () { applyLook(); }, togglePrivacy: function () { togglePrivacy(); },
-    quiet: function () { return quiet(); }, desktopNotify: function (t, x) { desktopNotify(t, x); }, chime: function (ok) { chime(ok); }
+    quiet: function () { return quiet(); }, desktopNotify: function (t, x) { desktopNotify(t, x); }, chime: function (ok) { chime(ok); },
+    speak: function (t) { speak(t); }, toggleFocus: function (on) { toggleFocus(on); }, windowsSettings: function () { return WINDOWS_SETTINGS; }
   };
 
   setInterval(pollActivity, 4000);
 
-  /* Live CPU/RAM in the top bar (light: one request every 3 s, paused while the tab is hidden). */
-  var liveSince = 0;
+  /* Settings › Behaviour: scan everything at start when the oldest scan is older than the chosen days (administrator only). */
+  function autoScan() {
+    var days = Components.store("autoScanDays");
+    if (!days || !state.info || !state.info.admin || state.info.preview) return;
+    var times = UI.AREAS.map(function (a) { return state.scanned[a]; });
+    var oldest = times.some(function (t) { return !t; }) ? 0 : Math.min.apply(null, times.map(function (t) { return new Date(t).getTime(); }));
+    if (Date.now() - oldest < days * 86400e3) return;
+    UI.toast("The last scan is older than " + days + " day" + (days > 1 ? "s" : "") + ": scanning every area now (Settings › Behaviour).", "info");
+    scanAll();
+  }
+
+  /* Live CPU/RAM in the top bar (light: one request every 3 s by default, paused while the tab is hidden; Settings › Behaviour). */
+  var liveSince = 0, liveTick = 0;
   setInterval(function () {
-    if (document.hidden) return;
+    var every = Components.store("liveInterval");
+    if (every == null) every = 3;
+    liveTick += 1;
+    if (document.hidden || !every || liveTick % every > 0) return;
     API.get("/live?since=" + liveSince).then(function (r) {
       if (!r.samples.length) return;
       var s = r.samples[r.samples.length - 1];
@@ -757,7 +818,7 @@
       mini.innerHTML = 'CPU <b class="' + level(s.cpu) + '">' + Math.round(s.cpu) + '%</b> RAM <b class="' + level(s.memory_pct) + '">' + s.memory_pct + "%</b>";
       if (before !== mini.textContent) { mini.classList.remove("tick"); void mini.offsetWidth; mini.classList.add("tick"); }
     }, function () { /* offline overlay handles it */ });
-  }, 3000);
+  }, 1000);  // a one-second tick; the request goes out every `liveInterval` seconds
 
   /* Connection lost: overlay with automatic reconnection. */
   var offline = null;
@@ -843,11 +904,16 @@
   });
 
   /* Appearance saved in Settings; Settings calls it again after every change. */
-  var LOOK = { contrast: "high-contrast", cbSafe: "cb-safe", noBlur: "no-blur", wideText: "wide-text", underlineLinks: "underline-links", privacy: "privacy-mode" };
+  var LOOK = { contrast: "high-contrast", cbSafe: "cb-safe", noBlur: "no-blur", wideText: "wide-text", underlineLinks: "underline-links", privacy: "privacy-mode",
+    hideStatusbar: "no-statusbar", noTips: "no-tips", hideDevice: "hide-device", focusMode: "focus-mode" };
+  // Values kept as attributes on <html>, read by the stylesheet (Settings › Appearance).
+  var LOOK_ATTRS = { corners: "rounded", sidebarWidth: "normal", shadows: "soft", typeface: "system", pageWidth: "full" };
   function applyLook() {
     var accent = Components.store("accent"), font = Components.store("fontSize");
     Object.keys(LOOK).forEach(function (k) { document.body.classList.toggle(LOOK[k], !!Components.store(k)); });
-    document.documentElement.setAttribute("data-corners", Components.store("corners") || "rounded");
+    Object.keys(LOOK_ATTRS).forEach(function (k) {
+      document.documentElement.setAttribute("data-" + k.replace(/[A-Z]/g, function (c) { return "-" + c.toLowerCase(); }), Components.store(k) || LOOK_ATTRS[k]);
+    });
     document.getElementById("live-mini").hidden = !!Components.store("hideLiveMini");
     if (accent && accent !== "blue") document.documentElement.setAttribute("data-accent", accent);
     if (font && font !== "normal") document.body.classList.add("font-" + font);
@@ -861,9 +927,29 @@
     applyLook();
     UI.toast(on ? "Privacy mode on: serial numbers, MAC addresses and IDs are hidden on screen." : "Privacy mode off.", "info");
   }
+  /* Focus mode (F, command palette): only the page, without sidebar and top bar; Esc or F again leaves it. */
+  function toggleFocus(force) {
+    var on = typeof force === "boolean" ? force : !Components.store("focusMode");
+    Components.store("focusMode", on);
+    applyLook();
+    if (on) UI.toast("Focus mode: press F or Esc to show the menu again.", "info");
+  }
+  /* [ and ]: previous and next page of the same category, like the links at the bottom of every page. */
+  function stepPage(delta) {
+    var c = Hubs.categoryOf(current());
+    if (!c) return;
+    var ids = c.pages.map(function (p) { return p[0]; }), i = ids.indexOf(current());
+    var next = ids[i + delta];
+    if (next) location.hash = "#/" + next;
+  }
   document.addEventListener("keydown", function (e) {
-    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
-    if (!typing && e.shiftKey && !e.ctrlKey && !e.altKey && e.key === "P" && !Components.store("noKeyShortcuts")) togglePrivacy();
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+    if (e.key === "Escape" && Components.store("focusMode") && !document.querySelector(".modal-backdrop")) { toggleFocus(false); return; }
+    if (typing || e.ctrlKey || e.altKey || e.metaKey || Components.store("noKeyShortcuts") || document.querySelector(".modal-backdrop")) return;
+    if (e.shiftKey && e.key === "P") togglePrivacy();
+    if (!e.shiftKey && (e.key === "f" || e.key === "F")) toggleFocus();
+    if (e.key === "[") stepPage(-1);
+    if (e.key === "]") stepPage(1);
   });
 
   /* Pinned pages: the star in every page header, shown as a row on the dashboard. */
@@ -930,7 +1016,8 @@
       ).then(function (v) { if (v === "yes") Guides.tour(0); else Components.store("tourDone", true); });
     });
     API.get("/playbooks").then(function (p) { state.playbooks = p.playbooks; }, function () { /* palette works without them */ });
-    refreshScores();
+    refreshScores().then(autoScan);
+    API.get("/history?limit=8").then(function (h) { state.recentRuns = h.runs; }, function () { /* palette works without them */ });
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });
     // A token from a previous agent run is rejected here: the 403 opens the reconnect dialog.
     if (API.hasToken()) API.post("/agent/token-check").catch(function () { renderChrome(); });
