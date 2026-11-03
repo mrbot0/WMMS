@@ -32,7 +32,7 @@ class Catalog(unittest.TestCase):
             ctx = FakeContext()
             ctx.anteprima = True
             with mock.patch.object(tools, "write_dword") as dword, mock.patch.object(tools, "delete_value") as cancella, \
-                    mock.patch.object(tools, "read_string", return_value="C:\OneDrive.exe"):
+                    mock.patch.object(tools, "read_string", return_value=r"C:\OneDrive.exe"):
                 esito = actions.CATALOG[action_id].run(ctx)
             self.assertIn(esito.stato, (tools.Stato.ANTEPRIMA, tools.Stato.OK), action_id)
             dword.assert_not_called()
@@ -44,7 +44,7 @@ class Fixes(unittest.TestCase):
         with mock.patch.object(tools, "read_string", return_value=None), mock.patch.object(tools, "delete_value") as cancella:
             self.assertEqual(tools.onedrive_autostart_off(FakeContext()).stato, tools.Stato.OK)
         cancella.assert_not_called()
-        with mock.patch.object(tools, "read_string", return_value="C:\OneDrive.exe"), mock.patch.object(tools, "delete_value") as cancella:
+        with mock.patch.object(tools, "read_string", return_value=r"C:\OneDrive.exe"), mock.patch.object(tools, "delete_value") as cancella:
             tools.onedrive_autostart_off(FakeContext())
         cancella.assert_called_once_with(tools.HKCU, r"Software\Microsoft\Windows\CurrentVersion\Run", "OneDrive")
 

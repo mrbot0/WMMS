@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import tools, tools_extra
+from . import tools, tools_extra, tools_extra2
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -844,7 +844,116 @@ _ACTIONS += (
     Action("cleanup.clipboard", "cleanup", "Clear the clipboard and its history", "Removes copied text and images, including passwords, from the clipboard and its history.",
            "moderate", 0.1, lambda ctx: _X.ps(ctx, _X.SCRIPT_CLIPBOARD), "Whatever is copied now, and the clipboard history, is lost."),
 )
-EXTRA_REPORTS = {
+_Y = tools_extra2
+
+
+def _R13(ctx, script, note=""):
+    """A report of iteration 13: it ends with exit 0, so only an explicit "exit 1" (something found) shows a warning,
+    never a harmless failed command inside the script."""
+    return _R(ctx, script + "\nexit 0\n", note)
+
+
+_ACTIONS += (
+    # Forty more tools (iteration 13): weekly fixes and checks for slow, insecure or outdated PCs.
+    # fixes
+    Action("network.reset_tcpip", "network", "Reset the TCP/IP stack", "Resets IPv4 and IPv6 settings to their defaults when no network fix helps.",
+           "moderate", 0.3, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_RESET_TCPIP), "Needs a restart; static IP addresses must be set again."),
+    Action("network.restart_adapters", "network", "Restart the network adapters", "Turns every physical adapter off and on, like unplugging the cable.",
+           "moderate", 0.3, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_RESTART_ADAPTERS), "The connection drops for a few seconds."),
+    Action("network.prefer_ipv4", "network", "Prefer IPv4 over IPv6", "For sites that load slowly or fail only over IPv6; IPv6 stays on.",
+           "moderate", 0.1, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_PREFER_IPV4), "Applies after a restart."),
+    Action("network.ipv6_default", "network", "IPv6 back to default", "Removes any IPv6 preference or block set on this PC.",
+           "moderate", 0.1, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_IPV6_DEFAULT), "Applies after a restart."),
+    Action("performance.rebuild_perf_counters", "performance", "Rebuild performance counters", "Fixes an empty Task Manager or Resource Monitor and wrong live figures.",
+           "moderate", 0.5, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_REBUILD_PERF_COUNTERS),
+           "Monitoring programs that read the counters may need a restart."),
+    Action("performance.reset_power_plans", "performance", "Reset power plans", "Restores the Windows power plans when sleep, brightness or performance behave oddly.",
+           "moderate", 0.1, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_RESET_POWER_PLANS), "Custom power plans are removed."),
+    Action("services.rebuild_search_index", "services", "Rebuild the search index", "For a Start menu or Explorer search that finds nothing or uses too much CPU.",
+           "moderate", 0.3, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_REBUILD_SEARCH), "Search results are incomplete for an hour or two."),
+    Action("updates.winget_source_reset", "updates", "Repair winget", "Resets the winget sources when app updates or installs fail.",
+           "moderate", 0.5, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_WINGET_SOURCE_RESET),
+           "Sources you added yourself are removed; the official ones come back."),
+    Action("cleanup.component_resetbase", "cleanup", "Deep component cleanup (ResetBase)", "Removes every superseded Windows component: the most space DISM can free.",
+           "high", 15, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_RESETBASE), "Installed updates can never be uninstalled afterwards."),
+    Action("integrity.verifier_off", "integrity", "Turn off Driver Verifier", "Stops a forgotten Driver Verifier that slows the PC and causes blue screens.",
+           "moderate", 0.1, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_VERIFIER_OFF), "Applies after a restart."),
+    Action("security.ps_policy_remotesigned", "security", "Safe PowerShell policy", "Local scripts run, downloaded scripts must be signed (RemoteSigned).",
+           "moderate", 0.1, lambda ctx: _Y.ps(ctx, _Y.SCRIPT_PS_POLICY), "Unsigned scripts downloaded from the internet stop running."),
+    # network reports
+    Action("network.dns_benchmark", "network", "DNS speed test", "Compares the DNS of this PC with Cloudflare, Google and Quad9.", "safe", 0.4,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_DNS_BENCHMARK, "the DNS of this PC is slow")),
+    Action("network.wifi_networks", "network", "Wi-Fi networks and channels", "Signal and channel of the networks around, to spot a crowded channel.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_WIFI_NETWORKS)),
+    Action("network.nic_errors", "network", "Network errors", "Errors and dropped packets of every adapter: bad cables, ports or Wi-Fi.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_NIC_ERRORS, "many network errors")),
+    Action("network.dhcp_report", "network", "Addresses and DHCP lease", "Where each adapter gets its address, gateway and DNS, and when the lease expires.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_DHCP)),
+    Action("network.internet_connections", "network", "Programs on the internet", "Which programs have connections to the internet right now.", "safe", 0.2,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_INTERNET_CONNECTIONS)),
+    Action("network.vpn_adapters", "network", "VPN and virtual adapters", "VPN and virtual adapters, often left by old VPNs that break DNS.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_VPN_ADAPTERS)),
+    Action("network.share_sessions", "network", "Who uses the shared folders", "Computers and users connected to the shared folders of this PC.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_SHARE_SESSIONS)),
+    # security reports
+    Action("security.suspicious_tasks", "security", "Suspicious scheduled tasks", "Tasks that run from user or temporary folders or with encoded commands.", "safe", 0.3,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_SUSPICIOUS_TASKS, "suspicious scheduled tasks")),
+    Action("security.unquoted_services", "security", "Unquoted service paths", "Services whose path has spaces without quotes, a known privilege escalation.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_UNQUOTED_SERVICES, "services with unquoted paths")),
+    Action("security.services_outside", "security", "Services outside system folders", "Services that run from folders other than Windows and Program Files.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_SERVICES_OUTSIDE, "services run from unusual folders")),
+    Action("security.failed_logons", "security", "Failed sign-ins", "Wrong passwords in the last 7 days, by account and source.", "safe", 0.3,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_FAILED_LOGONS, "many failed sign-ins")),
+    Action("security.usb_history", "security", "USB storage history", "Every USB drive ever connected to this PC.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_USB_HISTORY)),
+    Action("security.execution_policy", "security", "PowerShell execution policy", "Whether downloaded PowerShell scripts can run unchecked.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_EXEC_POLICY, "PowerShell runs any script")),
+    Action("security.firewall_profiles", "security", "Firewall profiles", "Whether the firewall is on and blocks incoming connections in every profile.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_FIREWALL_PROFILES, "a firewall profile is off or open")),
+    Action("security.smartscreen_report", "security", "SmartScreen and unwanted apps", "Whether SmartScreen and Defender's unwanted app blocking are on.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_SMARTSCREEN, "SmartScreen or unwanted app blocking is off")),
+    Action("security.activation", "security", "Windows activation", "Edition, license channel and activation state of Windows.", "safe", 0.2,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_ACTIVATION, "Windows is not activated")),
+    Action("security.browser_policies", "security", "Browser hijack check (policies)", "Browser settings forced by policies: homepage, search and extensions locked by adware.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_BROWSER_POLICIES, "browser settings are forced by policies")),
+    # updates and versions
+    Action("updates.windows_support", "updates", "Windows end of support", "The Windows version and when it stops receiving security updates.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_WINDOWS_SUPPORT, "Windows support ends soon or has ended")),
+    Action("updates.office_report", "updates", "Microsoft Office version", "Office edition, version, channel and whether updates are on.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_OFFICE, "Office needs attention")),
+    Action("updates.browser_versions", "updates", "Browser versions", "Version and date of Chrome, Edge, Firefox, Brave and Opera.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_BROWSER_VERSIONS)),
+    Action("updates.bios_age", "updates", "BIOS age", "Motherboard and BIOS version and how old the BIOS is.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_BIOS_AGE, "the BIOS is older than three years")),
+    # system integrity
+    Action("integrity.event_log_sizes", "integrity", "Event log sizes", "Size and limit of the main logs; small logs lose errors after a few days.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_EVENT_LOG_SIZES, "the event logs are small")),
+    Action("integrity.verifier_status", "integrity", "Driver Verifier status", "Whether Driver Verifier is checking drivers (it slows the PC down).", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_VERIFIER_STATUS, "Driver Verifier is on")),
+    Action("integrity.boot_debug", "integrity", "Unusual start options", "Test signing, debug mode or safe mode left on in the start options.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_BOOT_DEBUG, "unusual start options")),
+    # storage
+    Action("storage.onedrive_report", "storage", "OneDrive status", "OneDrive account, space used on this PC and which folders are backed up.", "safe", 0.5,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_ONEDRIVE)),
+    Action("storage.duplicate_files", "storage", "Duplicate files", "Identical files larger than 1 MB in Downloads, Desktop, Documents, Pictures and Videos.", "safe", 3,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_DUPLICATES)),
+    Action("storage.user_folders", "storage", "Size of your folders", "How much space Desktop, Documents, Downloads, Pictures, Videos, Music and AppData take.", "safe", 2,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_USER_FOLDERS)),
+    # performance
+    Action("performance.cpu_throttling", "performance", "Is the processor slowed down?", "Current speed against the base clock: power saving, overheating or BIOS limits.", "safe", 0.2,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_CPU_THROTTLING, "the processor runs slowed down")),
+    Action("performance.gpu_processes", "performance", "Programs using the GPU", "Which programs are using the graphics card right now, and how much.", "safe", 0.1,
+           lambda ctx: _R13(ctx, _Y.SCRIPT_GPU_PROCESSES)),
+)
+REPORTS_13 = {
+    "network.dns_benchmark", "network.wifi_networks", "network.nic_errors", "network.dhcp_report", "network.internet_connections", "network.vpn_adapters",
+    "network.share_sessions", "security.suspicious_tasks", "security.unquoted_services", "security.services_outside", "security.failed_logons",
+    "security.usb_history", "security.execution_policy", "security.firewall_profiles", "security.smartscreen_report", "security.activation",
+    "security.browser_policies", "updates.windows_support", "updates.office_report", "updates.browser_versions", "updates.bios_age",
+    "integrity.event_log_sizes", "integrity.verifier_status", "integrity.boot_debug", "storage.onedrive_report", "storage.duplicate_files",
+    "storage.user_folders", "performance.cpu_throttling", "performance.gpu_processes",
+}
+EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
     "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
     "updates.failures_report", "updates.optional_features_report", "updates.delivery_report", "network.speed_test", "network.public_ip_report",

@@ -13,6 +13,7 @@
     history.replaceState(null, "", location.pathname + location.search + "#/dashboard");
   }
   var BASE = "/api/v1";
+  var GET_TIMEOUT_MS = 5 * 60 * 1000;
   function setToken(value) {
     TOKEN = value || "";
     try { if (TOKEN) sessionStorage.setItem("wmm.token", TOKEN); else sessionStorage.removeItem("wmm.token"); } catch (e) { /* storage unavailable */ }
@@ -25,7 +26,15 @@
       options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
     }
-    return fetch(BASE + path, options).then(function (response) {
+    // A read that hangs (agent busy or stuck) ends with a clear message instead of a page that loads forever.
+    var timer = null;
+    if (method === "GET" && window.AbortController) {
+      var abort = new AbortController();
+      options.signal = abort.signal;
+      timer = setTimeout(function () { abort.abort(); }, GET_TIMEOUT_MS);
+    }
+    return send(path, options, method === "GET" ? 1 : 0).then(function (response) {
+      if (timer) clearTimeout(timer);
       return response.text().then(function (text) {
         var data = null;
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
@@ -47,8 +56,18 @@
         }
         return data;
       });
-    }, function () {
+    }, function (e) {
+      if (timer) clearTimeout(timer);
+      if (e && e.name === "AbortError") throw new Error("The agent did not answer within " + GET_TIMEOUT_MS / 60000 + " minutes. Try again or restart it.");
       throw new Error("The agent is not reachable. Make sure Windows Maintenance Manager is still running.");
+    });
+  }
+  /* Reads are retried once after a network failure (the agent restarting, a dropped keep-alive connection);
+     writes never are, so nothing runs twice. */
+  function send(path, options, retries) {
+    return fetch(BASE + path, options).catch(function (e) {
+      if (!retries || (e && e.name === "AbortError")) throw e;
+      return new Promise(function (resolve) { setTimeout(resolve, 800); }).then(function () { return send(path, options, retries - 1); });
     });
   }
 

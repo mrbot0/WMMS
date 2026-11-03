@@ -13,6 +13,7 @@
         ["cleanup", "Cleanup", "Temporary files, caches, crash dumps and obsolete Windows components."],
         ["storage", "Storage", "Where the space goes, disk health, SMART and 30+ disk tools."],
         ["startup", "Startup & Apps", "Programs that start with Windows and the installed applications."],
+        ["apps", "Applications", "Unsafe and unused programs, uninstall, Store apps, app updates and browser caches."],
         ["services", "Services", "Unnecessary services, with a backup of every change."]] },
     { id: "health", title: "Health", icon: "shield", text: "Keep Windows sound and safe: system files, security, updates, drivers and network.",
       pages: [["integrity", "System Integrity", "DISM, SFC, disk checks, crashes, reliability and the event log."],

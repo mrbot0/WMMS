@@ -3,6 +3,45 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.0.0 — 2026-11-03
+
+**Applications page, 40 new tools, a sturdier agent and 20 new console functions.**
+
+- **Applications** (`wmm/agent/apps.py`, `#/apps`, G then Z):
+  - Every program from the Uninstall keys and the Store apps, with a safety verdict:
+    - unsafe: end of support (Office 2016, 2019 and 2021, .NET 5-7, Python 3.10 and older, Node.js, Flash, Skype…),
+      versions with holes used in real attacks (WinRAR < 7.13, 7-Zip < 25.01, VLC < 3.0.21, PuTTY < 0.81), adware;
+    - review: remote access tools, "optimizers" and driver updaters, no publisher, support ending within 90 days.
+  - Last use from UserAssist (Start menu, taskbar), running programs and, as administrator, Prefetch; "not used" after
+    120 days, never for drivers, runtimes and security software.
+  - Suggestions, programs installed in the last 30 days, install folder size on request.
+  - Uninstall: the program's own uninstaller, read again from the registry (MSI with `/X`); leftover entries removed with
+    a registry backup; Store apps with `Remove-AppxPackage`; app updates with winget, one by one or all.
+  - Browser caches (Chrome, Edge, Brave, Vivaldi, Opera, Firefox): only cache folders, never cookies, passwords or history.
+  - Every change goes through `_logged_change`: administrator, History, simulated in preview.
+- **Toolbox** (`wmm/agent/tools_extra2.py`, 321 tools in total): 11 fixes and 29 reports.
+  - Fixes: TCP/IP reset, restart adapters, prefer IPv4, IPv6 default, rebuild performance counters, reset power plans,
+    rebuild the search index, reset winget sources, component store reset base, Driver Verifier off, RemoteSigned.
+  - Reports: DNS benchmark, Wi-Fi networks and channels, NIC errors, DHCP, internet connections, VPN adapters, share sessions,
+    suspicious tasks, unquoted service paths, services outside Windows folders, failed sign-ins, USB history, execution
+    policy, firewall profiles, SmartScreen, activation, browser policies, Windows and Office support, browser versions,
+    BIOS age, event log sizes, Driver Verifier, boot debug, OneDrive, duplicate files, folder sizes, CPU throttling, GPU use.
+  - Reports end with `exit 0`, so only "something found" turns them into a warning.
+- **Stability**:
+  - `AgentServer` ignores tabs closed mid-answer, queues 64 connections, and idle keep-alive connections close after
+    two minutes.
+  - Error answers to a closed socket no longer raise twice.
+  - SQLite in WAL mode.
+  - GET requests time out after five minutes and are retried once after a network error; script errors are reported
+    once.
+- **Console** (`wmm/web/js/upgrade.js`, 20 functions):
+  - Tables: search highlight, double-click to copy, Markdown and JSON export, remembered sort.
+  - Navigation: `?tab=` links and Copy a link to this tab; Shift + arrows change tab; Shift J (On this page); Shift F
+    (search the table); tab counts on Applications.
+  - Programs in the command palette and the unsafe counter in the menu.
+  - Notes for this PC (Shift N), per-page auto-refresh, agent response time, page error log, scroll progress, refresh
+    after five minutes away, offline notice.
+
 ## 1.9.0 — 2026-11-03
 
 **47 new tools, tabs on long pages, a better script editor and a hidden start with Windows.**

@@ -54,6 +54,11 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         with self._db() as db:
+            # Write-ahead log: a scheduled run (another process) writing History never blocks the console reading it.
+            try:
+                db.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.DatabaseError:
+                pass  # a read-only or network folder keeps the default journal
             db.executescript(SCHEMA)
             colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(schedules)")}
             if "delay" not in colonne:  # added in 1.7: minutes after startup or sign-in

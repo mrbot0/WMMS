@@ -31,10 +31,38 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
+  /* Marks the search text inside the rendered cells (text only: markup and attributes are never touched). */
+  function highlight(root, query) {
+    var needle = query.toLowerCase(), walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [], node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue.toLowerCase().indexOf(needle) >= 0 && !(node.parentNode.closest && node.parentNode.closest("button, select, option"))) hits.push(node);
+    }
+    hits.forEach(function (text) {
+      var value = text.nodeValue, lower = value.toLowerCase(), frag = document.createDocumentFragment(), at = 0, i;
+      while ((i = lower.indexOf(needle, at)) >= 0) {
+        frag.appendChild(document.createTextNode(value.slice(at, i)));
+        var mark = document.createElement("mark");
+        mark.className = "dt-hit";
+        mark.textContent = value.slice(i, i + needle.length);
+        frag.appendChild(mark);
+        at = i + needle.length;
+      }
+      frag.appendChild(document.createTextNode(value.slice(at)));
+      text.parentNode.replaceChild(frag, text);
+    });
+  }
+
   /* columns: [{key, title, render(row), value(row) for sort/search/csv, cls, sortable}] */
   function dataTable(el, options) {
     var state = { query: "", sort: options.sort || null, desc: !!options.desc, page: 0, filters: {}, size: store("pageSize") || options.pageSize || 10 };
     var value = function (col, row) { return col.value ? col.value(row) : row[col.key]; };
+    // Every table with a name remembers the column it was last sorted by.
+    var sortKey = options.exportName || "";
+    var savedSort = sortKey ? (store("tableSort") || {})[sortKey] : null;
+    if (savedSort && options.columns.some(function (c) { return c.key === savedSort[0] && c.sortable !== false && c.title; })) {
+      state.sort = savedSort[0];
+      state.desc = !!savedSort[1];
+    }
 
     function rows() {
       var q = state.query.toLowerCase();
@@ -72,8 +100,10 @@
               return '<option value="' + esc(o[0]) + '"' + (state.filters[f.key] === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>";
             }).join("") + "</select>";
           }).join("") + '<span style="flex:1"></span>' + (options.tools || "") +
-          (options.exportName ? '<button class="btn btn-sm" type="button" data-copy title="Copy the filtered rows">Copy</button><button class="btn btn-sm" type="button" data-export>' +
-            UI.icon("download") + "CSV</button>" : "") + "</div>";
+          (options.exportName ? '<button class="btn btn-sm" type="button" data-copy title="Copy the filtered rows">Copy</button>' +
+            '<button class="btn btn-sm" type="button" data-copy-md title="Copy the filtered rows as a Markdown table (tickets, chats, wikis)">MD</button>' +
+            '<button class="btn btn-sm" type="button" data-export>' + UI.icon("download") + "CSV</button>" +
+            '<button class="btn btn-sm" type="button" data-export-json title="Download the filtered rows as JSON">JSON</button>' : "") + "</div>";
       }
       var head = "<thead><tr>" + options.columns.map(function (c) {
         var sortable = c.sortable !== false && c.title;
@@ -97,6 +127,7 @@
         '<button class="btn btn-sm" type="button" data-page="1"' + (state.page < pages - 1 ? "" : " disabled") + ">Next</button></span></div>" : "";
       var hadFocus = document.activeElement && el.contains(document.activeElement) && document.activeElement.type === "search";
       el.innerHTML = bar + '<div class="table-wrap"><table class="table">' + head + "<tbody>" + body + "</tbody></table></div>" + foot;
+      if (state.query && shown.length) highlight(el.querySelector("tbody"), state.query);
       if (hadFocus) {
         var input = el.querySelector('input[type="search"]');
         input.focus();
@@ -122,8 +153,20 @@
     function sortBy(th) {
       var key = th.getAttribute("data-sort");
       if (state.sort === key) state.desc = !state.desc; else { state.sort = key; state.desc = false; }
+      if (sortKey) { var all = store("tableSort") || {}; all[sortKey] = [state.sort, state.desc]; store("tableSort", all); }
       draw();
     }
+    function exportColumns() { return options.columns.filter(function (c) { return c.title && c.csv !== false; }); }
+    // Double-click a cell to copy its text: paths, versions, IDs.
+    el.addEventListener("dblclick", function (e) {
+      var td = e.target.closest("td");
+      if (!td || !el.contains(td) || e.target.closest("button, a, input, select, label")) return;
+      var text = td.innerText.trim();
+      if (!text || text === "—") return;
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+        UI.toast("Copied: " + (text.length > 60 ? text.slice(0, 57) + "…" : text), "ok");
+      }, function () { /* clipboard not available: nothing to do */ });
+    });
     el.addEventListener("click", function (e) {
       var th = e.target.closest("[data-sort]");
       if (th) { sortBy(th); return; }
@@ -145,6 +188,25 @@
           return cols.map(function (c) { return csvCell(value(c, row)); }).join(",");
         }).join("\n");
         downloadText(options.exportName + ".csv", String.fromCharCode(0xFEFF) + text);
+        return;
+      }
+      if (e.target.closest("[data-export-json]")) {
+        var jcols = exportColumns();
+        var data = rows().map(function (row) {
+          var o = {};
+          jcols.forEach(function (c) { o[c.key] = value(c, row); });
+          return o;
+        });
+        downloadText(options.exportName + ".json", JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+        return;
+      }
+      if (e.target.closest("[data-copy-md]")) {
+        var mcols = exportColumns();
+        var cell = function (v) { return String(v == null ? "" : v).replace(/\|/g, "\\|").replace(/[\r\n]+/g, " "); };
+        var md = ["| " + mcols.map(function (c) { return cell(c.title); }).join(" | ") + " |", "|" + mcols.map(function () { return " --- "; }).join("|") + "|"]
+          .concat(rows().map(function (row) { return "| " + mcols.map(function (c) { return cell(value(c, row)); }).join(" | ") + " |"; })).join("\n");
+        (navigator.clipboard ? navigator.clipboard.writeText(md) : Promise.reject()).then(function () { UI.toast("Markdown table copied.", "ok"); },
+          function () { UI.toast("The clipboard is not available in this browser.", "warning"); });
       }
     });
     el.addEventListener("keydown", function (e) {
@@ -328,13 +390,15 @@
   /* ---------- keyboard shortcuts ---------- */
 
   var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services", k: "toolbox",
-    l: "events", m: "processes", w: "registry", y: "hardware",
+    l: "events", m: "processes", w: "registry", y: "hardware", z: "apps",
     i: "integrity", e: "security", u: "updates", n: "network", x: "activity", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
   var pendingG = 0;
 
   function shortcutsHelp() {
     var rows = [["Ctrl K  or  /", "Command palette"], ["?", "This help"], ["Shift T", "Toggle light / dark theme"], ["Shift S", "Scan all areas"],
-      ["Shift R", "Refresh the page"], ["Shift C", "Collapse or expand all cards"], ["Esc", "Close dialogs"]];
+      ["Shift R", "Refresh the page"], ["Shift C", "Collapse or expand all cards"], ["Esc", "Close dialogs"],
+      ["Shift F", "Search the table of this page"], ["Shift J", "Jump to a card of this page"], ["Shift N", "Notes for this PC"],
+      ["Shift ←  /  Shift →", "Previous / next tab of the page"], ["Double-click a cell", "Copy its text"]];
     Object.keys(GOTO).forEach(function (k) { rows.push(["G then " + k.toUpperCase(), "Go to " + UI.esc((window.App && App.pageTitle(GOTO[k])) || GOTO[k])]); });
     UI.modal("Keyboard shortcuts", '<div class="shortcuts">' + rows.map(function (r) {
       return "<div><span>" + r[1] + '</span><span class="kbd">' + esc(r[0]) + "</span></div>";
