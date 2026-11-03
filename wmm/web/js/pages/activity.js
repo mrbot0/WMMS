@@ -45,7 +45,10 @@
     box.querySelector('[data-f="current"]').textContent = current;
     box.querySelector('[data-f="bar"] > div').style.width = Math.max(2, job.percent) + "%";
     box.querySelector('[data-f="pct"]').innerHTML = job.percent.toFixed(job.percent < 10 ? 1 : 0) + "%" + (job.estimated ? "<small>estimated</small>" : "");
-    box.querySelector('[data-f="meta"]').textContent = job.done + " of " + job.total + " actions · running for " + duration(job.started);
+    // End estimate from the pace so far, once there is enough progress to trust it.
+    var elapsed = Date.now() / 1000 - job.started, eta = job.percent >= 5 && job.percent < 100 ? new Date(Date.now() + elapsed * (100 - job.percent) / job.percent * 1000) : null;
+    box.querySelector('[data-f="meta"]').textContent = job.done + " of " + job.total + " actions · running for " + duration(job.started) +
+      (eta ? " · ends around " + eta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
     job.titles.forEach(function (_, i) {
       var li = box.querySelector('[data-step="' + i + '"]');
       var state = stepState(job, i);

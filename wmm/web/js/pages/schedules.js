@@ -61,6 +61,43 @@
       '<div class="routine-grid">' + items.map(routineCard).join("") + "</div>";
   }
 
+  /* The next 7 days: every planned run of the enabled schedules and scripts, day by day. */
+  var AGENDA_DAYS = 7;
+  var WEEKDAY = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  function occurrences(s, from, to) {
+    var at = new Date(s.at), out = [];
+    if (isNaN(at)) return out;
+    if (s.kind === "once") return at >= from && at < to ? [at] : out;
+    for (var d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d < to; d.setDate(d.getDate() + 1)) {
+      var t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), at.getHours(), at.getMinutes());
+      if (t < from || t < at) continue;
+      if (s.kind === "daily" || (s.kind === "weekly" && (s.days || "").split(",").indexOf(WEEKDAY[t.getDay()]) >= 0) ||
+          (s.kind === "monthly" && t.getDate() === at.getDate())) out.push(t);
+    }
+    return out;
+  }
+  function agenda(list, scripts) {
+    var from = new Date(), to = new Date(from.getTime() + AGENDA_DAYS * 86400e3), rows = [], events = 0;
+    list.filter(function (s) { return s.enabled; }).forEach(function (s) {
+      if (s.kind === "startup" || s.kind === "logon") { events++; return; }
+      occurrences(s, from, to).forEach(function (t) { rows.push({ t: t, title: s.title }); });
+    });
+    scripts.filter(function (s) { return s.schedule; }).forEach(function (s) {
+      if (s.schedule.kind === "startup" || s.schedule.kind === "logon") { events++; return; }
+      occurrences(s.schedule, from, to).forEach(function (t) { rows.push({ t: t, title: s.name + " (script)" }); });
+    });
+    rows.sort(function (a, b) { return a.t - b.t; });
+    var lastDay = "";
+    return (rows.length ? '<ul class="agenda">' + rows.slice(0, 40).map(function (r) {
+      var day = r.t.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
+      var show = day !== lastDay;
+      lastDay = day;
+      return '<li><span class="agenda-day">' + (show ? esc(day) : "") + '</span><span class="agenda-time">' + ("0" + r.t.getHours()).slice(-2) + ":" + ("0" + r.t.getMinutes()).slice(-2) +
+        "</span><span>" + esc(r.title) + "</span></li>";
+    }).join("") + "</ul>" : '<p class="empty">Nothing planned in the next ' + AGENDA_DAYS + " days.</p>") +
+      (events ? '<p class="muted small" style="margin:10px 0 0">' + UI.icon("power") + " Plus " + events + " schedule" + (events === 1 ? "" : "s") + " at startup or sign-in.</p>" : "");
+  }
+
   /* Scripts scheduled from here or from the Scripts page: same Task Scheduler folder, run as SYSTEM. */
   function scriptsTable(scripts) {
     var rows = scripts.filter(function (s) { return s.schedule; });
@@ -147,7 +184,8 @@
               s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">' + (s.kind === "startup" ? "Next startup" : s.kind === "logon" ? "Next sign-in" : "—") + "</span>",
               s.last_run ? UI.statusBadge(s.last_status) + ' <span class="cell-sub">' + esc(UI.relative(s.last_run)) + "</span>" : '<span class="cell-sub">Not run yet</span>',
               '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>",
-              (s.sync !== "ok" ? '<button class="btn btn-sm" data-resync="' + s.id + '">' + UI.icon("refresh") + "Resync</button>" : "") +
+              '<button class="btn btn-sm" data-run-now="' + s.id + '" title="Run it now in this console, without waiting for its time">' + UI.icon("play") + "Run now</button>" +
+                (s.sync !== "ok" ? '<button class="btn btn-sm" data-resync="' + s.id + '">' + UI.icon("refresh") + "Resync</button>" : "") +
                 '<button class="btn btn-sm" data-delete="' + s.id + '">' + UI.icon("trash") + "Delete</button>"
             ];
           }), "No schedules yet. Apply a suggested routine above, use Schedule on any action, or create one here.");
@@ -160,12 +198,14 @@
         el.innerHTML = UI.pageHeader("Schedules", "Registered in Windows Task Scheduler › WindowsMaintenanceManager",
           UI.hint("Schedules are Windows tasks that run as SYSTEM, even when nobody is signed in and the console is closed. " +
             "Routines run several actions in one go: at startup, at sign-in, every day, week or month. Actions that are not safe create a restore point first.") +
+          (list.length ? UI.button(enabled.length ? "Pause all" : "Resume all", 'id="pause-all" title="' + (enabled.length ? "Disable every schedule, for example during a presentation or a trip" : "Enable every schedule again") + '"', "", enabled.length ? "clock" : "play") : "") +
           UI.button("New schedule", 'id="new-schedule"', "btn-primary", "clock")) + install + kpis +
           '<div class="grid">' + UI.card("Suggested routines", routinesBody(cat, tab),
             '<span class="muted small">' + cat.routines.length + " routines · " + cat.playbooks.length + " playbooks</span>", "routines-card") + "</div>" +
           '<div class="grid grid-2-1">' + UI.card("Scheduled actions and routines", table) +
           UI.card("Schedules by area", '<div class="chart-row">' + Charts.donut(byArea, { center: list.length, sub: "schedules", empty: "No schedules" }) + Charts.legend(byArea) + "</div>" +
             '<div class="callout">' + UI.icon("info") + "<div>Scheduled runs use the SYSTEM account, so they work when nobody is signed in. A startup routine runs before anyone signs in; a sign-in routine runs for every user.</div></div>") + "</div>" +
+          '<div class="grid">' + UI.card("Next 7 days", agenda(list, scriptList)) + "</div>" +
           '<div class="grid">' + UI.card("Scheduled scripts", scriptsTable(scriptList),
             '<span class="muted small">' + scriptList.filter(function (s) { return s.schedule; }).length + " of " + scriptList.length + " scripts</span>" +
             '<a class="btn btn-sm" href="#/scripts">' + UI.icon("scripts") + "Scripts</a>", "card-flush") + "</div>";
@@ -226,6 +266,26 @@
                 function (e) { UI.toast(e.message, "error"); });
             });
           });
+        });
+        el.querySelectorAll("[data-run-now]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var s = list.filter(function (x) { return String(x.id) === btn.getAttribute("data-run-now"); })[0];
+            if (!s) return;
+            var r = cat.routines.concat(cat.playbooks).filter(function (x) { return x.ref === s.action_id; })[0];
+            var ids = r ? r.actions.map(function (a) { return a.id; }) : [s.action_id];
+            App.runActions(App.order(ids));
+          });
+        });
+        var pause = el.querySelector("#pause-all");
+        if (pause) pause.addEventListener("click", function () {
+          var on = !enabled.length, targets = list.filter(function (s) { return s.enabled !== on; });
+          pause.disabled = true;
+          Promise.all(targets.map(function (s) { return API.patch("/schedules/" + s.id, { enabled: on }).then(function () { return 1; }, function () { return 0; }); }))
+            .then(function (done) {
+              var ok = done.reduce(function (a, b) { return a + b; }, 0);
+              UI.toast((on ? "Resumed " : "Paused ") + ok + " of " + targets.length + " schedules." + (ok < targets.length ? " The others need administrator rights." : ""), ok === targets.length ? "ok" : "warning");
+              rerender();
+            });
         });
         el.querySelectorAll("[data-resync]").forEach(function (btn) {
           btn.addEventListener("click", function () {

@@ -2,6 +2,38 @@
 
 CHANGELOG = [
     {
+        "version": "1.8.0",
+        "date": "2026-11-03",
+        "title": "20 new settings and 40 new functions across the pages",
+        "highlights": [
+            "Settings has two new sections, Notifications and Maintenance, a search box and 20 new options.",
+            "Pin any page to the dashboard with the star in its header.",
+            "Privacy mode (Shift P) hides serial numbers, MAC addresses and IDs for screen sharing.",
+            "Copy and export everywhere: status, improvements, area summaries, playbook steps, reports, hardware inventory.",
+            "Schedules: run now, pause all, and the next 7 days at a glance.",
+        ],
+        "changes": [
+            "Appearance: square corners, color-blind friendly status colors, reduced transparency, wider text spacing, underlined links.",
+            "Formats: 24 or 12-hour time, three date styles, Windows or decimal sizes.",
+            "Behaviour: ask before closing the tab during a run, single-key shortcuts can be turned off.",
+            "Notifications: sound volume and test, quiet hours, desktop alerts only for problems, progress in the tab title on or off.",
+            "Maintenance: default time and startup wait for new schedules, warning before long runs on battery, report outputs opened or not.",
+            "Data: privacy mode and clearing recent commands and pages.",
+            "Dashboard: pinned pages, Copy status, change of the overall score since the last visit; the auto-refresh label shows the chosen interval.",
+            "Recommendations: copy as a Markdown checklist, CSV export, select every one-click fix.",
+            "Every area page: Copy summary, a warning when the scan is a week old, a link to all its runs in History.",
+            "Cleanup: free space on C: after the cleanup.",
+            "History: Today period, Run again on every row, Copy log, area filter from links.",
+            "Event Viewer and Task Manager: search online; Task Manager: copy the path.",
+            "Registry: copy the key as a PowerShell path or a reg query command.",
+            "Hardware: JSON export, temperature history per sensor, an alert when a sensor gets too hot.",
+            "Scripts: duplicate and copy the content. Playbooks: copy the steps, estimated end time.",
+            "Activity: estimated end time of the run. Toolbox: Favorites and Safe only filters.",
+            "Reports: copy as text and an email draft. Support: copy the PC specifications.",
+            "Command palette: pin this page, copy a link to it, open any Settings section, privacy mode, clear recent items.",
+        ],
+    },
+    {
         "version": "1.7.0",
         "date": "2026-11-02",
         "title": "Routines in Schedules and the Hardware page",

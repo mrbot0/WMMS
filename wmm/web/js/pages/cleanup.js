@@ -17,12 +17,15 @@
         var recent = v.runs.filter(function (r) { return Date.now() - new Date(r.started).getTime() < 30 * DAY; });
         var freed = recent.reduce(function (a, r) { return a + (r.bytes_freed || 0); }, 0);
         var files = cats.reduce(function (a, x) { return a + (x.files || 0); }, 0);
+        // What C: would have free if everything recoverable were cleaned (most caches live on C:).
+        var after = c.total_gb ? Math.min(100, Math.round(100 * (c.free_gb + (d.recoverable_bytes || 0) / 1073741824) / c.total_gb)) : null;
         App.setSubtitle("Recoverable space and storage health");
 
         var kpis = '<div class="grid grid-4">' +
           UI.kpi("Cleanup score", String(v.score), v.recommendations.length + " improvement(s)", UI.tone(v.score)) +
           UI.kpi("Recoverable", esc(UI.formatBytes(d.recoverable_bytes)), files.toLocaleString() + " files in " + cats.filter(function (x) { return x.bytes; }).length + " categories", d.recoverable_bytes > 2 * 1073741824 ? "warning" : "info") +
-          UI.kpi("Free on C:", c.free_gb != null ? esc(c.free_gb) + " <small>GB</small>" : "—", cFree != null ? cFree + "% free" : "", cFree == null ? "" : cFree < 15 ? "error" : cFree < 25 ? "warning" : "ok") +
+          UI.kpi("Free on C:", c.free_gb != null ? esc(c.free_gb) + " <small>GB</small>" : "—", cFree != null ? cFree + "% free" + (after != null && after > cFree ? " · " + after + "% after cleanup" : "") : "",
+            cFree == null ? "" : cFree < 15 ? "error" : cFree < 25 ? "warning" : "ok") +
           UI.kpi("Freed in 30 days", esc(UI.formatBytes(freed)), recent.length + " cleanup run(s)", "info") + "</div>";
 
         var byCategory = Charts.hbars(cats.map(function (x) { return { label: x.name, value: x.bytes }; }),

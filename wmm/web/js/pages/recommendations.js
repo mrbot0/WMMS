@@ -50,9 +50,12 @@
           "> Show dismissed (" + hiddenCount + ")</label></div>";
 
         el.innerHTML = UI.pageHeader("Recommendations", "Generated from the latest scan of each area",
+          UI.button("Copy checklist", 'id="rec-copy" title="The listed improvements as a Markdown checklist, for a ticket or an email"', "", "copy") +
+          UI.button("CSV", 'id="rec-csv" title="Download the listed improvements as CSV"', "", "download") +
           UI.button("Scan all", 'id="rec-scan"', "", "refresh") + UI.button("Apply all safe fixes", 'id="rec-safe"' + (safeIds.length ? "" : " disabled"), "", "bolt") +
           UI.button("Apply selected", 'id="rec-selected" disabled', "btn-primary", "play")) + kpis +
-          '<div class="grid grid-2-1"><div class="stack">' + UI.card("Filters", bar) + UI.card("Improvements", '<div id="rec-list"></div>', '<span class="muted small" id="rec-count"></span>') + "</div>" +
+          '<div class="grid grid-2-1"><div class="stack">' + UI.card("Filters", bar) + UI.card("Improvements", '<div id="rec-list"></div>', '<span class="muted small" id="rec-count"></span>' +
+            '<button type="button" class="btn btn-sm" id="rec-pick-all" title="Tick every one-click fix in the list">Select all fixes</button>') + "</div>" +
           '<div class="stack">' + UI.card("By area", '<div class="chart-row">' + Charts.donut(areaSeries, { center: all.length, sub: "open", empty: "Nothing open" }) + Charts.legend(areaSeries) + "</div>") +
           UI.card("By impact", Charts.hbars([
             { label: "High", value: count("impact", "high"), color: "#C42B1C" }, { label: "Medium", value: count("impact", "medium"), color: "#C27C0E" }, { label: "Low", value: count("impact", "low"), color: "#0F6CBD" }
@@ -106,6 +109,25 @@
           });
         });
         selectedBtn.addEventListener("click", function () { App.runActions(order(picked())); });
+        el.querySelector("#rec-pick-all").addEventListener("click", function () {
+          var boxes = list.querySelectorAll("[data-pick]"), all = Array.prototype.every.call(boxes, function (c) { return c.checked; });
+          boxes.forEach(function (c) { c.checked = !all; });
+          update();
+        });
+        el.querySelector("#rec-copy").addEventListener("click", function () {
+          var items = shown();
+          if (!items.length) { UI.toast("No improvement in the list.", "info"); return; }
+          App.copyText(["Improvements for " + (App.state.info ? App.state.info.hostname : "this PC") + " (" + UI.formatDate(new Date().toISOString(), false) + "):", ""].concat(items.map(function (x) {
+            return "- [ ] **" + x.title + "** (" + (UI.AREA_LABEL[x.area] || x.area) + ", " + x.impact + " impact)" + (x.reason ? " – " + x.reason : "");
+          })).join("\n"), "Checklist");
+        });
+        el.querySelector("#rec-csv").addEventListener("click", function () {
+          var cell = function (v) { v = String(v == null ? "" : v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+          var rows = [["area", "title", "impact", "risk", "reason", "action", "scanned"]].concat(shown().map(function (x) {
+            return [UI.AREA_LABEL[x.area] || x.area, x.title, x.impact, x.risk, x.reason, x.action_id || "", x.scanned];
+          }));
+          Components.downloadText("wmm-recommendations.csv", String.fromCharCode(0xFEFF) + rows.map(function (r) { return r.map(cell).join(","); }).join("\n"), "text/csv;charset=utf-8");
+        });
         el.querySelector("#rec-safe").addEventListener("click", function () { App.runActions(order(safeIds)); });
         el.querySelector("#rec-scan").addEventListener("click", App.scanAll);
         draw();

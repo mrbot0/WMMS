@@ -31,8 +31,36 @@
     }
     return out.length ? '<span class="hw-links">' + out.join("") + "</span>" : "";
   }
-  function copyable(text) {
-    return text ? '<button type="button" class="hw-id" data-copy-text="' + esc(text) + '" data-tip="Copy">' + esc(text) + UI.icon("copy") + "</button>" : '<span class="cell-sub">—</span>';
+  function copyable(text, sensitive) {
+    return text ? '<button type="button" class="hw-id' + (sensitive ? " sensitive" : "") + '" data-copy-text="' + esc(text) + '" data-tip="Copy">' + esc(text) + UI.icon("copy") + "</button>"
+      : '<span class="cell-sub">—</span>';
+  }
+  /* Serial numbers, UUIDs and MAC addresses identify this PC: privacy mode blurs them. */
+  function secret(text) { return copyable(text, true); }
+
+  /* ---------- temperature history (this visit) and alerts ---------- */
+  var HISTORY = 60;          // readings kept per sensor: 5 minutes at one reading every 5 s
+  var ALERT_MINUTES = 10;    // the same sensor alerts again only after this time
+  var history = {}, alerted = {};
+  function remember(s) {
+    (s.temperatures || []).forEach(function (t) {
+      var key = t.group + "|" + t.name, list = history[key] = history[key] || [];
+      list.push(t.celsius);
+      if (list.length > HISTORY) list.shift();
+      if (t.state === "error" && Date.now() - (alerted[key] || 0) > ALERT_MINUTES * 60000) {
+        alerted[key] = Date.now();
+        UI.toast(t.name + " is at " + Math.round(t.celsius) + " °C: check the cooling and what is using it.", "warning");
+        App.desktopNotify("High temperature", t.name + " is at " + Math.round(t.celsius) + " °C.");
+      }
+    });
+  }
+  function sparkline(key) {
+    var v = history[key] || [];
+    if (v.length < 2) return "";
+    var min = Math.min.apply(null, v) - 1, max = Math.max.apply(null, v) + 1, w = 100, h = 24;
+    var pts = v.map(function (x, i) { return (i * w / (HISTORY - 1)).toFixed(1) + "," + (h - (x - min) / (max - min) * h).toFixed(1); }).join(" ");
+    return '<svg class="spark" viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none" aria-label="Last ' + v.length + ' readings, from ' +
+      Math.round(Math.min.apply(null, v)) + " to " + Math.round(Math.max.apply(null, v)) + ' °C"><polyline points="' + pts + '"/></svg>';
   }
   function kv(rows) {
     return '<dl class="hw-kv">' + rows.filter(function (r) { return r[1] !== undefined && r[1] !== null && r[1] !== ""; }).map(function (r) {
@@ -67,7 +95,7 @@
           var pct = Math.max(4, Math.min(100, t.celsius / (t.group === "Disks" ? 80 : 105) * 100));
           return '<div class="hw-sensor hw-' + t.state + '" data-tip="' + esc(t.source + (t.note ? " · " + t.note : "")) + '"><div class="hw-sensor-name">' + UI.icon("thermometer") + esc(t.name) + "</div>" +
             '<div class="hw-sensor-value">' + Math.round(t.celsius) + "<small>°C</small></div>" +
-            '<div class="hw-bar"><span style="width:' + pct + '%"></span></div>' +
+            '<div class="hw-bar"><span style="width:' + pct + '%"></span></div>' + sparkline(t.group + "|" + t.name) +
             '<div class="hw-sensor-sub">' + (t.max ? "Max " + Math.round(t.max) + " °C" : "") + (t.note ? (t.max ? " · " : "") + esc(t.note) : "") + "</div></div>";
         }).join("") +
         list.fans.map(function (f) {
@@ -103,7 +131,7 @@
     out.system = kv([["Manufacturer", sys.manufacturer], ["Model", sys.model], ["Family", sys.family], ["SKU", sys.sku],
       ["Motherboard", [sys.board_vendor, sys.board_model].filter(Boolean).join(" ")], ["Board version", sys.board_version],
       ["BIOS", [sys.bios_vendor, sys.bios_version].filter(Boolean).join(" ") + (sys.bios_date ? " (" + sys.bios_date + ")" : "")],
-      ["Serial number", copyable(sys.serial), true], ["Board serial", copyable(sys.board_serial), true], ["UUID", copyable(sys.uuid), true],
+      ["Serial number", secret(sys.serial), true], ["Board serial", secret(sys.board_serial), true], ["UUID", secret(sys.uuid), true],
       ["Windows", [sys.os, sys.os_build].filter(Boolean).join(" ") + (sys.os_version ? " · " + sys.os_version : "")]]) +
       '<div class="hw-links-row">' + (sys.board_model ? ext("https://www.google.com/search?q=" + q(sys.board_vendor + " " + sys.board_model + " BIOS download"), "Motherboard BIOS and drivers", "download") +
         ext("https://www.google.com/search?q=" + q(sys.board_vendor + " " + sys.board_model + " specifications manual"), "Motherboard manual", "search") : "") +
@@ -111,7 +139,7 @@
     out.cpu = d.cpu.map(function (c) {
       return item(c.name, c.vendor + (c.socket ? " · " + c.socket : ""), kv([["Cores / threads", c.cores + " / " + c.threads], ["Base clock", c.max_mhz ? (c.max_mhz / 1000).toFixed(2) + " GHz" : ""],
         ["Current clock", c.current_mhz ? (c.current_mhz / 1000).toFixed(2) + " GHz" : ""], ["Cache L2 / L3", (c.l2_kb ? Math.round(c.l2_kb / 1024 * 10) / 10 + " MB" : "—") + " / " + (c.l3_kb ? Math.round(c.l3_kb / 1024) + " MB" : "—")],
-        ["Family / model / stepping", c.caption], ["Processor ID", copyable(c.id), true], ["Virtualization", c.virtualization === true ? "Enabled in firmware" : c.virtualization === false ? "Disabled in firmware" : ""]]) +
+        ["Family / model / stepping", c.caption], ["Processor ID", secret(c.id), true], ["Virtualization", c.virtualization === true ? "Enabled in firmware" : c.virtualization === false ? "Disabled in firmware" : ""]]) +
         '<div class="hw-links-row">' + ext("https://www.google.com/search?q=" + q(c.name + " specifications"), "Specifications", "search") + "</div>", null);
     }).join("");
     var slots = d.memory_slots || {};
@@ -129,23 +157,23 @@
     }).join("");
     out.disks = d.disks.map(function (k) {
       return item(k.model, [k.media, k.bus || k.interface, gb(k.bytes)].filter(function (x) { return x && x !== "Unspecified"; }).join(" · "),
-        kv([["Health", k.health], ["Firmware", k.firmware], ["Serial number", copyable(k.serial), true], ["Partitions", k.partitions]].concat(idRows(k.ids, k.device))) +
+        kv([["Health", k.health], ["Firmware", k.firmware], ["Serial number", secret(k.serial), true], ["Partitions", k.partitions]].concat(idRows(k.ids, k.device))) +
         '<div class="hw-links-row">' + ext("https://www.google.com/search?q=" + q(k.model + " firmware update"), "Firmware updates", "download") + "</div>", null);
     }).join("");
     out.network = d.network.map(function (n) {
       return item(n.description, n.name + " · " + n.status + (n.speed && n.status === "Up" ? " · " + n.speed : ""),
-        kv([["MAC address", copyable(n.mac), true], ["Driver", (n.driver || "—") + (n.driver_provider ? " · " + n.driver_provider : "") + (n.driver_date ? " (" + n.driver_date + ")" : "")],
+        kv([["MAC address", secret(n.mac), true], ["Driver", (n.driver || "—") + (n.driver_provider ? " · " + n.driver_provider : "") + (n.driver_date ? " (" + n.driver_date + ")" : "")],
           ["Medium", n.media]].concat(idRows(n.ids, n.device))), n.ids);
     }).join("");
     out.monitors = d.monitors.map(function (m) {
-      return item(m.name || "Monitor", (m.vendor || "") + (m.year ? " · made in " + m.year : ""), kv([["Product code", m.product], ["Serial number", copyable(m.serial), true], ["Device instance", copyable(m.device), true]]) +
+      return item(m.name || "Monitor", (m.vendor || "") + (m.year ? " · made in " + m.year : ""), kv([["Product code", m.product], ["Serial number", secret(m.serial), true], ["Device instance", copyable(m.device), true]]) +
         '<div class="hw-links-row">' + ext("https://www.google.com/search?q=" + q((m.vendor || "") + " " + (m.name || m.product) + " monitor specifications"), "Specifications", "search") + "</div>", null);
     }).join("");
     out.audio = d.audio.map(function (a) { return item(a.name, (a.vendor || "") + " · " + a.status, kv(idRows(a.ids, a.device)), a.ids); }).join("");
     if (d.battery) {
       var b = d.battery, wear = b.designed_mwh && b.full_mwh ? Math.round(b.full_mwh / b.designed_mwh * 100) : null;
       out.battery = item(b.name || "Battery", b.vendor, kv([["Charge", b.charge != null ? b.charge + "%" : ""], ["Design capacity", b.designed_mwh ? b.designed_mwh + " mWh" : ""],
-        ["Full charge capacity", b.full_mwh ? b.full_mwh + " mWh" + (wear ? " (" + wear + "% of new)" : "") : ""], ["Serial number", copyable(b.serial), true]]), null);
+        ["Full charge capacity", b.full_mwh ? b.full_mwh + " mWh" + (wear ? " (" + wear + "% of new)" : "") : ""], ["Serial number", secret(b.serial), true]]), null);
     }
     return out;
   }
@@ -184,6 +212,8 @@
 
   window.Pages.hardware = {
     title: "Hardware",
+    /* The specifications as text without serial numbers (also used by the Support page). */
+    summaryText: function () { return API.get("/hardware").then(function (d) { return summary(d, null); }); },
     render: function (el, App) {
       var stopped = false, timer = null, paused = false, data = null, sensors = null;
       App.setSubtitle("Every component with its hardware IDs, live temperatures and fans");
@@ -191,7 +221,8 @@
       el.innerHTML = '<div class="hw-page">' + UI.pageHeader("Hardware", "Components, hardware IDs for finding drivers online, temperatures and fans",
         UI.hint("Hardware IDs (PCI\\VEN_…&DEV_…, USB\\VID_…&PID_…) identify a device even without its driver: search them in the Microsoft driver catalog or on the web. " +
           "Serial numbers and the UUID identify this PC: share them only with its manufacturer.") +
-        UI.button("Copy summary", 'id="hw-copy"', "", "copy") + UI.button("Read again", 'id="hw-refresh"', "", "refresh")) +
+        UI.button("Copy summary", 'id="hw-copy"', "", "copy") + UI.button("JSON", 'id="hw-json" title="Download the whole inventory as JSON, to compare PCs or keep a record"', "", "download") +
+        UI.button("Read again", 'id="hw-refresh"', "", "refresh")) +
         '<div id="hw-kpis" class="grid grid-4">' + Components.skeleton() + "</div>" +
         '<div class="grid">' + UI.card("Temperatures and fans", '<div id="hw-sensors">' + Components.skeleton() + "</div>",
           '<span class="muted small" id="hw-sensor-time"></span><button class="btn btn-sm" type="button" id="hw-pause">' + UI.icon("clock") + "Pause</button>", "hw-sensor-card") + "</div>" +
@@ -227,6 +258,7 @@
         API.get("/hardware/sensors" + (fresh ? "?fresh=1" : "")).then(function (s) {
           if (stopped || !App.isCurrent("hardware")) return;
           sensors = s;
+          remember(s);
           drawSensors();
         }, function () {}).then(schedule);
       }
@@ -307,6 +339,11 @@
           return;
         }
         if (e.target.closest("#hw-refresh")) { load(true); pollSensors(true); return; }
+        if (e.target.closest("#hw-json") && data) {
+          var name = "hardware-" + ((App.state.info || {}).hostname || "pc") + "-" + new Date().toISOString().slice(0, 10) + ".json";
+          Components.downloadText(name, JSON.stringify({ kind: "wmm-hardware", read_at: data.read_at, inventory: data, sensors: sensors }, null, 2), "application/json");
+          return;
+        }
         if (e.target.closest("#hw-copy") && data) copy(summary(data, sensors), "Summary copied, without serial numbers: paste it in a ticket or a forum.");
       });
 

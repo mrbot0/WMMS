@@ -68,12 +68,14 @@
           ["Shift R", "Refresh the page"], ["Shift S", "Scan all areas"], ["Shift T", "Light / dark theme"], ["Esc", "Close dialogs and panels"]].map(function (k) {
           return "<div><span>" + esc(k[1]) + '</span><span class="kbd">' + esc(k[0]) + "</span></div>";
         }).join("") + "</div>";
-        var diag = UI.definition([["Version", esc(info.version)], ["Device", esc(info.hostname)], ["Machine ID", '<span class="cell-mono">' + esc(info.machine_id) + "</span>"],
+        var diag = UI.definition([["Version", esc(info.version)], ["Device", esc(info.hostname)], ["Machine ID", '<span class="cell-mono sensitive">' + esc(info.machine_id) + "</span>"],
           ["Mode", info.preview ? "Preview" : info.admin ? "Administrator" : "Read-only"],
           ["Health", hc.summary.ok + " OK · " + hc.summary.warning + " warnings · " + hc.summary.error + " failed"], ["Actions", String(Object.keys(App.state.actions).length)]]);
 
         el.innerHTML = UI.pageHeader("Support", "Everything a technician needs to use Windows Maintenance Manager",
-          UI.button("Copy diagnostic info", 'id="copy-diag"', "", "download") + UI.button("Health check", 'id="go-health"', "", "shield")) +
+          UI.button("Copy diagnostic info", 'id="copy-diag"', "", "download") +
+          UI.button("Copy PC specifications", 'id="copy-specs" title="Processor, memory, graphics, disks and Windows, without serial numbers"', "", "hardware") +
+          UI.button("Health check", 'id="go-health"', "", "shield")) +
           '<div class="grid grid-2-1"><div class="stack">' + UI.card("Getting started", steps) + UI.card("Frequently asked questions", faq) + "</div>" +
           '<div class="stack">' + UI.card("Risk levels", risks) + UI.card("Keyboard shortcuts", keys) + UI.card("Diagnostics", diag) + "</div></div>" +
           '<div class="grid">' + UI.card("Areas at a glance", glossary) + "</div>";
@@ -88,6 +90,13 @@
           el.querySelector("#faq-empty").hidden = shown > 0;
         });
         el.querySelector("#go-health").addEventListener("click", function () { location.hash = "#/settings"; });
+        el.querySelector("#copy-specs").addEventListener("click", function (e) {
+          var b = e.currentTarget;
+          b.disabled = true;
+          b.classList.add("busy");
+          Pages.hardware.summaryText().then(function (text) { App.copyText(text, "PC specifications"); }, function (er) { UI.toast(er.message, "error"); })
+            .then(function () { b.disabled = false; b.classList.remove("busy"); });
+        });
         el.querySelector("#copy-diag").addEventListener("click", function () {
           var text = ["Windows Maintenance Manager " + info.version, "Device: " + info.hostname + " (" + info.machine_id + ")",
             "Mode: " + (info.preview ? "preview" : info.admin ? "administrator" : "read-only")].concat(hc.checks.map(function (c) {

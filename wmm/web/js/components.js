@@ -345,6 +345,7 @@
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); palette.open(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || document.querySelector(".modal-backdrop")) return;
+    if (store("noKeyShortcuts")) return;  // Settings › Behaviour: only Ctrl K stays, for screen readers and speech input
     if (e.key === "/") { e.preventDefault(); palette.open(); return; }
     if (e.key === "?") { e.preventDefault(); shortcutsHelp(); return; }
     if (e.key === "T" && e.shiftKey) { theme.toggle(); return; }

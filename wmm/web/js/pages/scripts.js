@@ -86,6 +86,8 @@
             '<div class="tm-actions">' + UI.button("Run", "data-run-script" + (running || !data.can_change ? " disabled" : ""), "btn-sm btn-primary", "play") +
             UI.button(s.schedule ? "Unschedule" : "Schedule", s.schedule ? "data-unschedule" : "data-schedule-script", "btn-sm", "clock") +
             (last && last.output ? UI.button("Output", "data-output-script", "btn-sm btn-ghost", "reports") : "") +
+            UI.button("", 'data-copy-script title="Copy the content" aria-label="Copy the content of ' + esc(s.name) + '"', "btn-sm btn-ghost", "copy") +
+            UI.button("", 'data-duplicate title="Duplicate: a copy to change without touching this one" aria-label="Duplicate ' + esc(s.name) + '"', "btn-sm btn-ghost", "plus") +
             UI.button("", 'data-download title="Download" aria-label="Download ' + esc(s.name) + '"', "btn-sm btn-ghost", "download") +
             UI.button("", 'data-delete title="Delete" aria-label="Delete ' + esc(s.name) + '"', "btn-sm btn-ghost", "trash") + "</div></div>";
         }).join("") + "</div>"
@@ -226,6 +228,14 @@
         }
         if (b.hasAttribute("data-output-script")) {
           Components.reportViewer(s.name, s.last_run.output, "Exit code " + s.last_run.exit + " · " + UI.formatDate(s.last_run.finished));
+        }
+        if (b.hasAttribute("data-copy-script")) {
+          API.get("/scripts/" + s.id).then(function (full) { App.copyText(full.content, "Script"); }, function (er) { UI.toast(er.message, "error"); });
+        }
+        if (b.hasAttribute("data-duplicate")) {
+          API.get("/scripts/" + s.id).then(function (full) {
+            return API.post("/scripts", { name: (s.name + " (copy)").slice(0, 80), content: full.content, filename: "copy" + s.file.slice(-4) });
+          }).then(function (r) { UI.toast("Duplicated as " + r.name + ". The copy is not scheduled.", "ok"); load(); }, function (er) { UI.toast(er.message, "error"); });
         }
         if (b.hasAttribute("data-download")) {
           API.get("/scripts/" + s.id).then(function (full) { Components.downloadText(s.name.replace(/[^\w.-]+/g, "_") + s.file.slice(-4), full.content, "text/plain;charset=utf-8"); });

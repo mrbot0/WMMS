@@ -36,10 +36,13 @@
     UI.modal(e.provider + " · " + e.id, body, [
       { label: "Only this source", cls: "btn-ghost", value: function () { return "source"; } },
       { label: "Only this ID", cls: "btn-ghost", value: function () { return "id"; } },
+      { label: "Search online", cls: "", value: function () { return "web"; } },
       { label: "Copy", cls: "", value: function () { return "copy"; } },
       { label: "Close", cls: "btn-primary" }
     ]).then(function (v) {
       if (v === "copy") App.copyText("[" + e.time + "] " + e.log + " · " + e.provider + " · ID " + e.id + " · " + (LEVEL[e.level] || LEVEL[4])[1] + "\n" + e.message, "Event");
+      // Event ID and source together are what forums and Microsoft Learn index; the message is left out (it may hold names and paths).
+      if (v === "web") window.open("https://www.google.com/search?q=" + encodeURIComponent('"Event ID ' + e.id + '" ' + e.provider), "_blank", "noopener,noreferrer");
       if (v === "source") apply({ providers: e.provider });
       if (v === "id") apply({ id: String(e.id), providers: e.provider });
     });

@@ -3,6 +3,26 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.8.0 — 2026-11-03
+
+**20 new settings and 40 new functions across the pages.** Everything is in the console; the agent API is unchanged.
+
+- **Settings**: new *Notifications* and *Maintenance* sections and a search box. Appearance: square corners,
+  color-blind friendly status colors, reduced transparency, wider text spacing, underlined links. Formats: 24/12-hour
+  time, three date styles, Windows (1024) or decimal (1000) sizes. Behaviour: ask before closing the tab during a run,
+  single-key shortcuts off. Notifications: volume with a test, quiet hours (they may span midnight), desktop alerts only
+  for problems, progress in the tab title. Maintenance: default time and startup wait of new schedules, warning before
+  runs of 10+ minutes on battery, open report outputs or not. Data: privacy mode and clear recent commands and pages.
+- **Everywhere**: a star in every page header pins it to the dashboard; privacy mode (Shift P) blurs serial numbers,
+  MAC addresses, UUIDs and the machine ID; command palette entries for pinning, page links, every Settings section.
+- **Dashboard** pinned pages, Copy status, score change since the last visit. **Recommendations** Markdown checklist,
+  CSV, select all fixes. **Area pages** Copy summary, week-old scan warning, link to their History. **Cleanup** free
+  space after cleanup. **History** Today, Run again, Copy log. **Event Viewer / Task Manager** search online, copy path.
+  **Registry** PowerShell path and `reg query`. **Hardware** JSON export, temperature history, high temperature alert.
+  **Schedules** Run now, Pause all / Resume all, next 7 days. **Scripts** duplicate, copy content. **Playbooks** copy
+  steps, end time. **Activity** end time. **Toolbox** Favorites and Safe only. **Reports** copy as text, email draft.
+  **Support** copy PC specifications.
+
 ## 1.7.0 — 2026-11-02
 
 **Routines in Schedules and the Hardware page.**

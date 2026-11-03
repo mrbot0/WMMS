@@ -8,18 +8,29 @@
     });
   }
 
+  /* Preferences read on every call (Settings › Behaviour › Formats); storage may be unavailable. */
+  function pref(key) { try { return JSON.parse(localStorage.getItem("wmm." + key)); } catch (e) { return null; } }
+
   function formatBytes(n) {
     n = Number(n) || 0;
+    var base = pref("sizeUnits") === "decimal" ? 1000 : 1024;  // decimal: the sizes printed on drive boxes
     var units = ["B", "KB", "MB", "GB", "TB"], i = 0;
-    while (Math.abs(n) >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    while (Math.abs(n) >= base && i < units.length - 1) { n /= base; i++; }
     return (i < 2 ? Math.round(n) : n.toFixed(1)) + " " + units[i];
   }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function formatDate(iso, withTime) {
     if (!iso) return "—";
     var d = new Date(iso);
     if (isNaN(d)) return esc(iso);
-    return withTime === false ? d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })
-      : d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    var style = pref("dateStyle") || "short", clock = pref("timeFormat") || "system";
+    var day = style === "iso" ? d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate())
+      : style === "numeric" ? d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" })
+        : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+    if (withTime === false) return day;
+    var time = d.toLocaleTimeString(undefined, clock === "system" ? { hour: "2-digit", minute: "2-digit" }
+      : { hour: "2-digit", minute: "2-digit", hour12: clock === "12" });
+    return day + ", " + time;
   }
   function relative(iso) {
     if (!iso) return "never";
@@ -323,6 +334,9 @@
     }
     var date = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
     var kind = sug.kind || "once", selDays = (sug.days || "MON").split(",");
+    // Settings › Maintenance: default time and wait when the action brings no suggestion of its own.
+    if (!sug.time) sug = Object.assign({}, sug, { time: pref("defaultTime") || "03:00" });
+    if (sug.delay == null && pref("defaultDelay") != null) sug = Object.assign({}, sug, { delay: pref("defaultDelay") });
     var warning = action.risk !== "safe"
       ? '<div class="callout callout-warning">' + icon("info") + "<div><strong>" + esc(RISK_LABEL[action.risk]) + " action.</strong> " + esc(action.warning) +
         ' A restore point is created before every run.<label class="check"><input type="checkbox" name="confirmed"> I understand and want to schedule this action</label></div></div>'
@@ -402,8 +416,13 @@
   function errorBox(error) {
     return '<div class="callout callout-error">' + icon("info") + "<div><strong>Something went wrong.</strong> " + esc(error && error.message || error) + "</div></div>";
   }
+  /* Every page header ends with a star that pins the page to the dashboard (Extras.togglePin). */
   function pageHeader(title, sub, buttons) {
-    return '<div class="page-head"><div><div class="page-kicker">' + esc(sub || "") + '</div></div><div class="page-actions">' + (buttons || "") + "</div></div>";
+    var page = (location.hash.replace(/^#\/?/, "").split("?")[0] || "dashboard");
+    var pinned = (pref("pinnedPages") || []).indexOf(page) >= 0;
+    var pin = page === "dashboard" ? "" : '<button type="button" class="btn btn-ghost pin-page' + (pinned ? " pinned" : "") + '" data-pin-page="' + esc(page) +
+      '" aria-pressed="' + pinned + '" title="' + (pinned ? "Unpin from the dashboard" : "Pin to the dashboard") + '">' + (pinned ? "★" : "☆") + "</button>";
+    return '<div class="page-head"><div><div class="page-kicker">' + esc(sub || "") + '</div></div><div class="page-actions">' + (buttons || "") + pin + "</div></div>";
   }
   function button(label, attrs, cls, iconName) {
     return '<button type="button" class="btn ' + (cls || "") + '" ' + (attrs || "") + ">" + (iconName ? icon(iconName) : "") + esc(label) + "</button>";
@@ -434,7 +453,12 @@
     var hasSafe = view.actions.some(function (a) { return a.risk === "safe" && a.kind !== "report"; });
     var noActions = !view.actions.length;
     var reportIds = view.actions.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
+    lastViews[area] = view;
+    var ageDays = view.created ? (Date.now() - new Date(view.created).getTime()) / 86400e3 : 0;
+    var stale = ageDays >= STALE_DAYS ? '<div class="callout callout-warning stale-scan">' + icon("clock") + "<div><strong>This scan is " + Math.floor(ageDays) +
+      " days old.</strong> The figures below may no longer match the PC.</div>" + button("Scan now", 'data-scan-area="' + area + '"', "btn-sm btn-primary", "refresh") + "</div>" : "";
     var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created),
+      button("Copy summary", 'data-copy-area="' + area + '" title="Score, improvements and recent runs as text, for a ticket"', "", "copy") +
       button("Scan", 'data-scan-area="' + area + '"', "", "refresh") +
       (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '" title="Runs every safe fix of this area at once; reports and risky actions are left out"', "", "bolt") : "") +
       button("Export report", 'data-export-area="' + area + '"', "btn-primary", "download"));
@@ -454,22 +478,44 @@
         (reportIds.length ? '<button type="button" class="btn btn-sm" data-run-reports="' + esc(reportIds.join(",")) + '">' + icon("reports") + "Run all diagnostics</button>" : "") +
         '<a class="btn btn-sm btn-ghost" href="#/toolbox?area=' + area + '">' + icon("explorer") + "Toolbox</a>"),
       trend: card("Score trend", trend),
-      runs: card("Recent activity", runsTable(view.runs.slice(0, 8), title)),
-      errors: view.data.errors && view.data.errors.length
+      runs: card("Recent activity", runsTable(view.runs.slice(0, 8), title), '<a class="btn btn-sm" href="#/history?area=' + area + '">' + icon("history") + "All runs of this area</a>"),
+      errors: stale + (view.data.errors && view.data.errors.length
         ? '<div class="callout callout-error">' + icon("info") + "<div><strong>Scan incomplete: some data could not be read.</strong> " + esc(view.data.errors.join(" · ")) + "</div></div>" :
         (view.data.warnings && view.data.warnings.length
-          ? '<div class="callout callout-warning">' + icon("info") + "<div>" + esc(view.data.warnings.join(" · ")) + "</div></div>" : "")
+          ? '<div class="callout callout-warning">' + icon("info") + "<div>" + esc(view.data.warnings.join(" · ")) + "</div></div>" : ""))
     };
   }
 
+  var STALE_DAYS = 7;
+  var lastViews = {};
+  /* The area as plain text: score, open improvements and the latest runs. */
+  function areaSummary(area) {
+    var v = lastViews[area];
+    if (!v) return "";
+    var title = function (id) { var a = window.App && App.action(id); return a ? a.title : id; };
+    var lines = [AREA_LABEL[area] + " · score " + v.score + "/100 · scanned " + formatDate(v.created)];
+    if (v.recommendations.length) {
+      lines.push("", "Open improvements:");
+      v.recommendations.forEach(function (r) { lines.push("- [" + (r.impact || "").toUpperCase() + "] " + r.title + (r.reason ? ": " + r.reason : "")); });
+    } else lines.push("", "No open improvements.");
+    if (v.runs.length) {
+      lines.push("", "Recent runs:");
+      v.runs.slice(0, 8).forEach(function (r) { lines.push("- " + formatDate(r.started) + " · " + title(r.action_id) + " · " + (STATUS_LABEL[r.status] || r.status)); });
+    }
+    return lines.join("\n");
+  }
+
   function bindArea(el, area, rerender) {
-    var scan = el.querySelector("[data-scan-area]");
-    if (scan) scan.addEventListener("click", function () {
-      scan.disabled = true;
-      scan.classList.add("busy");
-      API.post("/areas/" + area + "/scan").then(function () { UI.toast("Scan completed.", "ok"); rerender(); },
-        function (e) { UI.toast(e.message, "error"); scan.disabled = false; scan.classList.remove("busy"); });
+    el.querySelectorAll("[data-scan-area]").forEach(function (scan) {
+      scan.addEventListener("click", function () {
+        scan.disabled = true;
+        scan.classList.add("busy");
+        API.post("/areas/" + area + "/scan").then(function () { UI.toast("Scan completed.", "ok"); rerender(); },
+          function (e) { UI.toast(e.message, "error"); scan.disabled = false; scan.classList.remove("busy"); });
+      });
     });
+    var copy = el.querySelector("[data-copy-area]");
+    if (copy) copy.addEventListener("click", function () { App.copyText(areaSummary(area), AREA_LABEL[area] + " summary"); });
     var safe = el.querySelector("[data-safe-area]");
     if (safe) safe.addEventListener("click", function () { App.runSafe(area); });
     var exp = el.querySelector("[data-export-area]");
@@ -477,7 +523,7 @@
   }
 
   window.UI = {
-    runsTable: runsTable, areaParts: areaParts, bindArea: bindArea, ORIGIN_LABEL: ORIGIN_LABEL,
+    runsTable: runsTable, areaParts: areaParts, bindArea: bindArea, areaSummary: areaSummary, ORIGIN_LABEL: ORIGIN_LABEL, pref: pref,
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
