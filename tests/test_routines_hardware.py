@@ -244,6 +244,28 @@ class HardwareParsing(unittest.TestCase):
         self.assertEqual(dati["monitor_tool"], "LibreHardwareMonitor")
         self.assertEqual(dati["other"][0]["type"], "Load")
 
+    def test_sensor_tool_starts_only_from_protected_program_files(self):
+        programmi = r"C:\Program Files"
+        dentro = programmi + r"\WinGet\Packages\LibreHardwareMonitor.LibreHardwareMonitor_Microsoft.Winget.Source_8wekyb3d8bbwe\LibreHardwareMonitor.exe"
+        with mock.patch.dict(hardware.os.environ, {"ProgramFiles": programmi}), \
+                mock.patch.object(hardware, "monitor_tool_running", return_value=False), \
+                mock.patch.object(hardware.subprocess, "Popen") as avvia:
+            with mock.patch.object(hardware, "monitor_tool_path", return_value=r"C:\Users\x\AppData\Local\LibreHardwareMonitor.exe"):
+                with self.assertRaises(hardware.MonitorToolError):
+                    hardware.start_monitor_tool(unprotected=lambda percorsi: [])
+            with mock.patch.object(hardware, "monitor_tool_path", return_value=dentro):
+                visti = []
+                with self.assertRaises(hardware.MonitorToolError):
+                    hardware.start_monitor_tool(unprotected=lambda percorsi: visti.extend(percorsi) or [percorsi[1]])
+                self.assertEqual(visti[0], dentro)
+                self.assertEqual(visti[-1], programmi)  # the file and every folder up to Program Files
+                avvia.assert_not_called()
+                self.assertEqual(hardware.start_monitor_tool(unprotected=lambda percorsi: []), dentro)
+                avvia.assert_called_once()
+            with mock.patch.object(hardware, "monitor_tool_path", return_value=None):
+                with self.assertRaises(hardware.MonitorToolError):
+                    hardware.start_monitor_tool(unprotected=lambda percorsi: [])
+
     def test_empty_sensors(self):
         dati = hardware.summarize_sensors(None, [])
         self.assertEqual((dati["temperatures"], dati["fans"], dati["hottest"]), ([], [], None))

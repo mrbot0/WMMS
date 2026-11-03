@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 INVENTORY_TTL = 600
 SENSORS_TTL = 3   # nvidia-smi answers in a fraction of a second
@@ -272,19 +272,33 @@ class MonitorToolError(RuntimeError):
 
 
 def monitor_tool_path() -> Optional[str]:
-    """Where LibreHardwareMonitor is installed (winget portable package or a manual copy), if anywhere."""
-    candidati = [os.path.expandvars(r"%ProgramFiles%\LibreHardwareMonitor\\" + MONITOR_EXE),
-                 os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\\" + MONITOR_EXE)]
-    for radice in (os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages"), os.path.expandvars(r"%ProgramFiles%\WinGet\Packages")):
-        try:
-            cartelle = [os.path.join(radice, c) for c in os.listdir(radice) if c.startswith(MONITOR_PACKAGE)]
-        except OSError:
-            continue
-        for cartella in cartelle:
-            for base, _, file in os.walk(cartella):
-                if MONITOR_EXE in file:
-                    candidati.append(os.path.join(base, MONITOR_EXE))
+    """Where LibreHardwareMonitor is installed for all users, if anywhere.
+
+    The agent starts it with administrator rights, so only Program Files is searched: a copy under the
+    user profile (%LOCALAPPDATA%, per-user winget) could be replaced by any program the user runs."""
+    programmi = os.environ.get("ProgramFiles", r"C:\Program Files")
+    candidati = [os.path.join(programmi, "LibreHardwareMonitor", MONITOR_EXE)]
+    radice = os.path.join(programmi, "WinGet", "Packages")
+    try:
+        cartelle = [os.path.join(radice, c) for c in os.listdir(radice) if c.split("_")[0] == MONITOR_PACKAGE]
+    except OSError:
+        cartelle = []
+    for cartella in cartelle:
+        for base, _, file in os.walk(cartella):
+            if MONITOR_EXE in file:
+                candidati.append(os.path.join(base, MONITOR_EXE))
     return next((p for p in candidati if os.path.isfile(p)), None)
+
+
+def _folders_up_to(percorso: str, radice: str) -> List[str]:
+    """The file and every folder above it, up to and including `radice`."""
+    voci, corrente = [percorso], os.path.dirname(percorso)
+    radice = os.path.normcase(os.path.realpath(radice))
+    while True:
+        voci.append(corrente)
+        if os.path.normcase(corrente) == radice or os.path.dirname(corrente) == corrente:
+            return voci
+        corrente = os.path.dirname(corrente)
 
 
 def monitor_tool_running() -> bool:
@@ -299,7 +313,8 @@ def install_monitor_tool() -> str:
     if not winget:
         raise MonitorToolError("winget is not available on this PC: install App Installer from the Microsoft Store, "
                            "or download LibreHardwareMonitor from its GitHub page.")
-    risultato = subprocess.run([winget, "install", "--id", MONITOR_PACKAGE, "-e", "--silent", "--accept-source-agreements",
+    # --scope machine: Program Files, writable only by administrators (see start_monitor_tool).
+    risultato = subprocess.run([winget, "install", "--id", MONITOR_PACKAGE, "-e", "--scope", "machine", "--silent", "--accept-source-agreements",
                                 "--accept-package-agreements", "--disable-interactivity"],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, timeout=600,
                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -309,10 +324,21 @@ def install_monitor_tool() -> str:
     return uscita
 
 
-def start_monitor_tool() -> str:
+def start_monitor_tool(unprotected: Optional[Callable[[List[str]], List[str]]] = None) -> str:
+    """Starts LibreHardwareMonitor, elevated like the agent, only when standard users cannot change the file or its folders."""
     percorso = monitor_tool_path()
     if not percorso:
-        raise MonitorToolError("LibreHardwareMonitor is not installed.")
+        raise MonitorToolError("LibreHardwareMonitor is not installed for all users (Program Files).")
+    percorso = os.path.realpath(percorso)
+    programmi = os.path.realpath(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    if os.path.normcase(os.path.commonpath([percorso, programmi])) != os.path.normcase(programmi):
+        raise MonitorToolError(f"{percorso} is outside Program Files: it is not started with administrator rights.")
+    if unprotected is None:
+        from .scheduler import unprotected_paths as unprotected
+    aperti = unprotected(_folders_up_to(percorso, programmi))
+    if aperti:
+        raise MonitorToolError("LibreHardwareMonitor is not started: standard users can change " + ", ".join(aperti[:3]) +
+                               ". Reinstall it for all users or fix the folder permissions.")
     if not monitor_tool_running():
         subprocess.Popen([percorso], cwd=os.path.dirname(percorso), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, close_fds=True)
