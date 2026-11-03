@@ -35,7 +35,9 @@
         '<form class="rg-address" id="rg-form"><span class="rg-computer">' + UI.icon("explorer") + '</span><input id="rg-path" spellcheck="false" aria-label="Key path" value="' + esc(state.path) +
         '"><button class="btn btn-sm" type="submit">Go</button><button class="btn btn-sm" type="button" id="rg-up" title="Parent key" aria-label="Parent key">↑</button>' +
         '<button class="btn btn-sm rg-star" type="button" id="rg-star" title="Bookmark this key" aria-label="Bookmark this key">★</button>' +
-        '<button class="btn btn-sm" type="button" id="rg-copy" title="Copy the path">Copy</button></form>' +
+        '<button class="btn btn-sm" type="button" id="rg-copy" title="Copy the path">Copy</button>' +
+        '<button class="btn btn-sm" type="button" id="rg-copy-ps" title="Copy as a PowerShell path (HKLM:\\…), ready for Get-ItemProperty">PS</button>' +
+        '<button class="btn btn-sm" type="button" id="rg-copy-reg" title="Copy a reg query command that lists this key">reg</button></form>' +
         '<div class="rg-layout"><aside class="card rg-side"><div class="rg-favs"><div class="log-head">Favorites</div><div id="rg-favs"></div></div>' +
         '<div class="log-head" style="padding:0 14px">Keys</div><ul class="rg-tree" id="rg-tree" role="tree"></ul></aside>' +
         '<section class="card rg-main"><div id="rg-main">' + UI.loading("Opening the key…") + "</div></section></div>";
@@ -243,6 +245,13 @@
         if (parent) open(parent);
       });
       el.querySelector("#rg-copy").addEventListener("click", function () { App.copyText(state.data ? state.data.long_path : state.path, "Key path"); });
+      // HKLM\SOFTWARE\x -> HKLM:\SOFTWARE\x for PowerShell; the long hive names have no drive, so they use the Registry:: provider.
+      var DRIVES = { HKLM: "HKLM:", HKCU: "HKCU:", HKEY_LOCAL_MACHINE: "HKLM:", HKEY_CURRENT_USER: "HKCU:" };
+      el.querySelector("#rg-copy-ps").addEventListener("click", function () {
+        var p = state.path, hive = p.split("\\")[0].toUpperCase(), rest = p.slice(hive.length);
+        App.copyText(DRIVES[hive] ? "'" + DRIVES[hive] + rest + "'" : "'Registry::" + p + "'", "PowerShell path");
+      });
+      el.querySelector("#rg-copy-reg").addEventListener("click", function () { App.copyText('reg query "' + state.path + '"', "reg command"); });
       el.querySelector("#rg-star").addEventListener("click", function () {
         var list = bookmarks(), i = list.indexOf(state.path);
         if (i >= 0) list.splice(i, 1); else list.push(state.path);

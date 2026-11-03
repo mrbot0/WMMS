@@ -66,9 +66,22 @@
 
         var v = verdict(d.scores.overall), byImpact = d.issues_by_impact || {};
         var auto = Components.store("dashAuto") !== false;
-        var toolbar = '<div class="dash-toolbar"><span>Updated ' + esc(new Date().toLocaleTimeString()) + " · oldest area scan " +
-          esc(UI.relative(scanned.map(function (a) { return d.scanned[a]; }).sort()[0])) + '</span><label><span class="switch"><input type="checkbox" id="dash-auto"' + (auto ? " checked" : "") +
-          '><span></span></span>Auto-refresh every minute</label></div>';
+        var every = Components.store("dashInterval") || REFRESH_MS / 1000;
+        // Since the last visit: the overall score then and how long ago (kept in this browser).
+        var visitBefore = Components.store("lastVisit");
+        var sinceVisit = visitBefore && visitBefore.at && d.scores.overall != null && Date.now() - visitBefore.at > 3600e3
+          ? '<span class="since-visit">Since your last visit ' + esc(UI.relative(new Date(visitBefore.at).toISOString())) + ": " +
+            (d.scores.overall > visitBefore.score ? '<span class="delta-up">▲ +' + (d.scores.overall - visitBefore.score) + "</span>"
+              : d.scores.overall < visitBefore.score ? '<span class="delta-down">▼ ' + (d.scores.overall - visitBefore.score) + "</span>" : '<span class="delta-flat">no change</span>') + "</span> · " : "";
+        if (d.scores.overall != null && (!visitBefore || Date.now() - visitBefore.at > 3600e3)) Components.store("lastVisit", { at: Date.now(), score: d.scores.overall });
+        var toolbar = '<div class="dash-toolbar"><span>' + sinceVisit + "Updated " + esc(new Date().toLocaleTimeString()) + " · oldest area scan " +
+          esc(UI.relative(scanned.map(function (a) { return d.scanned[a]; }).sort()[0])) + '</span><button type="button" class="btn btn-sm" id="dash-copy" title="Overall health, every area and the top improvements as text">' +
+          UI.icon("copy") + 'Copy status</button><label><span class="switch"><input type="checkbox" id="dash-auto"' + (auto ? " checked" : "") +
+          '><span></span></span>Auto-refresh every ' + (every < 60 ? every + " s" : every / 60 === 1 ? "minute" : every / 60 + " min") + "</label></div>";
+        var pins = (Components.store("pinnedPages") || []).filter(function (p) { return window.Pages[p]; });
+        var pinnedRow = pins.length ? '<div class="pinned-pages" aria-label="Pinned pages">' + pins.map(function (p) {
+          return '<a href="#/' + esc(p) + '">' + UI.icon(p) + esc(App.pageTitle(p)) + "</a>";
+        }).join("") + "</div>" : "";
 
         var quick = '<div class="quick-grid">' + QUICK.map(function (q) {
           return '<button type="button" class="quick' + (q[4] ? " quick-primary" : "") + '" data-quick="' + q[0] + '" data-area="' + q[3] + '"><span class="tile-icon">' + UI.icon(q[2]) +
@@ -179,7 +192,7 @@
         var hidden = hiddenSections(), show = function (key, html) { return hidden.indexOf(key) >= 0 ? "" : html; };
         var catScores = {};
         UI.AREAS.forEach(function (a) { catScores[a] = d.scores[a]; });
-        el.innerHTML = toolbar + hero +
+        el.innerHTML = toolbar + pinnedRow + hero +
           show("categories", section("dashboard", "All categories", 'Click a category for its page, or go straight to a page · <a href="#" data-guide-open="dashboard">How to use the console</a>') +
             Hubs.overview(catScores)) +
           show("visit", section("check", "This visit", '<a href="#/settings">Customize the dashboard</a>') + '<div class="grid grid-3">' + UI.card("Today on this PC", todayCard) +
@@ -269,6 +282,15 @@
             "A scan that could not read its data is marked incomplete and capped at 50. Arrows on the tiles show the change since the previous scan.</p>", [{ label: "Close", cls: "btn-primary" }]);
         });
         el.querySelector("#dash-auto").addEventListener("change", function (e) { Components.store("dashAuto", e.target.checked); });
+        el.querySelector("#dash-copy").addEventListener("click", function () {
+          var lines = [(App.state.info ? App.state.info.hostname + " · " : "") + "overall health " + d.scores.overall + "/100 · " + UI.formatDate(new Date().toISOString()), ""];
+          UI.AREAS.forEach(function (a) { if (d.scores[a] != null) lines.push(UI.AREA_LABEL[a] + ": " + d.scores[a] + "/100"); });
+          if (d.recommendations.length) {
+            lines.push("", "Top improvements (" + d.open_issues + " open):");
+            d.recommendations.slice(0, 8).forEach(function (x) { lines.push("- [" + String(x.impact).toUpperCase() + "] " + x.title + " (" + (UI.AREA_LABEL[x.area] || x.area) + ")"); });
+          }
+          App.copyText(lines.join("\n"), "Status");
+        });
         if (hidden.indexOf("live") < 0) startLive(el, App);
         // App.render stops this page's timers and live loop before drawing it again.
         var timer = setTimeout(function () {

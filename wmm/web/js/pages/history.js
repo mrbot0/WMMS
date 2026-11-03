@@ -18,8 +18,12 @@
     title: "History",
     render: function (el, App) {
       var self = this;
+      // #/history?area=cleanup opens the runs of one area (area pages link here).
+      var fromUrl = /[?&]area=(\w+)/.exec(location.hash);
+      if (fromUrl && UI.AREAS.indexOf(fromUrl[1]) >= 0) filters.area = fromUrl[1];
       return API.get("/history?limit=5000" + (filters.area ? "&area=" + filters.area : "")).then(function (h) {
-        var since = filters.days ? Date.now() - Number(filters.days) * 86400e3 : 0;
+        var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+        var since = filters.days === "today" ? midnight.getTime() : filters.days ? Date.now() - Number(filters.days) * 86400e3 : 0;
         var runs = h.runs.filter(function (r) { return new Date(r.started).getTime() >= since; });
         var title = function (id) { var a = App.action(id); return a ? a.title : id; };
         var freed = runs.reduce(function (a, r) { return a + (r.bytes_freed || 0); }, 0);
@@ -28,7 +32,7 @@
         App.setSubtitle("Every scan and action recorded on this device");
 
         var kpis = '<div class="grid grid-4">' +
-          UI.kpi("Runs", Components.num(runs.length), filters.days ? "Last " + filters.days + " days" : "All time", "info") +
+          UI.kpi("Runs", Components.num(runs.length), filters.days === "today" ? "Today" : filters.days ? "Last " + filters.days + " days" : "All time", "info") +
           UI.kpi("Success rate", runs.length ? Components.num(Math.round(100 * ok / runs.length)) + "<small>%</small>" : "—", ok + " successful", runs.length && ok / runs.length < 0.8 ? "warning" : "ok") +
           UI.kpi("Space freed", esc(UI.formatBytes(freed)), "By the listed runs", "info") +
           UI.kpi("Scheduled runs", Components.num(runs.filter(function (r) { return r.origin === "schedule"; }).length), runs.filter(function (r) { return r.origin === "auto"; }).length + " automatic", "info") + "</div>";
@@ -41,7 +45,7 @@
           return '<span><span class="swatch" style="background:' + t.color + '"></span>' + esc(t.name) + "</span>";
         }).join("") + "</div>";
 
-        var days = [], index = {}, span = Math.min(filters.days ? Number(filters.days) : 90, 120);
+        var days = [], index = {}, span = filters.days === "today" ? 7 : Math.min(filters.days ? Number(filters.days) : 90, 120);
         for (var i = span - 1; i >= 0; i--) {
           var d = new Date(Date.now() - i * 86400e3);
           index[dayKey(d)] = days.length;
@@ -72,7 +76,7 @@
           '<a class="btn" href="' + API.url("/export/" + (filters.area || "all") + ".json") + '" download>' + UI.icon("download") + "Export JSON</a>") +
           '<div class="grid">' + UI.card("Filters", '<div class="filters"><label>Area<select data-filter="area"><option value="">All areas</option>' + UI.AREAS.map(function (a) {
             return '<option value="' + a + '"' + (filters.area === a ? " selected" : "") + ">" + esc(UI.AREA_LABEL[a]) + "</option>";
-          }).join("") + '</select></label><label>Period<select data-filter="days">' + [["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["", "All time"]].map(function (o) {
+          }).join("") + '</select></label><label>Period<select data-filter="days">' + [["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["", "All time"]].map(function (o) {
             return '<option value="' + o[0] + '"' + (filters.days === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
           }).join("") + "</select></label></div>") + "</div>" + kpis +
           '<div class="grid grid-2">' + UI.card("Score trend", trend) + UI.card("Runs per day", perDay) + "</div>" +
@@ -112,15 +116,24 @@
             { key: "status", title: "Result", render: function (r) { return UI.statusBadge(r.status); } },
             { key: "note", title: "Note", render: function (r) { return '<span class="cell-sub">' + esc(r.note || "") + "</span>"; } },
             { key: "bytes_freed", title: "Freed", cls: "num", render: function (r) { return r.bytes_freed ? esc(UI.formatBytes(r.bytes_freed)) : "—"; } },
-            { key: "log", title: "Log", sortable: false, csv: false, render: function (r) { return '<details class="log-details" data-log="' + r.id + '"><summary>View</summary><pre class="log">Loading…</pre></details>'; } }
+            { key: "log", title: "Log", sortable: false, csv: false, render: function (r) {
+              return '<details class="log-details" data-log-run="' + r.id + '"><summary>View</summary><pre class="log">Loading…</pre>' +
+                '<button type="button" class="btn btn-sm btn-ghost" data-copy-log hidden>' + UI.icon("copy") + "Copy log</button></details>"; } },
+            { key: "again", title: "", sortable: false, csv: false, render: function (r) {
+              var a = App.state.actions[r.action_id];
+              return a ? '<button type="button" class="btn btn-sm" data-run="' + esc(r.action_id) + '" title="Run ' + esc(a.title) + ' again">' + UI.icon("refresh") + "Again</button>" : "";
+            } }
           ],
           after: function (box) {
-            box.querySelectorAll("[data-log]").forEach(function (det) {
+            box.querySelectorAll("[data-log-run]").forEach(function (det) {
               det.addEventListener("toggle", function () {
                 if (!det.open || det.loaded) return;
                 det.loaded = true;
-                API.get("/history/runs/" + det.getAttribute("data-log") + "/log").then(function (r) {
+                API.get("/history/runs/" + det.getAttribute("data-log-run") + "/log").then(function (r) {
                   det.querySelector("pre").textContent = r.log || "(no output)";
+                  var copy = det.querySelector("[data-copy-log]");
+                  copy.hidden = !r.log;
+                  copy.addEventListener("click", function () { App.copyText(r.log, "Log"); });
                 }, function (e) { det.querySelector("pre").textContent = e.message; });
               });
             });

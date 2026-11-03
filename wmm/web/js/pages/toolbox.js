@@ -48,12 +48,14 @@
           '<input type="search" id="tb-q" placeholder="Search tools… (press / )" value="' + esc(view.query) + '"></label>' +
           '<label class="tb-sort">Sort<select id="tb-sort">' + [["name", "Name"], ["duration", "Shortest first"], ["recent", "Recently run"]].map(function (o) {
             return '<option value="' + o[0] + '"' + (view.sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-          }).join("") + '</select></label><label class="check"><input type="checkbox" id="tb-never"' + (view.never ? " checked" : "") + "> Never run</label></div>" +
+          }).join("") + '</select></label><label class="check"><input type="checkbox" id="tb-never"' + (view.never ? " checked" : "") + "> Never run</label>" +
+          '<label class="check"><input type="checkbox" id="tb-favs"' + (view.favs ? " checked" : "") + "> Favorites</label>" +
+          '<label class="check" title="Only tools that run without confirmation"><input type="checkbox" id="tb-safe"' + (view.safe ? " checked" : "") + "> Safe only</label></div>" +
           '<div id="tb-list" aria-live="polite"></div></div></section>';
         var list = el.querySelector("#tb-list"), visibleReports = [];
 
         function shown() {
-          var words = view.query.toLowerCase().split(/\s+/).filter(Boolean);
+          var words = view.query.toLowerCase().split(/\s+/).filter(Boolean), favs = App.favorites();
           var sorts = {
             name: function (x, y) { return x.title.localeCompare(y.title); },
             duration: function (x, y) { return x.minutes - y.minutes || x.title.localeCompare(y.title); },
@@ -65,11 +67,12 @@
           return all.filter(function (a) {
             var text = (a.title + " " + a.description + " " + a.id).toLowerCase();
             return (!view.area || a.area === view.area) && (!view.kind || a.kind === view.kind) && (!view.never || !last[a.id]) &&
+              (!view.favs || favs.indexOf(a.id) >= 0) && (!view.safe || a.risk === "safe") &&
               words.every(function (w) { return text.indexOf(w) >= 0; });
           }).sort(sorts[view.sort] || sorts.name);
         }
         function draw() {
-          Components.store("toolbox", { area: view.area, kind: view.kind, query: view.query, sort: view.sort, never: view.never });
+          Components.store("toolbox", { area: view.area, kind: view.kind, query: view.query, sort: view.sort, never: view.never, favs: view.favs, safe: view.safe });
           var items = shown();
           visibleReports = items.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
           var areas = view.area ? [view.area] : UI.AREAS;
@@ -121,6 +124,12 @@
         });
         el.querySelector("#tb-q").addEventListener("input", function (e) { view.query = e.target.value; draw(); });
         el.querySelector("#tb-sort").addEventListener("change", function (e) { view.sort = e.target.value; draw(); });
+        el.querySelector("#tb-favs").addEventListener("change", function (e) {
+          view.favs = e.target.checked;
+          if (view.favs && !App.favorites().length) UI.toast("No favorites yet: star a tool in its details or in Actions.", "info");
+          draw();
+        });
+        el.querySelector("#tb-safe").addEventListener("change", function (e) { view.safe = e.target.checked; draw(); });
         el.querySelector("#tb-never").addEventListener("change", function (e) { view.never = e.target.checked; draw(); });
         list.addEventListener("change", function (e) {
           if (!e.target.hasAttribute("data-pick")) return;

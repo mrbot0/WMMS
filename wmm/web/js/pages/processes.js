@@ -49,12 +49,17 @@
     var body = (p.critical ? '<div class="callout callout-warning">' + UI.icon("shield") + "<div>Essential to Windows: it cannot be ended or reprioritized from here.</div></div>" : "") +
       UI.definition(rows) + '<div class="log-head" style="margin-top:12px">Command line</div><pre class="log" style="min-height:0;max-height:22vh">' + esc(p.command || "(not available)") + "</pre>";
     UI.modal(p.name + " · PID " + p.pid, body, [
+      { label: "Search online", cls: "btn-ghost", value: function () { return "web"; } },
+      { label: "Copy path", cls: "btn-ghost", value: function () { return "path"; } },
       { label: "Copy", cls: "btn-ghost", value: function () { return "copy"; } },
       { label: "Open location", cls: "", value: function () { return "reveal"; } },
       { label: "End process", cls: p.critical ? "" : "btn-danger", value: function () { return "end"; } },
       { label: "Close", cls: "btn-primary" }
     ]).then(function (v) {
       if (v === "copy") App.copyText(COLUMNS.map(function (c) { var x = p[c[0]]; return c[1] + ": " + (Array.isArray(x) ? x.join(", ") : x == null ? "" : x); }).join("\n"), "Process details");
+      // "What is this process?": the file name and its company, never the command line (it may hold paths or tokens).
+      if (v === "web") window.open("https://www.google.com/search?q=" + encodeURIComponent(p.name + (p.company ? " " + p.company : "") + " what is this process"), "_blank", "noopener,noreferrer");
+      if (v === "path") { if (p.path) App.copyText(p.path, "Path"); else UI.toast("Windows does not report the path of this process.", "info"); }
       if (v === "reveal") ops.reveal(p);
       if (v === "end") ops.end([p], false);
     });

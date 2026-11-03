@@ -144,15 +144,7 @@ def normalize(content) -> str:
 
 
 def task_xml(script_id: str, path: str, schedule: dict) -> str:
-    inizio = f"<StartBoundary>{schedule['at']}:00</StartBoundary><Enabled>true</Enabled>"
-    if schedule["kind"] == "once":
-        trigger = f"<TimeTrigger>{inizio}</TimeTrigger>"
-    elif schedule["kind"] == "daily":
-        trigger = f"<CalendarTrigger>{inizio}<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"
-    else:
-        giorni = "".join(f"<{scheduler.WEEKDAYS[g]} />" for g in schedule["days"].split(",") if g)
-        trigger = (f"<CalendarTrigger>{inizio}<ScheduleByWeek><DaysOfWeek>{giorni}</DaysOfWeek>"
-                   f"<WeeksInterval>1</WeeksInterval></ScheduleByWeek></CalendarTrigger>")
+    trigger = scheduler.trigger_xml(schedule)
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Author>Windows Maintenance Manager</Author><Description>Script {escape(script_id)}</Description></RegistrationInfo>
@@ -309,13 +301,14 @@ class ScriptLibrary:
 
     # ---------- schedules ----------
 
-    def schedule(self, script_id: str, kind: str, at: str, days: str = "") -> dict:
+    def schedule(self, script_id: str, kind: str, at: str, days: str = "", delay: int = 0) -> dict:
         with self._lock:
             elenco = self._load()
             voce = self._find(elenco, script_id)
-            piano = {"kind": kind, "at": at, "days": days if kind == "weekly" else ""}
+            piano = {"kind": kind, "at": at, "days": days if kind == "weekly" else "",
+                     "delay": delay if kind in scheduler.EVENT_KINDS else 0}
             try:
-                scheduler.validate(kind, at, piano["days"])
+                scheduler.validate(kind, at, piano["days"], piano["delay"])
             except ValueError as errore:
                 raise ScriptError(str(errore)) from None
             if self.unprotected([str(self.folder), str(self.path(voce))]):

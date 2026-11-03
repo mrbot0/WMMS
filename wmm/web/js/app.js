@@ -14,7 +14,8 @@
     "services.control": { id: "services.control", title: "Service started, stopped or restarted", area: "services", risk: "moderate" },
     "scripts.run": { id: "scripts.run", title: "Script run", area: "scripts", risk: "moderate" },
     "scripts.schedule": { id: "scripts.schedule", title: "Script schedule changed", area: "scripts", risk: "moderate" },
-    "scripts.shutdown_timer": { id: "scripts.shutdown_timer", title: "Shutdown timer", area: "scripts", risk: "moderate" }
+    "scripts.shutdown_timer": { id: "scripts.shutdown_timer", title: "Shutdown timer", area: "scripts", risk: "moderate" },
+    "hardware.monitor_tool": { id: "hardware.monitor_tool", title: "Sensor tool (LibreHardwareMonitor)", area: "performance", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };
@@ -187,6 +188,7 @@
   function updateTitle() {
     var page = window.Pages[state.page], job = state.job && state.job.active ? state.job : null;
     var pct = job ? (job.percent != null ? job.percent : 100 * job.done / Math.max(1, job.total)) : null;
+    if (Components.store("titleProgress") === false) pct = null;  // Settings › Notifications: keep the tab title still
     document.title = (pct != null ? Math.round(pct) + "% · " : "") + (page ? page.title : "") + " · Windows Maintenance Manager";
     Components.faviconProgress(pct);
   }
@@ -195,14 +197,15 @@
 
   /* Settings › Behaviour › Sound: two short tones when a run finishes (rising: success, falling: errors). */
   function chime(ok) {
-    if (!Components.store("sound") || !window.AudioContext) return;
+    if (!Components.store("sound") || !window.AudioContext || quiet()) return;
+    var peak = { low: 0.05, medium: 0.15, high: 0.4 }[Components.store("soundVolume") || "medium"] || 0.15;
     try {
       var ctx = new AudioContext();
       (ok ? [660, 880] : [440, 330]).forEach(function (f, i) {
         var o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.16;
         o.frequency.value = f;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.15, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(peak, t + 0.02);
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
         o.connect(g).connect(ctx.destination);
         o.start(t);
@@ -308,10 +311,11 @@
           var text = job.results.length + " action(s)" + (freed ? ", " + UI.formatBytes(freed) + " freed" : "") + (errors ? ", " + errors + " failed" : "");
           UI.toast((errors ? errors + " action(s) failed." : "Run completed: " + text + ".") + " Details in Activity.", errors ? "error" : "ok");
           Components.notifications.add(errors ? "Run finished with errors" : "Run completed", text, errors ? "error" : "ok");
-          desktopNotify(errors ? "Run finished with errors" : "Run completed", text);
-          // A run made only of reports exists to be read: its output opens at once.
+          var problems = job.results.some(function (r) { return r.status === "error" || r.status === "warning"; });
+          if (problems || !Components.store("notifyProblemsOnly")) desktopNotify(errors ? "Run finished with errors" : "Run completed", text);
+          // A run made only of reports exists to be read: its output opens at once (unless turned off in Settings).
           var onlyReports = job.results.length && job.results.every(function (r) { var a = action(r.action_id); return a && a.kind === "report"; });
-          if (onlyReports) {
+          if (onlyReports && Components.store("autoOpenReports") !== false) {
             Components.reportViewer(job.results.length === 1 ? action(job.results[0].action_id).title : job.results.length + " diagnostics", job.log.join("\n"),
               "Finished " + UI.formatDate(new Date().toISOString()) + (state.info ? " on " + state.info.hostname : ""));
           } else if (!errors) FX.confetti();
@@ -399,7 +403,8 @@
     var risky = list.filter(function (a) { return a.risk !== "safe"; });
     // Safe actions start at once; anything else, or a batch, is confirmed with its steps.
     var ask = risky.length || list.length > 2 || Components.store("confirmSafe") ? confirmRun(list, risky) : Promise.resolve(true);
-    return ask.then(function (ok) {
+    var minutes = list.reduce(function (s, a) { return s + (a.minutes || 0); }, 0);
+    return ask.then(function (ok) { return ok && batteryCheck(minutes); }).then(function (ok) {
       if (!ok) return null;
       return API.post("/runs", { actions: ids, confirmed: risky.length > 0 }).then(function (r) {
         state.job = { active: true, done: 0, total: ids.length, results: [], log: [], current: null };
@@ -407,6 +412,25 @@
         return r.id;
       });
     }).catch(function (error) { UI.toast(error.message, "error"); });
+  }
+
+  /* Settings › Maintenance: a run of 10 minutes or more on a laptop running on battery asks first. */
+  var LONG_RUN_MINUTES = 10;
+  function batteryCheck(minutes) {
+    if (!Components.store("batteryWarn") || minutes < LONG_RUN_MINUTES || !navigator.getBattery) return Promise.resolve(true);
+    return navigator.getBattery().then(function (b) {
+      if (b.charging) return true;
+      return UI.confirm("Running on battery", "This run takes about " + Math.round(minutes) + " minutes and the PC is not plugged in (" + Math.round(b.level * 100) +
+        "% left). If the battery runs out, a repair can stop halfway. Plug in the charger or run it anyway.", { ok: "Run anyway" });
+    }, function () { return true; });
+  }
+
+  /* Settings › Notifications: no sounds or desktop notifications between the two times (they may span midnight). */
+  function quiet() {
+    var q = Components.store("quietHours");
+    if (!q || !q.on || !q.from || !q.to) return false;
+    var d = new Date(), now = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    return q.from <= q.to ? now >= q.from && now < q.to : now >= q.from || now < q.to;
   }
 
   function runSafe(area) {
@@ -615,6 +639,21 @@
     list.push({ group: "Commands", title: "Show activity", icon: "performance", run: openDrawer });
     list.push({ group: "Commands", title: "Collapse or expand all cards", icon: "dashboard", run: toggleCards });
     list.push({ group: "Commands", title: "Copy the machine ID", icon: "download", run: function () { if (state.info) copyText(state.info.machine_id, "Machine ID"); } });
+    var here = current();
+    if (here !== "dashboard") {
+      var isPinned = (Components.store("pinnedPages") || []).indexOf(here) >= 0;
+      list.push({ group: "Commands", title: (isPinned ? "Unpin " : "Pin ") + pageTitle(here) + (isPinned ? " from" : " to") + " the dashboard", icon: "dashboard",
+        keywords: "pin star favorite page", run: function () { togglePin(here); } });
+    }
+    list.push({ group: "Commands", title: "Copy a link to this page", icon: "copy", keywords: "url address share",
+      run: function () { copyText(location.origin + "/#/" + here, "Link"); } });
+    list.push({ group: "Preferences", title: "Privacy mode (hide serial numbers and IDs)", icon: "shield", keywords: "screen share mask blur serial mac", run: togglePrivacy });
+    list.push({ group: "Preferences", title: "Clear recent commands and pages", icon: "x", keywords: "history palette forget",
+      run: function () { Components.store("recentCommands", null); Components.store("recentPages", null); UI.toast("Recent commands and pages cleared.", "ok"); } });
+    ((window.Pages.settings || {}).sections || []).forEach(function (sct) {
+      list.push({ group: "Settings", title: "Settings › " + sct[1], sub: sct[3], icon: sct[2], keywords: "preferences options " + sct[3],
+        run: function () { Components.store("settingsSection", sct[0]); location.hash = "#/settings?s=" + sct[0]; if (current() === "settings") render(); } });
+    });
     list.push({ group: "Commands", title: "Open the user guide", icon: "support", keywords: "help faq", run: function () { location.hash = "#/support"; } });
     if (state.info && state.info.admin && !state.info.preview && API.hasToken()) {
       list.push({ group: "Commands", title: "Stop Windows Maintenance Manager", icon: "power", keywords: "shutdown quit exit kill power off", run: powerOff });
@@ -698,7 +737,8 @@
     state: state, render: render, isCurrent: isCurrent, onLeave: onLeave, runActions: runActions, runSafe: runSafe, schedule: schedule,
     scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores,
     order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards, actionDetail: actionDetail,
-    favorites: favorites, toggleFavorite: toggleFavorite
+    favorites: favorites, toggleFavorite: toggleFavorite, applyLook: function () { applyLook(); }, togglePrivacy: function () { togglePrivacy(); },
+    quiet: function () { return quiet(); }, desktopNotify: function (t, x) { desktopNotify(t, x); }, chime: function (ok) { chime(ok); }
   };
 
   setInterval(pollActivity, 4000);
@@ -802,14 +842,56 @@
     Components.store("recentPages", recent.slice(0, 5));
   });
 
-  /* Appearance saved in Settings. */
-  (function () {
+  /* Appearance saved in Settings; Settings calls it again after every change. */
+  var LOOK = { contrast: "high-contrast", cbSafe: "cb-safe", noBlur: "no-blur", wideText: "wide-text", underlineLinks: "underline-links", privacy: "privacy-mode" };
+  function applyLook() {
     var accent = Components.store("accent"), font = Components.store("fontSize");
-    document.body.classList.toggle("high-contrast", !!Components.store("contrast"));
+    Object.keys(LOOK).forEach(function (k) { document.body.classList.toggle(LOOK[k], !!Components.store(k)); });
+    document.documentElement.setAttribute("data-corners", Components.store("corners") || "rounded");
     document.getElementById("live-mini").hidden = !!Components.store("hideLiveMini");
     if (accent && accent !== "blue") document.documentElement.setAttribute("data-accent", accent);
     if (font && font !== "normal") document.body.classList.add("font-" + font);
-  })();
+  }
+  applyLook();
+
+  /* Privacy mode (Settings, Shift P, command palette): serial numbers, MAC addresses and IDs are blurred on screen. */
+  function togglePrivacy() {
+    var on = !Components.store("privacy");
+    Components.store("privacy", on);
+    applyLook();
+    UI.toast(on ? "Privacy mode on: serial numbers, MAC addresses and IDs are hidden on screen." : "Privacy mode off.", "info");
+  }
+  document.addEventListener("keydown", function (e) {
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (!typing && e.shiftKey && !e.ctrlKey && !e.altKey && e.key === "P" && !Components.store("noKeyShortcuts")) togglePrivacy();
+  });
+
+  /* Pinned pages: the star in every page header, shown as a row on the dashboard. */
+  function togglePin(page) {
+    var list = (Components.store("pinnedPages") || []).filter(function (p) { return p !== page; });
+    var on = list.length === (Components.store("pinnedPages") || []).length;
+    if (on) list.push(page);
+    Components.store("pinnedPages", list);
+    document.querySelectorAll('[data-pin-page="' + page + '"]').forEach(function (b) {
+      b.classList.toggle("pinned", on);
+      b.textContent = on ? "★" : "☆";
+      b.setAttribute("aria-pressed", String(on));
+      b.title = on ? "Unpin from the dashboard" : "Pin to the dashboard";
+      if (on) FX.burst(b);
+    });
+    UI.toast(pageTitle(page) + (on ? " pinned to the dashboard." : " unpinned."), "ok");
+  }
+  document.addEventListener("click", function (e) {
+    var pin = e.target.closest("[data-pin-page]");
+    if (pin) togglePin(pin.getAttribute("data-pin-page"));
+  });
+
+  /* Settings › Behaviour: closing the tab during a run asks first (the run itself goes on in the agent). */
+  window.addEventListener("beforeunload", function (e) {
+    if (Components.store("warnOnClose") === false || !(state.job && state.job.active)) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
 
   /* Settings › Data and security: this window forgets its connection after a while without use. */
   var lastUse = Date.now();
@@ -823,7 +905,7 @@
   }, 30000);
 
   function desktopNotify(title, text) {
-    if (!Components.store("desktopNotify") || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
+    if (!Components.store("desktopNotify") || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden || quiet()) return;
     try { new Notification(title, { body: text }); } catch (e) { /* not supported */ }
   }
   setInterval(function () {

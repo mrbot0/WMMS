@@ -3,6 +3,45 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 1.8.0 — 2026-11-03
+
+**20 new settings and 40 new functions across the pages.** Everything is in the console; the agent API is unchanged.
+
+- **Settings**: new *Notifications* and *Maintenance* sections and a search box. Appearance: square corners,
+  color-blind friendly status colors, reduced transparency, wider text spacing, underlined links. Formats: 24/12-hour
+  time, three date styles, Windows (1024) or decimal (1000) sizes. Behaviour: ask before closing the tab during a run,
+  single-key shortcuts off. Notifications: volume with a test, quiet hours (they may span midnight), desktop alerts only
+  for problems, progress in the tab title. Maintenance: default time and startup wait of new schedules, warning before
+  runs of 10+ minutes on battery, open report outputs or not. Data: privacy mode and clear recent commands and pages.
+- **Everywhere**: a star in every page header pins it to the dashboard; privacy mode (Shift P) blurs serial numbers,
+  MAC addresses, UUIDs and the machine ID; command palette entries for pinning, page links, every Settings section.
+- **Dashboard** pinned pages, Copy status, score change since the last visit. **Recommendations** Markdown checklist,
+  CSV, select all fixes. **Area pages** Copy summary, week-old scan warning, link to their History. **Cleanup** free
+  space after cleanup. **History** Today, Run again, Copy log. **Event Viewer / Task Manager** search online, copy path.
+  **Registry** PowerShell path and `reg query`. **Hardware** JSON export, temperature history, high temperature alert.
+  **Schedules** Run now, Pause all / Resume all, next 7 days. **Scripts** duplicate, copy content. **Playbooks** copy
+  steps, end time. **Activity** end time. **Toolbox** Favorites and Safe only. **Reports** copy as text, email draft.
+  **Support** copy PC specifications.
+
+## 1.7.0 — 2026-11-02
+
+**Routines in Schedules and the Hardware page.**
+
+- **Routines**: a group of actions on one schedule. New frequencies for actions, routines and scripts: *at every startup*
+  and *at every sign-in* (Task Scheduler boot and logon triggers, with an optional 0–60 minute wait) and *every month*
+  (days 1–28). Schedules stores `routine:<id>` or `playbook:<id>` in `action_id`; a `delay` column is added to existing
+  databases on start.
+- **12 suggested routines** in five groups (at startup, at sign-in, every day, week, month), each with its frequency
+  ready, and every playbook can be applied as a routine (also from the Playbooks page). `GET /api/v1/routines`.
+- **Hardware page** (System › Hardware, `G` then `Y`): system and motherboard, BIOS, processor, memory modules, graphics,
+  disks, network, monitors, audio, battery and every PnP device with hardware IDs, driver version and status; links to
+  the web, the Microsoft Update Catalog and the PCI/USB ID database; copyable summary without serial numbers.
+  `GET /api/v1/hardware`.
+- **Temperatures and fans**, live every 5 s (`GET /api/v1/hardware/sensors`): Windows thermal zones, disk temperatures,
+  NVIDIA GPUs (nvidia-smi) and, when LibreHardwareMonitor or OpenHardwareMonitor runs, every CPU, motherboard and fan
+  sensor. `POST /api/v1/hardware/monitor-tool` installs LibreHardwareMonitor with winget and starts it (administrator,
+  recorded in History).
+
 ## 1.6.0 — 2026-11-02
 
 **Settings menu, 10 new preferences, scripts in Schedules and 10 more playbooks.**

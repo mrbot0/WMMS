@@ -23,7 +23,10 @@
           '<div class="page-actions">' +
           UI.button("Update preview", 'id="rep-preview"', "", "refresh") +
           UI.button("Download HTML", 'id="rep-html"', "btn-primary", "download") +
-          UI.button("Print / Save as PDF", 'id="rep-print"', "", "print") + "</div></form>") +
+          UI.button("Print / Save as PDF", 'id="rep-print"', "", "print") + "</div>" +
+          '<div class="page-actions" style="justify-content:flex-start">' +
+          UI.button("Copy as text", 'id="rep-copy" title="The report without layout, to paste in an email or a ticket"', "btn-sm", "copy") +
+          UI.button("Email draft", 'id="rep-mail" title="Opens your email program with a summary; attach the downloaded report"', "btn-sm", "bell") + "</div></form>") +
         UI.card("Data export",
           '<p class="muted" style="margin-top:0">Raw data for spreadsheets, ticketing systems or a central console.</p><div class="page-actions">' +
           '<a class="btn" id="csv" download>' + UI.icon("download") + "History CSV</a>" +
@@ -50,6 +53,23 @@
       el.querySelector("#rep-preview").addEventListener("click", preview);
       el.querySelector("#rep-html").addEventListener("click", function () { Report.download(form.scope.value, options()); });
       el.querySelector("#rep-print").addEventListener("click", function () { Report.print(form.scope.value, options()); });
+      function reportText() {
+        var doc = frame.contentDocument;
+        return doc && doc.body ? doc.body.innerText.replace(/\n{3,}/g, "\n\n").trim() : "";
+      }
+      el.querySelector("#rep-copy").addEventListener("click", function () {
+        var text = reportText();
+        if (text.length < 40) { UI.toast("The preview is still being built: try again in a moment.", "info"); return; }
+        App.copyText(text, "Report");
+      });
+      // mailto bodies are cut by many mail programs after a couple of thousand characters: the summary stays short.
+      var MAIL_CHARS = 1800;
+      el.querySelector("#rep-mail").addEventListener("click", function () {
+        var text = reportText(), info = App.state.info || {};
+        var subject = "Maintenance report · " + (info.hostname || "PC") + " · " + UI.formatDate(new Date().toISOString(), false);
+        var body = (form.notes.value.trim() ? form.notes.value.trim() + "\n\n" : "") + (text.length > MAIL_CHARS ? text.slice(0, MAIL_CHARS) + "…\n\n(The full report is attached.)" : text);
+        location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      });
       links();
       return preview();
     }

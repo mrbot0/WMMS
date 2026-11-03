@@ -17,9 +17,14 @@ from .jobs import RunInProgress
 from .store import Store, now
 
 FOLDER = "\\WindowsMaintenanceManager\\"
-KINDS = ("once", "daily", "weekly")
+KINDS = ("once", "daily", "weekly", "monthly", "startup", "logon")
+EVENT_KINDS = ("startup", "logon")  # fire on an event, not at a time: `at` is only the date they become active
+MAX_DELAY_MINUTES = 60
+MAX_MONTH_DAY = 28  # every month has it, so a monthly schedule never skips a month
 WEEKDAYS = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday",
             "FRI": "Friday", "SAT": "Saturday", "SUN": "Sunday"}
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 BUSY_RETRIES = 60
 BUSY_WAIT_SECONDS = 30
 
@@ -31,7 +36,7 @@ def task_name(schedule_id: int) -> str:
 AT_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
-def validate(kind: str, at: str, days: str) -> None:
+def validate(kind: str, at: str, days: str, delay=0) -> None:
     if not isinstance(kind, str) or kind not in KINDS:
         raise ValueError(f"Unknown schedule type: {kind}")
     if not isinstance(days, str):
@@ -39,26 +44,45 @@ def validate(kind: str, at: str, days: str) -> None:
     try:
         if not isinstance(at, str) or not AT_FORMAT.fullmatch(at):
             raise ValueError
-        datetime.strptime(at, "%Y-%m-%dT%H:%M")
+        inizio = datetime.strptime(at, "%Y-%m-%dT%H:%M")
     except ValueError:
         raise ValueError("The start must have the format YYYY-MM-DDTHH:MM.") from None
     if kind == "weekly":
         giorni = [g for g in days.split(",") if g]
         if not giorni or any(g not in WEEKDAYS for g in giorni):
             raise ValueError("Weekly schedules need at least one day among MON, TUE, WED, THU, FRI, SAT, SUN.")
+    if kind == "monthly" and inizio.day > MAX_MONTH_DAY:
+        raise ValueError(f"Monthly schedules run on a day from 1 to {MAX_MONTH_DAY}, so no month is skipped.")
+    if isinstance(delay, bool) or not isinstance(delay, int) or not 0 <= delay <= MAX_DELAY_MINUTES:
+        raise ValueError(f"The delay must be a whole number of minutes from 0 to {MAX_DELAY_MINUTES}.")
+
+
+def trigger_xml(schedule: dict) -> str:
+    """The <Triggers> content for a schedule (actions and scripts share it)."""
+    inizio = f"<StartBoundary>{schedule['at']}:00</StartBoundary><Enabled>true</Enabled>"
+    tipo = schedule["kind"]
+    if tipo in EVENT_KINDS:
+        ritardo = int(schedule.get("delay") or 0)
+        attesa = f"<Delay>PT{ritardo}M</Delay>" if ritardo else ""
+        # No UserId in the logon trigger: it fires when any user signs in.
+        return f"<BootTrigger>{inizio}{attesa}</BootTrigger>" if tipo == "startup" else f"<LogonTrigger>{inizio}{attesa}</LogonTrigger>"
+    if tipo == "once":
+        return f"<TimeTrigger>{inizio}</TimeTrigger>"
+    if tipo == "daily":
+        return f"<CalendarTrigger>{inizio}<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"
+    if tipo == "monthly":
+        giorno = int(schedule["at"][8:10])
+        mesi = "".join(f"<{m} />" for m in MONTHS)
+        return (f"<CalendarTrigger>{inizio}<ScheduleByMonth><DaysOfMonth><Day>{giorno}</Day></DaysOfMonth>"
+                f"<Months>{mesi}</Months></ScheduleByMonth></CalendarTrigger>")
+    giorni = "".join(f"<{WEEKDAYS[g]} />" for g in schedule["days"].split(",") if g)
+    return (f"<CalendarTrigger>{inizio}<ScheduleByWeek><DaysOfWeek>{giorni}</DaysOfWeek>"
+            f"<WeeksInterval>1</WeeksInterval></ScheduleByWeek></CalendarTrigger>")
 
 
 def task_xml(schedule: dict, python: str, script: str) -> str:
-    validate(schedule["kind"], schedule["at"], schedule.get("days") or "")
-    inizio = f"<StartBoundary>{schedule['at']}:00</StartBoundary><Enabled>true</Enabled>"
-    if schedule["kind"] == "once":
-        trigger = f"<TimeTrigger>{inizio}</TimeTrigger>"
-    elif schedule["kind"] == "daily":
-        trigger = f"<CalendarTrigger>{inizio}<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"
-    else:
-        giorni = "".join(f"<{WEEKDAYS[g]} />" for g in schedule["days"].split(",") if g)
-        trigger = (f"<CalendarTrigger>{inizio}<ScheduleByWeek><DaysOfWeek>{giorni}</DaysOfWeek>"
-                   f"<WeeksInterval>1</WeeksInterval></ScheduleByWeek></CalendarTrigger>")
+    validate(schedule["kind"], schedule["at"], schedule.get("days") or "", int(schedule.get("delay") or 0))
+    trigger = trigger_xml(schedule)
     abilitato = "true" if schedule.get("enabled", True) else "false"
     # -I: ignore PYTHONPATH and user site-packages in the SYSTEM process.
     argomenti = escape(f'-I "{script}" --run-schedule {schedule["id"]}')
@@ -258,6 +282,16 @@ def next_run(schedule: dict, ref: datetime) -> Optional[str]:
         return None
     if schedule["kind"] == "once":
         return inizio.isoformat(timespec="minutes") if inizio > ref else None
+    if schedule["kind"] in EVENT_KINDS:
+        return None  # depends on when Windows starts or someone signs in
+    if schedule["kind"] == "monthly":
+        anno, mese = ref.year, ref.month
+        for _ in range(13):
+            candidato = inizio.replace(year=anno, month=mese)
+            if candidato > ref and candidato >= inizio:
+                return candidato.isoformat(timespec="minutes")
+            anno, mese = (anno + 1, 1) if mese == 12 else (anno, mese + 1)
+        return None
     giorni = None
     if schedule["kind"] == "weekly":
         nomi = list(WEEKDAYS)
@@ -279,9 +313,15 @@ def run_schedule(schedule_id: int, store: Store, jobs) -> int:
         return 2
     if not schedule["enabled"]:
         return 0
+    from . import routines
+    try:
+        da_eseguire = routines.expand(schedule["action_id"])
+    except KeyError:
+        store.update_schedule(schedule_id, last_status="error", last_run=now())
+        return 2
     for tentativo in range(BUSY_RETRIES + 1):
         try:
-            stato = jobs.run_sync([schedule["action_id"]], "schedule", confirmed=schedule["confirmed"])
+            stato = jobs.run_sync(da_eseguire, "schedule", confirmed=schedule["confirmed"])
             break
         except RunInProgress:
             if tentativo == BUSY_RETRIES:

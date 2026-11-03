@@ -8,18 +8,29 @@
     });
   }
 
+  /* Preferences read on every call (Settings › Behaviour › Formats); storage may be unavailable. */
+  function pref(key) { try { return JSON.parse(localStorage.getItem("wmm." + key)); } catch (e) { return null; } }
+
   function formatBytes(n) {
     n = Number(n) || 0;
+    var base = pref("sizeUnits") === "decimal" ? 1000 : 1024;  // decimal: the sizes printed on drive boxes
     var units = ["B", "KB", "MB", "GB", "TB"], i = 0;
-    while (Math.abs(n) >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    while (Math.abs(n) >= base && i < units.length - 1) { n /= base; i++; }
     return (i < 2 ? Math.round(n) : n.toFixed(1)) + " " + units[i];
   }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function formatDate(iso, withTime) {
     if (!iso) return "—";
     var d = new Date(iso);
     if (isNaN(d)) return esc(iso);
-    return withTime === false ? d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })
-      : d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    var style = pref("dateStyle") || "short", clock = pref("timeFormat") || "system";
+    var day = style === "iso" ? d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate())
+      : style === "numeric" ? d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" })
+        : d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+    if (withTime === false) return day;
+    var time = d.toLocaleTimeString(undefined, clock === "system" ? { hour: "2-digit", minute: "2-digit" }
+      : { hour: "2-digit", minute: "2-digit", hour12: clock === "12" });
+    return day + ", " + time;
   }
   function relative(iso) {
     if (!iso) return "never";
@@ -91,6 +102,14 @@
   ICONS.services = '<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/>';
   ICONS.integrity = '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L16 9.5"/>';
   ICONS.dashboard = '<rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/>';
+  ICONS.user = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
+  ICONS.calendar = '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>';
+  ICONS.plus = '<path d="M12 5v14M5 12h14"/>';
+  ICONS.thermometer = '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>';
+  ICONS.fan = '<circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-7 4-7 2 0 3 2 2 4l-4 4M14 12c4 0 7 1 7 4 0 2-2 3-4 2l-4-4M12 14c0 4-1 7-4 7-2 0-3-2-2-4l4-4M10 12c-4 0-7-1-7-4 0-2 2-3 4-2l4 4"/>';
+  ICONS.hardware = '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>';
+  ICONS.copy = '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>';
+  ICONS.globe = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>';
   function icon(name) {
     return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || "") + "</svg>";
   }
@@ -286,37 +305,90 @@
   var DAYS = [["MON", "Mon"], ["TUE", "Tue"], ["WED", "Wed"], ["THU", "Thu"], ["FRI", "Fri"], ["SAT", "Sat"], ["SUN", "Sun"]];
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
+  var DAY_NAME = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+  var KINDS = [["once", "Once"], ["daily", "Every day"], ["weekly", "Every week"], ["monthly", "Every month"],
+    ["startup", "At every startup"], ["logon", "At every sign-in"]];
+  var EVENT_KINDS = { startup: 1, logon: 1 };
+
+  /* The frequency of a schedule (actions, routines and scripts) in plain words. */
+  function scheduleText(s) {
+    if (!s) return "Not scheduled";
+    var at = s.at.replace("T", " "), t = at.slice(11), delay = +s.delay || 0;
+    var after = delay ? ", after " + delay + " min" : "";
+    if (s.kind === "startup") return "At every startup" + after;
+    if (s.kind === "logon") return "At every sign-in" + after;
+    if (s.kind === "once") return "Once on " + at;
+    if (s.kind === "daily") return "Every day at " + t;
+    if (s.kind === "monthly") return "Every month on day " + (+at.slice(8, 10)) + " at " + t;
+    return "Every " + (s.days || "").split(",").map(function (d) { return DAY_NAME[d] || d; }).join(", ") + " at " + t;
+  }
+
+  /* action: {title, description, risk, warning, suggested: {kind, time, days, day, delay}, label} */
   function scheduleDialog(action) {
+    var sug = action.suggested || {};
     var d = new Date(Date.now() + 3600e3);
+    if (sug.kind === "monthly" && sug.day) {
+      var m = new Date(d.getFullYear(), d.getMonth(), sug.day);
+      if (m < new Date()) m = new Date(d.getFullYear(), d.getMonth() + 1, sug.day);
+      d = m;
+    }
     var date = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    var kind = sug.kind || "once", selDays = (sug.days || "MON").split(",");
+    // Settings › Maintenance: default time and wait when the action brings no suggestion of its own.
+    if (!sug.time) sug = Object.assign({}, sug, { time: pref("defaultTime") || "03:00" });
+    if (sug.delay == null && pref("defaultDelay") != null) sug = Object.assign({}, sug, { delay: pref("defaultDelay") });
     var warning = action.risk !== "safe"
       ? '<div class="callout callout-warning">' + icon("info") + "<div><strong>" + esc(RISK_LABEL[action.risk]) + " action.</strong> " + esc(action.warning) +
         ' A restore point is created before every run.<label class="check"><input type="checkbox" name="confirmed"> I understand and want to schedule this action</label></div></div>'
       : '<div class="callout">' + icon("shield") + "<div>Safe action: it runs unattended without confirmation.</div></div>";
     var body = '<p class="modal-text"><strong>' + esc(action.title) + "</strong><br><span class=\"muted\">" + esc(action.description) + "</span></p>" +
       '<form class="form" onsubmit="return false">' +
-      '<label>Frequency<select name="kind"><option value="once">Once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label>' +
-      '<div class="form-row"><label>Start date<input type="date" name="date" value="' + date + '" required></label>' +
-      '<label>Time<input type="time" name="time" value="03:00" required></label></div>' +
+      '<label>Frequency<select name="kind">' + KINDS.map(function (k) {
+        return '<option value="' + k[0] + '"' + (k[0] === kind ? " selected" : "") + ">" + k[1] + "</option>";
+      }).join("") + "</select></label>" +
+      '<div class="form-row"><label><span class="date-label">Start date</span><input type="date" name="date" value="' + date + '" required></label>' +
+      '<label class="time-field">Time<input type="time" name="time" value="' + esc(sug.time || "03:00") + '" required></label>' +
+      '<label class="delay-field" hidden>Wait after the event<select name="delay">' + [0, 1, 2, 5, 10, 15, 30, 60].map(function (n) {
+        return '<option value="' + n + '"' + (n === (+sug.delay || 0) ? " selected" : "") + ">" + (n ? n + " min" : "No wait") + "</option>";
+      }).join("") + "</select></label></div>" +
       '<fieldset class="days" hidden><legend>Days</legend>' + DAYS.map(function (day) {
-        return '<label class="chip"><input type="checkbox" name="day" value="' + day[0] + '"' + (day[0] === "MON" ? " checked" : "") + "><span>" + day[1] + "</span></label>";
-      }).join("") + "</fieldset>" + warning +
+        return '<label class="chip"><input type="checkbox" name="day" value="' + day[0] + '"' + (selDays.indexOf(day[0]) >= 0 ? " checked" : "") + "><span>" + day[1] + "</span></label>";
+      }).join("") + "</fieldset>" +
+      '<p class="muted small kind-note"></p>' + warning +
       '<p class="muted small">The schedule is registered in Windows Task Scheduler and runs even when this console is closed.</p></form>';
-    var promise = modal("Schedule action", body, [
+    var promise = modal(action.label || "Schedule action", body, [
       { label: "Cancel", cls: "btn-ghost" },
       { label: "Create schedule", cls: "btn-primary", value: function (wrap) {
         var form = wrap.querySelector("form");
         var days = Array.prototype.map.call(form.querySelectorAll('input[name="day"]:checked'), function (i) { return i.value; });
         var confirmed = form.querySelector('input[name="confirmed"]');
+        var k = form.kind.value, ev = !!EVENT_KINDS[k];
         return {
-          kind: form.kind.value, at: form.date.value + "T" + form.time.value, days: form.kind.value === "weekly" ? days.join(",") : "",
+          kind: k, at: form.date.value + "T" + (ev ? "00:00" : form.time.value), days: k === "weekly" ? days.join(",") : "",
+          delay: ev ? +form.delay.value : 0,
           confirmed: action.risk === "safe" ? false : !!(confirmed && confirmed.checked)
         };
       } }
     ]);
     var form = document.querySelector("#modal-root form");
     if (form) {
-      form.kind.addEventListener("change", function () { form.querySelector(".days").hidden = form.kind.value !== "weekly"; });
+      var NOTES = {
+        startup: "Runs a little after Windows starts, before anyone signs in. The wait lets the PC finish starting.",
+        logon: "Runs when any user signs in. A short wait keeps the desktop responsive.",
+        monthly: "Runs on the day of the start date every month (days 1 to 28, so no month is skipped)."
+      };
+      var now = new Date(), today = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+      var sync = function () {
+        var k = form.kind.value, ev = !!EVENT_KINDS[k];
+        if (ev && form.date.value > today) form.date.value = today;  // a startup routine is active from today unless chosen otherwise
+        form.querySelector(".days").hidden = k !== "weekly";
+        form.querySelector(".time-field").hidden = ev;
+        form.querySelector(".delay-field").hidden = !ev;
+        form.querySelector(".date-label").textContent = ev ? "Active from" : k === "monthly" ? "First run (sets the day)" : "Start date";
+        form.querySelector(".kind-note").textContent = NOTES[k] || "";
+      };
+      form.kind.addEventListener("change", sync);
+      sync();
     }
     return promise;
   }
@@ -344,8 +416,13 @@
   function errorBox(error) {
     return '<div class="callout callout-error">' + icon("info") + "<div><strong>Something went wrong.</strong> " + esc(error && error.message || error) + "</div></div>";
   }
+  /* Every page header ends with a star that pins the page to the dashboard (Extras.togglePin). */
   function pageHeader(title, sub, buttons) {
-    return '<div class="page-head"><div><div class="page-kicker">' + esc(sub || "") + '</div></div><div class="page-actions">' + (buttons || "") + "</div></div>";
+    var page = (location.hash.replace(/^#\/?/, "").split("?")[0] || "dashboard");
+    var pinned = (pref("pinnedPages") || []).indexOf(page) >= 0;
+    var pin = page === "dashboard" ? "" : '<button type="button" class="btn btn-ghost pin-page' + (pinned ? " pinned" : "") + '" data-pin-page="' + esc(page) +
+      '" aria-pressed="' + pinned + '" title="' + (pinned ? "Unpin from the dashboard" : "Pin to the dashboard") + '">' + (pinned ? "★" : "☆") + "</button>";
+    return '<div class="page-head"><div><div class="page-kicker">' + esc(sub || "") + '</div></div><div class="page-actions">' + (buttons || "") + pin + "</div></div>";
   }
   function button(label, attrs, cls, iconName) {
     return '<button type="button" class="btn ' + (cls || "") + '" ' + (attrs || "") + ">" + (iconName ? icon(iconName) : "") + esc(label) + "</button>";
@@ -376,7 +453,12 @@
     var hasSafe = view.actions.some(function (a) { return a.risk === "safe" && a.kind !== "report"; });
     var noActions = !view.actions.length;
     var reportIds = view.actions.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
+    lastViews[area] = view;
+    var ageDays = view.created ? (Date.now() - new Date(view.created).getTime()) / 86400e3 : 0;
+    var stale = ageDays >= STALE_DAYS ? '<div class="callout callout-warning stale-scan">' + icon("clock") + "<div><strong>This scan is " + Math.floor(ageDays) +
+      " days old.</strong> The figures below may no longer match the PC.</div>" + button("Scan now", 'data-scan-area="' + area + '"', "btn-sm btn-primary", "refresh") + "</div>" : "";
     var header = pageHeader(AREA_LABEL[area], "Last scan " + relative(view.created) + " · " + formatDate(view.created),
+      button("Copy summary", 'data-copy-area="' + area + '" title="Score, improvements and recent runs as text, for a ticket"', "", "copy") +
       button("Scan", 'data-scan-area="' + area + '"', "", "refresh") +
       (hasSafe ? button("Apply safe actions", 'data-safe-area="' + area + '" title="Runs every safe fix of this area at once; reports and risky actions are left out"', "", "bolt") : "") +
       button("Export report", 'data-export-area="' + area + '"', "btn-primary", "download"));
@@ -396,22 +478,44 @@
         (reportIds.length ? '<button type="button" class="btn btn-sm" data-run-reports="' + esc(reportIds.join(",")) + '">' + icon("reports") + "Run all diagnostics</button>" : "") +
         '<a class="btn btn-sm btn-ghost" href="#/toolbox?area=' + area + '">' + icon("explorer") + "Toolbox</a>"),
       trend: card("Score trend", trend),
-      runs: card("Recent activity", runsTable(view.runs.slice(0, 8), title)),
-      errors: view.data.errors && view.data.errors.length
+      runs: card("Recent activity", runsTable(view.runs.slice(0, 8), title), '<a class="btn btn-sm" href="#/history?area=' + area + '">' + icon("history") + "All runs of this area</a>"),
+      errors: stale + (view.data.errors && view.data.errors.length
         ? '<div class="callout callout-error">' + icon("info") + "<div><strong>Scan incomplete: some data could not be read.</strong> " + esc(view.data.errors.join(" · ")) + "</div></div>" :
         (view.data.warnings && view.data.warnings.length
-          ? '<div class="callout callout-warning">' + icon("info") + "<div>" + esc(view.data.warnings.join(" · ")) + "</div></div>" : "")
+          ? '<div class="callout callout-warning">' + icon("info") + "<div>" + esc(view.data.warnings.join(" · ")) + "</div></div>" : ""))
     };
   }
 
+  var STALE_DAYS = 7;
+  var lastViews = {};
+  /* The area as plain text: score, open improvements and the latest runs. */
+  function areaSummary(area) {
+    var v = lastViews[area];
+    if (!v) return "";
+    var title = function (id) { var a = window.App && App.action(id); return a ? a.title : id; };
+    var lines = [AREA_LABEL[area] + " · score " + v.score + "/100 · scanned " + formatDate(v.created)];
+    if (v.recommendations.length) {
+      lines.push("", "Open improvements:");
+      v.recommendations.forEach(function (r) { lines.push("- [" + (r.impact || "").toUpperCase() + "] " + r.title + (r.reason ? ": " + r.reason : "")); });
+    } else lines.push("", "No open improvements.");
+    if (v.runs.length) {
+      lines.push("", "Recent runs:");
+      v.runs.slice(0, 8).forEach(function (r) { lines.push("- " + formatDate(r.started) + " · " + title(r.action_id) + " · " + (STATUS_LABEL[r.status] || r.status)); });
+    }
+    return lines.join("\n");
+  }
+
   function bindArea(el, area, rerender) {
-    var scan = el.querySelector("[data-scan-area]");
-    if (scan) scan.addEventListener("click", function () {
-      scan.disabled = true;
-      scan.classList.add("busy");
-      API.post("/areas/" + area + "/scan").then(function () { UI.toast("Scan completed.", "ok"); rerender(); },
-        function (e) { UI.toast(e.message, "error"); scan.disabled = false; scan.classList.remove("busy"); });
+    el.querySelectorAll("[data-scan-area]").forEach(function (scan) {
+      scan.addEventListener("click", function () {
+        scan.disabled = true;
+        scan.classList.add("busy");
+        API.post("/areas/" + area + "/scan").then(function () { UI.toast("Scan completed.", "ok"); rerender(); },
+          function (e) { UI.toast(e.message, "error"); scan.disabled = false; scan.classList.remove("busy"); });
+      });
     });
+    var copy = el.querySelector("[data-copy-area]");
+    if (copy) copy.addEventListener("click", function () { App.copyText(areaSummary(area), AREA_LABEL[area] + " summary"); });
     var safe = el.querySelector("[data-safe-area]");
     if (safe) safe.addEventListener("click", function () { App.runSafe(area); });
     var exp = el.querySelector("[data-export-area]");
@@ -419,12 +523,12 @@
   }
 
   window.UI = {
-    runsTable: runsTable, areaParts: areaParts, bindArea: bindArea, ORIGIN_LABEL: ORIGIN_LABEL,
+    runsTable: runsTable, areaParts: areaParts, bindArea: bindArea, areaSummary: areaSummary, ORIGIN_LABEL: ORIGIN_LABEL, pref: pref,
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
     kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
-    recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog,
+    recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog, scheduleText: scheduleText,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL
   };

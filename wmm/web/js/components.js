@@ -328,7 +328,7 @@
   /* ---------- keyboard shortcuts ---------- */
 
   var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services", k: "toolbox",
-    l: "events", m: "processes", w: "registry",
+    l: "events", m: "processes", w: "registry", y: "hardware",
     i: "integrity", e: "security", u: "updates", n: "network", x: "activity", z: "actions", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
   var pendingG = 0;
 
@@ -345,6 +345,7 @@
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); palette.open(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || document.querySelector(".modal-backdrop")) return;
+    if (store("noKeyShortcuts")) return;  // Settings › Behaviour: only Ctrl K stays, for screen readers and speech input
     if (e.key === "/") { e.preventDefault(); palette.open(); return; }
     if (e.key === "?") { e.preventDefault(); shortcutsHelp(); return; }
     if (e.key === "T" && e.shiftKey) { theme.toggle(); return; }
