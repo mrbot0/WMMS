@@ -8,6 +8,13 @@
   /* Improvements the technician chose to ignore on this PC (kept in this browser). */
   function keyOf(x) { return x.area + "|" + x.title; }
   function dismissed() { return Components.store("recDismissed") || []; }
+  /* Snoozed improvements come back by themselves after a week. */
+  var SNOOZE_DAYS = 7;
+  function snoozed() {
+    var all = Components.store("recSnoozed") || {}, now = Date.now(), live = {};
+    Object.keys(all).forEach(function (k) { if (all[k] > now) live[k] = all[k]; });
+    return live;
+  }
 
   window.Pages.recommendations = {
     title: "Recommendations",
@@ -16,8 +23,12 @@
       var fromUrl = /[?&]area=(\w+)/.exec(location.hash);
       if (fromUrl && UI.AREAS.indexOf(fromUrl[1]) >= 0) filters.area = fromUrl[1];
       return API.get("/recommendations").then(function (r) {
-        var hidden = dismissed();
-        var everything = r.items.map(function (x) { x.dismissed = hidden.indexOf(keyOf(x)) >= 0; return x; });
+        var hidden = dismissed(), sleeping = snoozed(), recView = Components.store("recView") || { group: false };
+        var everything = r.items.map(function (x) {
+          x.snoozedUntil = sleeping[keyOf(x)] || 0;
+          x.dismissed = hidden.indexOf(keyOf(x)) >= 0 || !!x.snoozedUntil;
+          return x;
+        });
         var all = everything.filter(function (x) { return !x.dismissed; });
         var hiddenCount = everything.length - all.length;
         App.setSubtitle("All recommended improvements from the latest scans");
@@ -47,7 +58,8 @@
           sel("impact", "Impact", [["high", "High"], ["medium", "Medium"], ["low", "Low"]]) +
           sel("risk", "Risk", [["safe", "Safe"], ["moderate", "Moderate"], ["high", "High risk"]]) +
           '<label class="check"><input type="checkbox" data-f="dismissed"' + (filters.dismissed ? " checked" : "") + (hiddenCount ? "" : " disabled") +
-          "> Show dismissed (" + hiddenCount + ")</label></div>";
+          "> Show dismissed and snoozed (" + hiddenCount + ")</label>" +
+          '<label class="check"><input type="checkbox" id="rec-group"' + (recView.group ? " checked" : "") + "> Group by area</label></div>";
 
         el.innerHTML = UI.pageHeader("Recommendations", "Generated from the latest scan of each area",
           UI.button("Copy checklist", 'id="rec-copy" title="The listed improvements as a Markdown checklist, for a ticket or an email"', "", "copy") +
@@ -73,17 +85,26 @@
           var items = shown();
           el.querySelector("#rec-count").textContent = items.length + " of " + (filters.dismissed ? everything : all).length;
           if (!items.length) { list.innerHTML = UI.recommendations([]); return; }
-          list.innerHTML = '<ul class="recs">' + items.map(function (x) {
+          var groups = recView.group ? UI.AREAS.filter(function (a) { return items.some(function (x) { return x.area === a; }); }) : [null];
+          list.innerHTML = groups.map(function (g) {
+            var part = g ? items.filter(function (x) { return x.area === g; }) : items;
+            return (g ? '<div class="rec-group-title">' + UI.icon(g) + esc(UI.AREA_LABEL[g]) + ' <span class="muted small">' + part.length + "</span></div>" : "") +
+              '<ul class="recs">' + part.map(item).join("") + "</ul>";
+          }).join("");
+          update();
+        }
+        function item(x) {
             var check = x.action_id ? '<input type="checkbox" class="rec-check" data-pick="' + esc(x.action_id) + '" aria-label="Select ' + esc(x.title) + '">' : '<span class="rec-check" style="width:13px"></span>';
-            var dismiss = '<button class="btn btn-sm btn-ghost" data-dismiss="' + esc(keyOf(x)) + '" title="' + (x.dismissed ? "Show this improvement again" : "Hide this improvement on this PC") + '">' +
+            var dismiss = x.snoozedUntil ? '<button class="btn btn-sm btn-ghost" data-unsnooze="' + esc(keyOf(x)) + '" title="Snoozed until ' + esc(UI.formatDate(new Date(x.snoozedUntil).toISOString(), false)) + '">Wake up</button>'
+              : '<button class="btn btn-sm btn-ghost" data-dismiss="' + esc(keyOf(x)) + '" title="' + (x.dismissed ? "Show this improvement again" : "Hide this improvement on this PC") + '">' +
               (x.dismissed ? "Restore" : UI.icon("x")) + "</button>";
-            return '<li class="rec rec-' + esc(x.impact) + (x.dismissed ? " rec-dismissed" : "") + '">' + check + '<div class="rec-main"><div class="rec-title">' + esc(x.title) + ' <span class="muted small">· ' +
+            var snooze = x.dismissed ? "" : '<button class="btn btn-sm btn-ghost" data-snooze="' + esc(keyOf(x)) + '" title="Hide it for ' + SNOOZE_DAYS + ' days, then show it again">' + UI.icon("clock") + "</button>";
+            dismiss = snooze + dismiss;
+            return '<li class="rec rec-' + esc(x.impact) + (x.dismissed ? " rec-dismissed" : "") + (x.snoozedUntil ? " rec-snoozed" : "") + '">' + check + '<div class="rec-main"><div class="rec-title">' + esc(x.title) + ' <span class="muted small">· ' +
               esc(UI.AREA_LABEL[x.area] || x.area) + '</span></div><div class="rec-reason">' + esc(x.reason) + '</div><div class="rec-badges">' + UI.impactBadge(x.impact) + UI.riskBadge(x.risk) +
               '<span class="badge">Scanned ' + esc(UI.relative(x.scanned)) + "</span></div></div>" + '<div class="rec-actions">' +
               (x.action_id ? '<button class="btn btn-sm btn-primary" data-run="' + esc(x.action_id) + '">' + UI.icon("play") + 'Apply</button><button class="btn btn-sm" data-schedule="' + esc(x.action_id) + '">' + UI.icon("clock") + "Schedule</button>"
                 : '<a class="btn btn-sm" href="#/' + esc(x.area) + '">Open ' + esc(UI.AREA_LABEL[x.area] || x.area) + "</a>") + dismiss + "</div></li>";
-          }).join("") + "</ul>";
-          update();
         }
         function picked() { return unique(Array.prototype.map.call(list.querySelectorAll("[data-pick]:checked"), function (c) { return c.getAttribute("data-pick"); })); }
         function update() {
@@ -93,6 +114,15 @@
         }
         list.addEventListener("change", update);
         list.addEventListener("click", function (e) {
+          var sn = e.target.closest("[data-snooze],[data-unsnooze]");
+          if (sn) {
+            var all = snoozed(), k = sn.getAttribute("data-snooze") || sn.getAttribute("data-unsnooze");
+            if (sn.hasAttribute("data-snooze")) all[k] = Date.now() + SNOOZE_DAYS * 86400e3; else delete all[k];
+            Components.store("recSnoozed", all);
+            UI.toast(sn.hasAttribute("data-snooze") ? "Snoozed for " + SNOOZE_DAYS + " days: it comes back by itself." : "Improvement shown again.", "info");
+            App.render();
+            return;
+          }
           var b = e.target.closest("[data-dismiss]");
           if (!b) return;
           var key = b.getAttribute("data-dismiss"), keys = dismissed(), i = keys.indexOf(key);
@@ -109,6 +139,11 @@
           });
         });
         selectedBtn.addEventListener("click", function () { App.runActions(order(picked())); });
+        el.querySelector("#rec-group").addEventListener("change", function (e) {
+          recView.group = e.target.checked;
+          Components.store("recView", recView);
+          draw();
+        });
         el.querySelector("#rec-pick-all").addEventListener("click", function () {
           var boxes = list.querySelectorAll("[data-pick]"), all = Array.prototype.every.call(boxes, function (c) { return c.checked; });
           boxes.forEach(function (c) { c.checked = !all; });

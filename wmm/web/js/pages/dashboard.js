@@ -67,6 +67,15 @@
         var v = verdict(d.scores.overall), byImpact = d.issues_by_impact || {};
         var auto = Components.store("dashAuto") !== false;
         var every = Components.store("dashInterval") || REFRESH_MS / 1000;
+        var weakest = scanned.slice().sort(function (a, b) { return d.scores[a] - d.scores[b]; })[0];
+        if (weakest && d.scores[weakest] >= 90) weakest = null;  // nothing worth pointing at
+        // Settings › Notifications: scheduled runs that happened while nobody was looking.
+        var seen = Components.store("lastVisit");
+        if (seen && seen.at && Components.store("scheduleNotice") !== false && Date.now() - seen.at > 3600e3) {
+          var sched = (d.activity || []).filter(function (x) { return x.origin === "schedule" && new Date(x.started).getTime() > seen.at; });
+          var failed = sched.filter(function (x) { return x.status === "error"; }).length;
+          if (sched.length) UI.toast(sched.length + " scheduled run" + (sched.length > 1 ? "s" : "") + " since your last visit" + (failed ? ", " + failed + " failed. See History." : ", all fine."), failed ? "warning" : "info");
+        }
         // Since the last visit: the overall score then and how long ago (kept in this browser).
         var visitBefore = Components.store("lastVisit");
         var sinceVisit = visitBefore && visitBefore.at && d.scores.overall != null && Date.now() - visitBefore.at > 3600e3
@@ -75,7 +84,9 @@
               : d.scores.overall < visitBefore.score ? '<span class="delta-down">▼ ' + (d.scores.overall - visitBefore.score) + "</span>" : '<span class="delta-flat">no change</span>') + "</span> · " : "";
         if (d.scores.overall != null && (!visitBefore || Date.now() - visitBefore.at > 3600e3)) Components.store("lastVisit", { at: Date.now(), score: d.scores.overall });
         var toolbar = '<div class="dash-toolbar"><span>' + sinceVisit + "Updated " + esc(new Date().toLocaleTimeString()) + " · oldest area scan " +
-          esc(UI.relative(scanned.map(function (a) { return d.scanned[a]; }).sort()[0])) + '</span><button type="button" class="btn btn-sm" id="dash-copy" title="Overall health, every area and the top improvements as text">' +
+          esc(UI.relative(scanned.map(function (a) { return d.scanned[a]; }).sort()[0])) + "</span>" +
+          (weakest ? '<a class="btn btn-sm" href="#/' + weakest + '" title="The area with the lowest score">' + UI.icon(weakest) + "Weakest: " + esc(UI.AREA_LABEL[weakest]) + " " + d.scores[weakest] + "</a>" : "") +
+          '<button type="button" class="btn btn-sm" id="dash-copy" title="Overall health, every area and the top improvements as text">' +
           UI.icon("copy") + 'Copy status</button><label><span class="switch"><input type="checkbox" id="dash-auto"' + (auto ? " checked" : "") +
           '><span></span></span>Auto-refresh every ' + (every < 60 ? every + " s" : every / 60 === 1 ? "minute" : every / 60 + " min") + "</label></div>";
         var pins = (Components.store("pinnedPages") || []).filter(function (p) { return window.Pages[p]; });
@@ -196,7 +207,9 @@
           show("categories", section("dashboard", "All categories", 'Click a category for its page, or go straight to a page · <a href="#" data-guide-open="dashboard">How to use the console</a>') +
             Hubs.overview(catScores)) +
           show("visit", section("check", "This visit", '<a href="#/settings">Customize the dashboard</a>') + '<div class="grid grid-3">' + UI.card("Today on this PC", todayCard) +
-            UI.card("Visit checklist", checklist, '<button class="btn btn-sm btn-ghost" type="button" id="visit-reset">Reset</button>') + UI.card("Technician notes", notes) + "</div>") +
+            UI.card("Visit checklist", checklist, '<button class="btn btn-sm btn-ghost" type="button" id="visit-copy" title="The checklist with what is done, as text">' + UI.icon("copy") + "</button>" +
+              '<button class="btn btn-sm btn-ghost" type="button" id="visit-reset">Reset</button>') +
+            UI.card("Technician notes", notes, '<button class="btn btn-sm btn-ghost" type="button" id="notes-stamp" title="Insert the date and time at the cursor">' + UI.icon("clock") + "Time stamp</button>") + "</div>") +
           show("favorites", pinned) +
           show("tiles", section("dashboard", "Health by area", scanned.length + " of " + UI.AREAS.length + ' assessed · <a href="#" id="score-help">How scores work</a>') + tiles) +
           show("live", section("performance", "Live system", '<a href="#/performance">Open Performance</a>') + live) +
@@ -210,6 +223,17 @@
             '<div class="grid grid-3">' + UI.card("System", info, '<button class="btn btn-sm" type="button" id="copy-info">' + UI.icon("download") + "Copy</button>") + UI.card("Up next", upcoming, '<a class="btn btn-sm" href="#/activity">Activity</a>') +
             UI.card("Recent activity", UI.runsTable(d.runs.slice(0, 6), title), '<a class="btn btn-sm" href="#/history">History</a>', "card-flush") + "</div>");
 
+        // Tabs: the health at a glance first, then the visit, live data, insights and the system details.
+        var sectionIs = function (text) { return function (n) { return n.classList.contains("section-title") && n.textContent.indexOf(text) === 0; }; };
+        if (Components.store("pageTabs") !== false) {
+          UI.pageTabs(el, "dashboard", [
+            { id: "overview", label: "Overview", icon: "dashboard", match: function (n) { return sectionIs("All categories")(n) || sectionIs("Favorite actions")(n) || sectionIs("Health by area")(n); } },
+            { id: "visit", label: "This visit", icon: "check", match: sectionIs("This visit") },
+            { id: "live", label: "Live", icon: "performance", match: function (n) { return sectionIs("Live system")(n) || sectionIs("Key figures")(n); } },
+            { id: "insights", label: "Insights", icon: "sparkle", match: sectionIs("Insights") },
+            { id: "system", label: "System", icon: "cpu", match: sectionIs("System & operations") }
+          ]);
+        }
         // The overall score went up since the last visit: celebrate it on the gauge.
         var previous = Components.store("lastOverall"), overall = d.scores.overall;
         if (overall != null) {
@@ -252,6 +276,23 @@
             if (box.checked) FX.burst(box);
             if (n === VISIT.length) { UI.toast("Visit checklist completed.", "ok"); FX.confetti(); }
           });
+        });
+        var visitCopy = el.querySelector("#visit-copy");
+        if (visitCopy) visitCopy.addEventListener("click", function () {
+          var v = visitState();
+          App.copyText(["Visit " + UI.formatDate(new Date().toISOString(), false) + (App.state.info ? " · " + App.state.info.hostname : "")].concat(VISIT.map(function (x) {
+            return (v.done[x[0]] ? "[x] " : "[ ] ") + x[1];
+          })).join("\n"), "Checklist");
+        });
+        var stamp = el.querySelector("#notes-stamp");
+        if (stamp) stamp.addEventListener("click", function () {
+          var box = el.querySelector("#tech-notes"), text = UI.formatDate(new Date().toISOString()) + " – ";
+          var at = box.selectionStart != null ? box.selectionStart : box.value.length;
+          var before = box.value.slice(0, at), lead = before && !/\n$/.test(before) ? "\n" : "";
+          box.value = before + lead + text + box.value.slice(at);
+          box.focus();
+          box.selectionStart = box.selectionEnd = at + lead.length + text.length;
+          box.dispatchEvent(new Event("input"));
         });
         var reset = el.querySelector("#visit-reset");
         if (reset) reset.addEventListener("click", function () { Components.store("visit", null); App.render(); });

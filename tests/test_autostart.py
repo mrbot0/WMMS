@@ -23,7 +23,16 @@ class TaskXml(unittest.TestCase):
         self.assertEqual(principale.find("t:RunLevel", NS).text, "HighestAvailable")
         self.assertEqual(principale.find("t:LogonType", NS).text, "InteractiveToken")
         argomenti = radice.find("t:Actions/t:Exec/t:Arguments", NS).text
-        self.assertEqual(argomenti, r'-I "C:\Program Files\WMM & Co\wmm.py" --no-browser --port 8765')
+        # Hidden console, browser opened: the console appears in the browser at sign-in, with no window of its own.
+        self.assertEqual(argomenti, r'-I "C:\Program Files\WMM & Co\wmm.py" --hidden --port 8765')
+
+    def test_uses_pythonw_when_present(self):
+        with mock.patch.object(autostart.os.path, "isfile", return_value=True):
+            xml = autostart.task_xml(SID, r"C:\Program Files\Python313\python.exe", r"C:\WMM\wmm.py", 8765)
+        self.assertIn(r"<Command>C:\Program Files\Python313\pythonw.exe</Command>", xml)
+        with mock.patch.object(autostart.os.path, "isfile", return_value=False):
+            xml = autostart.task_xml(SID, r"C:\Program Files\Python313\python.exe", r"C:\WMM\wmm.py", 8765)
+        self.assertIn(r"<Command>C:\Program Files\Python313\python.exe</Command>", xml)
 
 
 class Lifecycle(unittest.TestCase):

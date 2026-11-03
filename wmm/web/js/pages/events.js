@@ -29,6 +29,8 @@
     }), { height: 170, empty: "No events in this range" });
   }
 
+  function savedFilters() { return Components.store("eventFilters") || []; }
+
   function detail(App, e, apply) {
     var body = UI.definition([["Time", esc(UI.formatDate(e.time))], ["Level", levelBadge(e.level)], ["Log", esc(e.log)], ["Source", esc(e.provider)],
       ["Event ID", '<span class="cell-mono">' + esc(e.id) + "</span>"], ["Task", esc(e.task)], ["Process ID", esc(e.pid || "—")], ["Record", esc(e.record)]]) +
@@ -72,7 +74,11 @@
           '<label>Source<input type="text" id="ev-source" placeholder="e.g. disk, Ntfs" value="' + esc(view.providers || "") + '"></label>' +
           '<label>Event ID<input type="number" id="ev-id" min="0" max="65535" value="' + esc(view.id || "") + '"></label>' +
           '<label>Max events<select id="ev-limit">' + [200, 500, 1000, 2000].map(function (n) { return "<option" + (Number(view.limit) === n ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></label>" +
-          UI.button("Reset filters", 'id="ev-reset"', "btn-ghost btn-sm", "x") + "</div>" +
+          UI.button("Reset filters", 'id="ev-reset"', "btn-ghost btn-sm", "x") +
+          '<label>Saved<select id="ev-saved"><option value="">Saved filters…</option>' + savedFilters().map(function (f, i) {
+            return '<option value="' + i + '">' + esc(f.name) + "</option>";
+          }).join("") + "</select></label>" + UI.button("Save", 'id="ev-save" title="Keep these filters under a name, to open them again with one click"', "btn-sm", "check") +
+          UI.button("Copy sources", 'id="ev-copy-sources" title="Event counts by source and ID, as text for a forum or a ticket"', "btn-sm btn-ghost", "copy") + "</div>" +
           '<p class="muted small" style="margin:8px 0 0">Levels left empty use the category defaults. The search box and the column filters below work instantly on the loaded events.</p></div></section>' +
           '<div id="ev-body">' + UI.loading("Reading the event logs…") + "</div>";
 
@@ -171,6 +177,28 @@
           });
         });
         el.querySelector("#ev-reset").addEventListener("click", function () { apply({ logs: "", levels: "", providers: "", id: "", hours: 168, limit: 500 }); });
+        el.querySelector("#ev-save").addEventListener("click", function () {
+          UI.modal("Save these filters", '<form class="form" onsubmit="return false"><label>Name<input name="n" maxlength="40" placeholder="e.g. Disk errors this week" required></label></form>',
+            [{ label: "Cancel", cls: "btn-ghost" }, { label: "Save", cls: "btn-primary", value: function (w) { return w.querySelector("input").value.trim(); } }]).then(function (name) {
+            if (!name) return;
+            var list = savedFilters().filter(function (f) { return f.name !== name; });
+            list.push({ name: name, view: { preset: view.preset, hours: view.hours, logs: view.logs, levels: view.levels, providers: view.providers, id: view.id, limit: view.limit } });
+            Components.store("eventFilters", list.slice(-12));
+            UI.toast("Filters saved as " + name + ".", "ok");
+            App.render();
+          });
+        });
+        el.querySelector("#ev-saved").addEventListener("change", function (e) {
+          var f = savedFilters()[Number(e.target.value)];
+          if (f) apply(f.view);
+        });
+        el.querySelector("#ev-copy-sources").addEventListener("click", function () {
+          if (!data) return;
+          var by = {};
+          data.events.forEach(function (x) { var k = x.provider + " · ID " + x.id; by[k] = (by[k] || 0) + 1; });
+          var keys = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; }).slice(0, 25);
+          App.copyText(["Events in the last " + view.hours + " h (" + data.events.length + " loaded):"].concat(keys.map(function (k) { return by[k] + "× " + k; })).join("\n"), "Sources");
+        });
         el.querySelector("#ev-refresh").addEventListener("click", function () { data = null; load(true); });
         el.querySelector("#ev-live").addEventListener("change", function (e) { view.live = e.target.checked; save(); setLive(view.live); });
         App.onLeave(function () { clearInterval(timer); });

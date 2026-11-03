@@ -87,6 +87,7 @@
           var avg = average(c, scores), high = recs.filter(function (x) { return x.impact === "high"; }).length;
           var tools = Object.keys(App.state.actions).filter(function (id) { return areas.indexOf(App.state.actions[id].area) >= 0; }).length;
           var oldest = areas.map(function (a) { return App.state.scanned[a]; }).filter(Boolean).sort()[0];
+          var weakest = areas.filter(function (a) { return scores[a] != null && scores[a] < 90; }).sort(function (a, b) { return scores[a] - scores[b]; })[0];
           var kpis = areas.length ? '<div class="grid grid-4">' +
             UI.kpi("Category score", avg != null ? Components.num(avg) : "—", areas.length + " areas", avg != null ? UI.tone(avg) : "") +
             UI.kpi("Open improvements", Components.num(recs.length), high + " high impact", recs.length ? (high ? "error" : "warning") : "ok") +
@@ -94,6 +95,8 @@
             UI.kpi("Oldest scan", esc(oldest ? UI.relative(oldest) : "never"), "Scan again for fresh data", "info") + "</div>" : "";
           el.innerHTML = '<section class="card hub-hero"><span class="hub-icon hub-icon-lg">' + UI.icon(c.icon) + '</span><div class="grow"><h2>' + esc(c.title) + "</h2><p>" + esc(c.text) + "</p></div>" +
             (areas.length ? '<div class="hub-hero-actions">' + UI.button("Scan these areas", 'id="hub-scan"', "", "refresh") +
+              (weakest ? '<a class="btn" href="#/' + weakest + '" title="The page with the lowest score in this category">' + UI.icon(weakest) + "Weakest: " + esc(App.pageTitle(weakest)) + "</a>" : "") +
+              UI.button("Copy summary", 'id="hub-copy" title="Scores and open improvements of this category, as text"', "", "copy") +
               (recs.some(function (x) { return x.action_id && x.risk === "safe"; }) ? UI.button("Apply safe fixes", 'id="hub-safe"', "btn-primary", "bolt") : "") + "</div>" : "") +
             "</section>" + kpis + '<div class="section-title">' + UI.icon(c.icon) + 'Pages in this category<span class="extra">' + c.pages.length + "</span></div>" +
             '<div class="hub-pages">' + c.pages.map(function (p) {
@@ -115,6 +118,12 @@
               UI.toast(c.title + " scanned.", "ok");
               return App.refreshScores();
             }, function (e) { UI.toast(e.message, "error"); }).then(function () { App.render(); });
+          });
+          var copy = el.querySelector("#hub-copy");
+          if (copy) copy.addEventListener("click", function () {
+            App.copyText([c.title + (avg != null ? " · score " + avg + "/100" : "")].concat(areas.map(function (a) {
+              return "- " + UI.AREA_LABEL[a] + ": " + (scores[a] != null ? scores[a] + "/100" : "not scanned") + " · " + recs.filter(function (x) { return x.area === a; }).length + " improvements";
+            }), recs.length ? ["", "Top improvements:"].concat(recs.slice(0, 8).map(function (x) { return "- [" + String(x.impact).toUpperCase() + "] " + x.title; })) : []).join("\n"), c.title + " summary");
           });
           var safe = el.querySelector("#hub-safe");
           if (safe) safe.addEventListener("click", function () {

@@ -4,6 +4,17 @@
   window.Pages = window.Pages || {};
   var esc = UI.esc;
   var SCOPES = ["full", "dashboard"].concat(UI.AREAS);
+  /* Sentences technicians write in almost every report: one click adds them to the notes. */
+  var PHRASES = [
+    ["Cleanup done", "Temporary files, caches and old logs were removed to free disk space."],
+    ["Windows repaired", "The Windows image and system files were checked and repaired (DISM and SFC)."],
+    ["Updates installed", "Windows, drivers and applications were updated to the latest versions."],
+    ["Security checked", "Antivirus, firewall and Windows security settings were checked and are active."],
+    ["Startup lighter", "Programs that slowed down the start of Windows were disabled."],
+    ["Backup advice", "We recommend an automatic backup of your documents to an external drive or the cloud."],
+    ["Restart needed", "Please restart the PC to complete the maintenance."],
+    ["Next visit", "We recommend the next maintenance in 6 months."]
+  ];
 
   function remembered(key) { try { return localStorage.getItem("wmm." + key) || ""; } catch (e) { return ""; } }
   function remember(key, value) { try { localStorage.setItem("wmm." + key, value); } catch (e) { /* storage unavailable */ } }
@@ -19,7 +30,10 @@
             return '<option value="' + s + '">' + esc(Report.SCOPE_LABEL[s]) + (s === "full" ? " (all areas)" : "") + "</option>";
           }).join("") + "</select></label>" +
           '<label>Technician<input name="technician" maxlength="80" placeholder="Name shown on the report" value="' + esc(remembered("technician")) + '"></label>' + '<span class="muted small">Empty: the default technician from Settings is used.</span>' +
-          '<label>Notes for the customer<textarea name="notes" maxlength="4000" placeholder="Work performed, advice, next steps…"></textarea></label>' +
+          '<label>Notes for the customer<textarea name="notes" maxlength="4000" placeholder="Work performed, advice, next steps…">' + esc(remembered("reportNotes")) + "</textarea></label>" +
+          '<div class="phrases" aria-label="Common phrases">' + PHRASES.map(function (p, i) {
+            return '<button type="button" class="btn btn-sm btn-ghost" data-phrase="' + i + '" title="' + esc(p[1]) + '">+ ' + esc(p[0]) + "</button>";
+          }).join("") + '</div><span class="muted small" id="notes-saved">The notes are kept in this browser until you clear them.</span>' +
           '<div class="page-actions">' +
           UI.button("Update preview", 'id="rep-preview"', "", "refresh") +
           UI.button("Download HTML", 'id="rep-html"', "btn-primary", "download") +
@@ -50,6 +64,20 @@
           function (e) { frame.srcdoc = '<p style="font-family:Segoe UI;padding:24px;color:#C42B1C">' + esc(e.message) + "</p>"; });
       }
       form.scope.addEventListener("change", function () { links(); preview(); });
+      // The notes survive a reload or a closed tab: they are written for one visit and kept until cleared.
+      var noteTimer = null;
+      form.notes.addEventListener("input", function () {
+        clearTimeout(noteTimer);
+        noteTimer = setTimeout(function () { remember("reportNotes", form.notes.value); el.querySelector("#notes-saved").textContent = "Draft saved " + new Date().toLocaleTimeString() + "."; }, 600);
+      });
+      el.querySelector(".phrases").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-phrase]");
+        if (!b) return;
+        var text = PHRASES[Number(b.getAttribute("data-phrase"))][1], cur = form.notes.value.trim();
+        if (cur.indexOf(text) >= 0) return;
+        form.notes.value = (cur ? cur + "\n" : "") + text;
+        form.notes.dispatchEvent(new Event("input"));
+      });
       el.querySelector("#rep-preview").addEventListener("click", preview);
       el.querySelector("#rep-html").addEventListener("click", function () { Report.download(form.scope.value, options()); });
       el.querySelector("#rep-print").addEventListener("click", function () { Report.print(form.scope.value, options()); });

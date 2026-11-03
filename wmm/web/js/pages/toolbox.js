@@ -40,7 +40,10 @@
         }).join("") + "</div>";
 
         el.innerHTML = UI.pageHeader("Toolbox", "Every maintenance tool in one place",
-          '<span class="muted small" id="tb-info">Nothing selected</span>' + UI.button("Run diagnostics", 'id="tb-reports"', "", "reports") +
+          '<span class="muted small" id="tb-info">Nothing selected</span>' +
+          UI.button(view.list ? "Cards" : "List", 'id="tb-layout" title="Compact list or cards with descriptions"', "", view.list ? "dashboard" : "playbooks") +
+          UI.button("Copy", 'id="tb-copy" disabled title="Names and IDs of the selected tools, for a ticket or a script"', "", "copy") +
+          UI.button("Run diagnostics", 'id="tb-reports"', "", "reports") +
           UI.button("Clear", 'id="tb-clear" disabled', "", "x") + UI.button("Run selected", 'id="tb-run" disabled', "btn-primary", "play")) + kpis +
           '<section class="card toolbox"><div class="card-body">' + tabs +
           '<div class="tb-bar">' + segmented + UI.hint("Fixes change a setting or delete files. Reports only read the PC and open their output when they finish.") +
@@ -72,7 +75,7 @@
           }).sort(sorts[view.sort] || sorts.name);
         }
         function draw() {
-          Components.store("toolbox", { area: view.area, kind: view.kind, query: view.query, sort: view.sort, never: view.never, favs: view.favs, safe: view.safe });
+          Components.store("toolbox", { area: view.area, kind: view.kind, query: view.query, sort: view.sort, never: view.never, favs: view.favs, safe: view.safe, list: view.list });
           var items = shown();
           visibleReports = items.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
           var areas = view.area ? [view.area] : UI.AREAS;
@@ -83,6 +86,7 @@
               '<div class="action-grid">' + group.map(function (a) { return UI.toolCard(a, last[a.id], { pick: true, picked: !!picked[a.id] }); }).join("") + "</div>";
           }).join("");
           list.innerHTML = html || '<div class="empty-state">' + UI.icon("search") + "<h2>No tool matches</h2><p>Change the area, the kind or the search text.</p></div>";
+          list.classList.toggle("tb-list", !!view.list);
           el.querySelector("#tb-reports").disabled = !visibleReports.length;
           el.querySelector("#tb-reports").title = visibleReports.length + " read-only reports in the current view";
           update();
@@ -91,7 +95,7 @@
           var ids = Object.keys(picked);
           var total = ids.reduce(function (s, id) { return s + App.state.actions[id].minutes; }, 0);
           el.querySelector("#tb-info").textContent = ids.length ? ids.length + " selected · " + UI.duration(total) : "Nothing selected";
-          el.querySelector("#tb-run").disabled = el.querySelector("#tb-clear").disabled = !ids.length;
+          el.querySelector("#tb-run").disabled = el.querySelector("#tb-clear").disabled = el.querySelector("#tb-copy").disabled = !ids.length;
         }
         function selectTab(btn) {
           view.area = btn.getAttribute("data-area");
@@ -123,6 +127,14 @@
           draw();
         });
         el.querySelector("#tb-q").addEventListener("input", function (e) { view.query = e.target.value; draw(); });
+        el.querySelector("#tb-layout").addEventListener("click", function (e) {
+          view.list = !view.list;
+          e.currentTarget.lastChild.textContent = view.list ? "Cards" : "List";
+          draw();
+        });
+        el.querySelector("#tb-copy").addEventListener("click", function () {
+          App.copyText(Object.keys(picked).map(function (id) { var a = App.state.actions[id]; return a.title + " (" + id + ", " + a.risk + ", ~" + Math.max(1, Math.round(a.minutes)) + " min)"; }).join("\n"), "Tools");
+        });
         el.querySelector("#tb-sort").addEventListener("change", function (e) { view.sort = e.target.value; draw(); });
         el.querySelector("#tb-favs").addEventListener("change", function (e) {
           view.favs = e.target.checked;

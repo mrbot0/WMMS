@@ -28,8 +28,16 @@ def current_user_sid() -> str:
     return sid
 
 
+def windowless(python: str) -> str:
+    """pythonw.exe from the same folder: the console starts at sign-in without any window."""
+    candidato = os.path.join(os.path.dirname(python), "pythonw.exe")
+    return candidato if os.path.isfile(candidato) else python
+
+
 def task_xml(sid: str, python: str, script: str, port: int) -> str:
-    argomenti = escape(f'-I "{script}" --no-browser --port {int(port)}')
+    # --hidden: no console window (output in dati\wmm-console.log); the console opens in the default browser.
+    python = windowless(python)
+    argomenti = escape(f'-I "{script}" --hidden --port {int(port)}')
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
