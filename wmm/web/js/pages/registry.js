@@ -156,10 +156,12 @@
 
       /* ---------- changes ---------- */
       function change(op, body, okText) {
-        return API.post("/registry/" + op, body).then(function (r) {
+        // Deleting a key makes a restore point first (and asks when Windows cannot make one).
+        var send = op === "delete-key" ? UI.withRestorePoint("/registry/" + op, body) : API.post("/registry/" + op, body);
+        return send.then(function (r) {
           UI.toast(r.preview ? "Preview mode: nothing was written (recorded in History)." : okText + (r.backup ? " Backup: " + r.backup : ""), r.preview ? "info" : "ok");
           return r;
-        }, function (e) { UI.toast(e.message, "error"); throw e; });
+        }, function (e) { UI.toast(e.message, e.cancelled ? "info" : "error"); throw e; });
       }
       function valueByName(name) { return state.data.values.filter(function (v) { return v.name === name; })[0]; }
       function dataField(type, data) {

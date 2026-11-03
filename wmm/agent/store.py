@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
 SETTINGS_DEFAULTS = {"technician": "", "company": "", "report_header": "", "report_footer": "", "notes": "",
-                     "restore_on_start": "1"}
+                     "restore_on_start": "1", "restore_before_changes": "1"}
 SETTINGS_MAX_LENGTH = 500
 NOTES_MAX_LENGTH = 4000
-FLAG_SETTINGS = {"restore_on_start"}  # "1" on, "0" off
+FLAG_SETTINGS = {"restore_on_start", "restore_before_changes"}  # "1" on, "0" off
 
 RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed"
 SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run", "delay"}

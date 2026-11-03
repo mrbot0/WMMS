@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import codecs
 import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import wmm  # noqa: F401
@@ -23,46 +25,123 @@ OLD_INSTALL_DAYS = 3 * 365
 
 # ---------- rules: end of life, known holes, unwanted programs ----------
 
+# The rules live in a data file, so they can be updated without a new version of the program:
+# wmm/data/app_rules.json ships with it, "Update the rules" saves a newer copy in the data folder.
+BUNDLED_RULES = Path(__file__).resolve().parent.parent / "data" / "app_rules.json"
+RULES_URL = "https://raw.githubusercontent.com/mrbot0/WMMS/main/wmm/data/app_rules.json"
+RULES_MAX_BYTES = 512 * 1024
+RULES_OVERRIDE: Optional[Path] = None  # set by the agent: <data folder>/app_rules.json
+RULES_INFO: dict = {}
+
 # (name pattern, end of support, what to tell the user). A product listed here is unsafe after that date.
-END_OF_LIFE: List[Tuple[str, str, str]] = [
-    (r"adobe flash", "2020-12-31", "Adobe Flash Player is dead since 2020 and full of known holes."),
-    (r"silverlight", "2021-10-12", "Microsoft Silverlight left support in October 2021."),
-    (r"quicktime", "2016-04-14", "QuickTime for Windows gets no fixes since 2016 and has known holes."),
-    (r"^skype(?! for business)\b", "2025-05-05", "Skype was retired in May 2025: Microsoft Teams replaced it."),
-    (r"windows live|windows essentials", "2017-01-10", "Windows Essentials (Live Mail, Movie Maker) left support in 2017."),
-    (r"\bpicasa\b", "2016-03-15", "Picasa is discontinued since 2016."),
-    (r"adobe reader (?:x|xi|9|8)\b|acrobat (?:x|xi)\b|acrobat (?:reader )?(?:dc )?2017", "2022-06-06",
-     "This Adobe Reader or Acrobat version gets no security fixes."),
-    (r"java(?:\(tm\))? ?[4-7] update|j2se runtime", "2015-04-30", "Java 7 and older get no security fixes."),
-    (r"microsoft office .*2007", "2017-10-10", "Office 2007 left support in 2017."),
-    (r"microsoft office .*2010", "2020-10-13", "Office 2010 left support in 2020."),
-    (r"microsoft office .*2013", "2023-04-11", "Office 2013 left support in April 2023."),
-    (r"microsoft office .*(?:2016|2019)", "2025-10-14", "Office 2016 and 2019 left support in October 2025: no more security fixes."),
-    (r"microsoft office .*2021", "2026-10-13", "Office 2021 left support in October 2026: no more security fixes."),
-    (r"\.net core (?:1|2|3)\.|\.net (?:runtime|core runtime) - (?:1|2|3)\.", "2022-12-13", ".NET Core 3.1 and older get no security fixes."),
-    (r"(?:\.net|desktop runtime|asp\.net core).* - 5\.", "2022-05-10", ".NET 5 gets no security fixes."),
-    (r"(?:\.net|desktop runtime|asp\.net core).* - 6\.", "2024-11-12", ".NET 6 left support in November 2024."),
-    (r"(?:\.net|desktop runtime|asp\.net core).* - 7\.", "2024-05-14", ".NET 7 left support in May 2024."),
-    (r"(?:\.net|desktop runtime|asp\.net core).* - [89]\.", "2026-11-10", ".NET 8 and 9 leave support on 10 November 2026."),
-]
-# Python and Node.js: support ends per minor or major version.
-PYTHON_EOL = {(2, 7): "2020-01-01", (3, 6): "2021-12-23", (3, 7): "2023-06-27", (3, 8): "2024-10-07", (3, 9): "2025-10-31",
-              (3, 10): "2026-10-31", (3, 11): "2027-10-31", (3, 12): "2028-10-31", (3, 13): "2029-10-31"}
-NODE_EOL = {14: "2023-04-30", 16: "2023-09-11", 17: "2022-06-01", 18: "2025-04-30", 19: "2023-06-01", 20: "2026-04-30",
-            21: "2024-06-01", 22: "2027-04-30", 23: "2025-06-01", 24: "2028-04-30", 25: "2026-06-01"}
+END_OF_LIFE: List[Tuple[str, str, str]] = []
+PYTHON_EOL: Dict[Tuple[int, int], str] = {}
+NODE_EOL: Dict[int, str] = {}
 # (name pattern, first safe version, the hole fixed there).
-MIN_VERSIONS: List[Tuple[str, str, str]] = [
-    (r"^winrar\b", "7.13", "WinRAR before 7.13 can be taken over by a booby-trapped archive (CVE-2025-8088, used in real attacks)."),
-    (r"^7-zip\b", "25.01", "7-Zip before 25.01 can write files outside the folder when extracting a crafted archive (CVE-2025-0411, CVE-2025-55188)."),
-    (r"^vlc media player", "3.0.21", "VLC before 3.0.21 can run code from a crafted video file."),
-    (r"^putty\b", "0.81", "PuTTY before 0.81 can leak your private SSH key (CVE-2024-31497)."),
-]
-UNWANTED = (
-    r"ask toolbar|babylon|conduit|mywebsearch|web ?companion|onelaunch|wave browser|shift browser|pc app store|segurazo|santivirus|"
-    r"bytefence|reimage|restoro|search protect|hola vpn|mypc backup|slimcleaner|yahoo.*toolbar|pc accelerate|wajam|dealply"
-)
-OPTIMIZERS = r"driver booster|driverpack|driver easy|driver updater|advanced systemcare|pc optimizer|pc cleaner|ccleaner|iobit|wise care|glary"
-REMOTE_ACCESS = r"teamviewer|anydesk|rustdesk|splashtop|logmein|ultraviewer|remote utilities|tightvnc|realvnc|ultravnc|chrome remote desktop|supremo|ammyy"
+MIN_VERSIONS: List[Tuple[str, str, str]] = []
+UNWANTED = OPTIMIZERS = REMOTE_ACCESS = STORE_BLOAT = r"(?!)"
+
+
+def validate_rules(dati) -> dict:
+    """Checks a rules file before it is used: types, dates, versions and patterns that compile. ValueError otherwise."""
+    if not isinstance(dati, dict) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(dati.get("version") or "")):
+        raise ValueError("not a rules file (no version date)")
+
+    def pattern(testo, dove: str) -> str:
+        if not isinstance(testo, str) or not testo or len(testo) > 2000:
+            raise ValueError(f"{dove}: invalid pattern")
+        try:
+            re.compile(testo)
+        except re.error as errore:
+            raise ValueError(f"{dove}: {errore}") from None
+        return testo
+
+    def data(testo, dove: str) -> str:
+        if not isinstance(testo, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", testo):
+            raise ValueError(f"{dove}: invalid date")
+        return testo
+
+    def terne(chiave: str, secondo) -> List[Tuple[str, str, str]]:
+        voci = dati.get(chiave)
+        if not isinstance(voci, list) or len(voci) > 500:
+            raise ValueError(f"{chiave} must be a list")
+        uscita = []
+        for i, voce in enumerate(voci):
+            if not isinstance(voce, list) or len(voce) != 3 or not isinstance(voce[2], str):
+                raise ValueError(f"{chiave}[{i}] must be [pattern, value, text]")
+            uscita.append((pattern(voce[0], f"{chiave}[{i}]"), secondo(voce[1], f"{chiave}[{i}]"), voce[2][:400]))
+        return uscita
+
+    def versione(testo, dove: str) -> str:
+        if not isinstance(testo, str) or not re.fullmatch(r"\d+(\.\d+){0,3}", testo):
+            raise ValueError(f"{dove}: invalid version")
+        return testo
+
+    def date_per(chiave: str, forma: str) -> dict:
+        voci = dati.get(chiave)
+        if not isinstance(voci, dict):
+            raise ValueError(f"{chiave} must be an object")
+        uscita = {}
+        for k, v in voci.items():
+            if not re.fullmatch(forma, str(k)):
+                raise ValueError(f"{chiave}: invalid key {k}")
+            uscita[tuple(int(x) for x in str(k).split(".")) if "." in str(k) else int(k)] = data(v, f"{chiave}.{k}")
+        return uscita
+
+    return {
+        "version": dati["version"],
+        "end_of_life": terne("end_of_life", data), "min_versions": terne("min_versions", versione),
+        "python_eol": date_per("python_eol", r"\d+\.\d+"), "node_eol": date_per("node_eol", r"\d+"),
+        "unwanted": pattern(dati.get("unwanted"), "unwanted"), "optimizers": pattern(dati.get("optimizers"), "optimizers"),
+        "remote_access": pattern(dati.get("remote_access"), "remote_access"), "store_bloat": pattern(dati.get("store_bloat"), "store_bloat"),
+    }
+
+
+def apply_rules(regole: dict, origine: str) -> None:
+    global END_OF_LIFE, PYTHON_EOL, NODE_EOL, MIN_VERSIONS, UNWANTED, OPTIMIZERS, REMOTE_ACCESS, STORE_BLOAT, RULES_INFO
+    END_OF_LIFE, MIN_VERSIONS = regole["end_of_life"], regole["min_versions"]
+    PYTHON_EOL, NODE_EOL = regole["python_eol"], regole["node_eol"]
+    UNWANTED, OPTIMIZERS, REMOTE_ACCESS, STORE_BLOAT = regole["unwanted"], regole["optimizers"], regole["remote_access"], regole["store_bloat"]
+    RULES_INFO = {"version": regole["version"], "source": origine, "end_of_life": len(END_OF_LIFE), "min_versions": len(MIN_VERSIONS)}
+
+
+def _read_rules(percorso: Path) -> Optional[dict]:
+    try:
+        return validate_rules(json.loads(percorso.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return None
+
+
+def load_rules() -> dict:
+    """The newest valid rules: the downloaded copy when it is newer than the one shipped with the program."""
+    integrate = _read_rules(BUNDLED_RULES)
+    scaricate = _read_rules(RULES_OVERRIDE) if RULES_OVERRIDE else None
+    if scaricate and (not integrate or scaricate["version"] > integrate["version"]):
+        apply_rules(scaricate, "downloaded")
+    elif integrate:
+        apply_rules(integrate, "built-in")
+    return dict(RULES_INFO)
+
+
+def update_rules(url: str = RULES_URL) -> dict:
+    """Downloads the rules from the project repository; they are used only when valid and newer."""
+    import urllib.request
+    richiesta = urllib.request.Request(url, headers={"User-Agent": "WindowsMaintenanceManager/" + wmm.VERSION})
+    with urllib.request.urlopen(richiesta, timeout=20) as risposta:
+        testo = risposta.read(RULES_MAX_BYTES + 1)
+    if len(testo) > RULES_MAX_BYTES:
+        raise ValueError("the rules file is too large")
+    regole = validate_rules(json.loads(testo.decode("utf-8")))
+    attuale = RULES_INFO.get("version", "")
+    if regole["version"] <= attuale:
+        return dict(RULES_INFO, updated=False)
+    if RULES_OVERRIDE is None:
+        raise ValueError("no data folder to save the rules")
+    RULES_OVERRIDE.write_bytes(testo)
+    apply_rules(regole, "downloaded")
+    return dict(RULES_INFO, updated=True)
+
+
 BROWSERS = r"^(?:google chrome|mozilla firefox|microsoft edge|brave|opera(?: gx)?(?: stable)?|vivaldi|waterfox|librewolf|tor browser|chromium)\b"
 ANTIVIRUS = r"avast|avg (?:antivirus|internet)|eset|kaspersky|bitdefender|norton|mcafee|sophos|malwarebytes|trend micro|webroot|panda dome|f-secure|g data|avira|total ?av"
 RUNTIMES = r"visual c\+\+|\.net|^java|^python|node\.js|directx|webview2|runtime|redistributable"
@@ -481,14 +560,7 @@ SCRIPT_STORE = r"""
   [ordered]@{ package = $_.PackageFullName; family = $_.PackageFamilyName; id_name = $_.Name; name = $name; publisher = $pub; version = "$($_.Version)"; installed = $when }
 }) | ConvertTo-Json -Depth 3 -Compress
 """
-# Store apps Windows installs by itself; removing them is safe and the Store can reinstall them.
-STORE_BLOAT = (
-    r"king\.com|candycrush|bubblewitch|disney|tiktok|facebook|instagram|spotify|netflix|primevideo|amazon|linkedin|"
-    r"microsoft\.(?:bingnews|bingweather|bingsports|bingfinance|getstarted|gethelp|microsoftsolitairecollection|mixedreality\.portal|"
-    r"microsoft3dviewer|print3d|people|skypeapp|windowsfeedbackhub|zunevideo|microsoftofficehub|todos|powerautomatedesktop|"
-    r"messaging|oneconnect|wallet|549981c3f5f10|bingsearch|windowsmaps)|clipchamp|picsart|adobeexpress|duolingo|"
-    r"royalrevolt|marchofempires|hiddencity|farmville|asphalt|phototastic"
-)
+# Store apps Windows installs by itself (STORE_BLOAT, in the rules): removing them is safe, the Store can reinstall them.
 
 
 def store_label(nome: str) -> str:
@@ -627,21 +699,155 @@ def scan(ctx, oggi: Optional[date] = None) -> dict:
         "suggestions": suggestions(programmi, store, browsers), "errors": errori,
         "usage_source": "UserAssist and Prefetch" if pf else "UserAssist only (run as administrator to also read Prefetch)",
         "winget": bool(shutil.which("winget")), "scanned": datetime.now().isoformat(timespec="seconds"),
+        "rules": dict(RULES_INFO),
     }
 
 
 # ---------- changes (the API wraps each one in _logged_change) ----------
 
+# Uninstallers started by this agent, by process id: the page asks whether they are still running.
+RUNNING: Dict[int, subprocess.Popen] = {}
+
+
 def run_uninstaller(app: dict) -> dict:
-    """Starts the program's own uninstaller and returns: its window guides the user, the page rescans later."""
+    """Starts the program's own uninstaller and returns: its window guides the user, the page waits for it to end."""
     comando = app.get("uninstall") or ""
     if not comando:
         raise ValueError("This program has no uninstaller.")
     if comando.startswith("MsiExec.exe /X"):
-        subprocess.Popen(["msiexec.exe", "/x", comando[len("MsiExec.exe /X"):], "/qb", "/norestart"])
+        processo = subprocess.Popen(["msiexec.exe", "/x", comando[len("MsiExec.exe /X"):], "/qb", "/norestart"])
     else:
-        subprocess.Popen(comando)  # a Windows command line: CreateProcess parses it like Settings > Apps does
-    return {"started": comando}
+        processo = subprocess.Popen(comando)  # a Windows command line: CreateProcess parses it like Settings > Apps does
+    RUNNING[processo.pid] = processo
+    return {"started": comando, "pid": processo.pid}
+
+
+def is_running(pid: Optional[int]) -> bool:
+    processo = RUNNING.get(pid or 0)
+    if processo is None:
+        return False
+    if processo.poll() is None:
+        return True
+    RUNNING.pop(pid, None)
+    return False
+
+
+# ---------- leftovers after an uninstall ----------
+
+# Folder and key names shared by many programs: never offered as leftovers of one of them.
+SHARED_NAMES = {
+    "microsoft", "windows", "google", "intel", "nvidia", "nvidia corporation", "amd", "realtek", "common files", "packages", "temp",
+    "programs", "installer", "package cache", "microsoft shared", "classes", "policies", "wow6432node", "apple", "adobe", "mozilla",
+    "oracle", "java", "python", "steam", "valve", "default", "public", "users", "system32", "crashdumps", "d3dscache", "connecteddevicesplatform",
+}
+LEFTOVER_ROOTS = ("%ProgramFiles%", "%ProgramFiles(x86)%", "%ProgramData%", "%APPDATA%", "%LOCALAPPDATA%")
+
+
+def _names(app: dict) -> List[str]:
+    """Folder names that belong to this program only: 'VLC media player 3.0.18' -> ['vlc media player', 'vlc'].
+    The first word alone is skipped when it is the publisher ('CPUID CPU-Z': CPUID makes other programs too)."""
+    nomi = []
+    base = base_name(app.get("name") or "")
+    editore = (re.findall(r"\w+", (app.get("publisher") or "").lower()) or [""])[0]
+    primo = base.split(" ")[0] if base else ""
+    for candidato in (base, "" if primo == editore else primo):
+        if len(candidato) >= 3 and candidato not in SHARED_NAMES and candidato not in nomi:
+            nomi.append(candidato)
+    return nomi
+
+
+def leftover_folders(app: dict) -> List[str]:
+    nomi = _names(app)
+    editore = (app.get("publisher") or "").lower().strip()
+    trovate: List[str] = []
+    cartella = app.get("folder") or ""
+    if cartella and os.path.isdir(cartella) and safe_leftover(cartella):
+        trovate.append(cartella)
+    for radice in (os.path.expandvars(r) for r in LEFTOVER_ROOTS):
+        if "%" in radice or not os.path.isdir(radice):
+            continue
+        try:
+            voci = {v.name.lower(): v.path for v in os.scandir(radice) if v.is_dir(follow_symlinks=False)}
+        except OSError:
+            continue
+        for nome in nomi:
+            if nome in voci:
+                trovate.append(voci[nome])
+        # Publisher\Program, e.g. VideoLAN\VLC: only the program folder, never the publisher one.
+        if editore and editore in voci and editore not in SHARED_NAMES:
+            try:
+                sotto = {v.name.lower(): v.path for v in os.scandir(voci[editore]) if v.is_dir(follow_symlinks=False)}
+            except OSError:
+                sotto = {}
+            trovate += [sotto[n] for n in nomi if n in sotto]
+    unici: List[str] = []
+    for percorso in trovate:
+        if percorso.lower() not in (u.lower() for u in unici) and safe_leftover(percorso):
+            unici.append(percorso)
+    return unici
+
+
+def safe_leftover(percorso: str) -> bool:
+    """Only a folder inside one of the program roots, never a root itself, a link or a Windows folder."""
+    pieno = os.path.normcase(os.path.abspath(percorso))
+    radici = [os.path.normcase(os.path.abspath(os.path.expandvars(r))) for r in LEFTOVER_ROOTS if "%" not in os.path.expandvars(r)]
+    if not any(pieno.startswith(r + os.sep) for r in radici) or os.path.basename(pieno) in SHARED_NAMES:
+        return False
+    try:
+        info = os.lstat(percorso)
+    except OSError:
+        return False
+    return not (getattr(info, "st_file_attributes", 0) & 0x400)  # no junctions or symbolic links
+
+
+def leftover_keys(app: dict) -> List[str]:
+    import winreg
+    nomi = _names(app)
+    editore = (app.get("publisher") or "").strip()
+    trovate = []
+    for hive, radice in (("HKCU", "Software"), ("HKLM", "SOFTWARE"), ("HKLM", r"SOFTWARE\WOW6432Node")):
+        candidati = [n for n in nomi] + ([editore.lower() + "\\" + n for n in nomi] if editore and editore.lower() not in SHARED_NAMES else [])
+        for nome in candidati:
+            try:
+                with winreg.OpenKey(inventory._hive(hive), radice + "\\" + nome, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY):
+                    trovate.append(hive + "\\" + radice + "\\" + nome)
+            except OSError:
+                continue
+    return trovate
+
+
+def leftovers(app: dict, others: Iterable[dict] = ()) -> List[dict]:
+    """What the uninstaller left: folders (sent to the Recycle Bin) and registry keys (deleted with a backup).
+    Nothing that another installed program still uses: its folder, a folder holding it, or a name it shares."""
+    altri = [o for o in others if o.get("id") != app.get("id")]
+    cartelle_altri = [os.path.normcase(o["folder"]).rstrip("\\") + "\\" for o in altri if o.get("folder")]
+    nomi_altri = {n for o in altri for n in _names(o)}
+
+    def libera(percorso: str) -> bool:
+        pieno = os.path.normcase(percorso).rstrip("\\") + "\\"
+        return not any(c.startswith(pieno) or pieno.startswith(c) for c in cartelle_altri)
+
+    elenco = []
+    for percorso in [p for p in leftover_folders(app) if libera(p)]:
+        elenco.append({"id": hashlib.sha1(percorso.lower().encode("utf-8")).hexdigest()[:12], "kind": "folder", "path": percorso,
+                       "size_mb": folder_size(percorso, 5.0)})
+    for chiave in leftover_keys(app):
+        if chiave.rsplit("\\", 1)[-1] in nomi_altri:
+            continue
+        elenco.append({"id": hashlib.sha1(chiave.lower().encode("utf-8")).hexdigest()[:12], "kind": "key", "path": chiave, "size_mb": None})
+    return elenco
+
+
+def recycle(percorso: str) -> None:
+    """To the Recycle Bin, so a wrong guess can be put back from there."""
+    if not safe_leftover(percorso):
+        raise ValueError(f"{percorso} is not a program folder that can be removed.")
+    testo = percorso.replace("'", "''")
+    risultato = subprocess.run(powershell_command(
+        "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('" + testo +
+        "', 'OnlyErrorDialogs', 'SendToRecycleBin')"), capture_output=True, text=True, timeout=600)
+    if risultato.returncode != 0 or os.path.isdir(percorso):
+        raise OSError((risultato.stderr or "").strip()[-300:] or f"{percorso} is still there (files in use?)")
 
 
 def remove_store_app(pacchetto: str) -> dict:
@@ -711,3 +917,6 @@ def winget_upgrade(package_id: str, timeout: int = 1800) -> dict:
     if risultato.returncode != 0:
         raise OSError(f"winget ended with code {risultato.returncode}: " + uscita.strip()[-400:])
     return {"output": uscita[-2000:]}
+
+
+load_rules()

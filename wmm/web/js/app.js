@@ -21,7 +21,8 @@
     "apps.remove_entry": { id: "apps.remove_entry", title: "Leftover program entry removed", area: "startup", risk: "moderate" },
     "apps.store_remove": { id: "apps.store_remove", title: "Store app removed", area: "startup", risk: "moderate" },
     "apps.browser_cache": { id: "apps.browser_cache", title: "Browser cache cleared", area: "cleanup", risk: "safe" },
-    "apps.update": { id: "apps.update", title: "App updated (winget)", area: "updates", risk: "moderate" }
+    "apps.update": { id: "apps.update", title: "App updated (winget)", area: "updates", risk: "moderate" },
+    "integrity.system_restore": { id: "integrity.system_restore", title: "System Restore opened", area: "integrity", risk: "safe" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };

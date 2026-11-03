@@ -54,6 +54,8 @@ class ApiTests(unittest.TestCase):
             mock.patch.object(inventory, "startup_items", return_value=STARTUP["items"]),
             mock.patch.object(inventory, "collect_events", return_value=({"total": 0, "top": []}, [])),
             mock.patch.object(inventory, "set_startup_enabled"),
+            # Manual changes ask for a restore point: never a real one in tests.
+            mock.patch.object(api.restore, "ensure_point", return_value={"seq": 7, "description": "test", "created": "2026-11-03T10:00:00", "new": True}),
         ]
         for patch in self.patches:
             patch.start()
