@@ -90,6 +90,8 @@
     gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.4" fill="currentColor"/>'
   };
   ICONS.power = '<path d="M12 3v9M6.4 6.6a8 8 0 1 0 11.2 0"/>';
+  ICONS.apps = '<rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/>' +
+    '<rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><path d="M17.25 13.5v7.5M13.5 17.25H21"/>';
   ICONS.scripts = '<path d="M4 4h16v16H4z"/><path d="M8 9l3 3-3 3M13 15h3"/>';
   ICONS.events ='<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5M8 17h3"/><circle cx="17" cy="16" r="2.5" fill="currentColor" stroke="none"/>';
   ICONS.processes = '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-4 3 3 4-5M8 21h8"/>';
@@ -544,7 +546,9 @@
     if (!owner.length) return;
     var used = groups.filter(function (g) { return owner.some(function (o) { return o[1] === g.id; }); });
     if (used.length < 2) return;  // one group only: no tabs needed
-    var active = pref("tab." + key);
+    // A link can open a given tab: #/apps?tab=security (Copy a link to this tab, suggestions, the dashboard).
+    var linked = /[?&]tab=([\w-]+)/.exec(location.hash);
+    var active = linked && used.some(function (g) { return g.id === linked[1]; }) ? linked[1] : pref("tab." + key);
     if (!used.some(function (g) { return g.id === active; })) active = used[0].id;
     var bar = document.createElement("div");
     bar.className = "tabs page-tabs";

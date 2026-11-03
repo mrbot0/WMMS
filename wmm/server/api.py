@@ -34,7 +34,7 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import (actions, advisor, autostart, collectors, core, events, hardware, health, inventory, live, processes, registry,
+from ..agent import (actions, advisor, apps, autostart, collectors, core, events, hardware, health, inventory, live, processes, registry,
                      routines, scheduler, scripts, shutdown)
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
@@ -108,6 +108,8 @@ class Agent:
         self.timer = scripts.ShutdownTimer(self.data_dir / "shutdown_timer.json")
         self._protect_lock = threading.Lock()
         self._protect: dict = {"active": False, "status": "idle", "log": []}
+        self._apps_lock = threading.Lock()
+        self._apps: Optional[dict] = None
 
     # ---------- data ----------
 
@@ -288,6 +290,77 @@ class Agent:
             raise ApiError(500, f"Could not change the startup entry: {errore}") from None
         self.store.close_run(run_id, "ok", f"{voce['name']}: {stato}", 0, f"{voce['location']} › {voce['name']} {stato}")
         return {"ok": True}
+
+    # ---------- applications ----------
+
+    def apps(self, refresh: bool = False) -> dict:
+        """The last applications scan; the first call (or refresh) scans, which takes a few seconds."""
+        with self._apps_lock:
+            if refresh or self._apps is None:
+                self._apps = apps.scan(self._context())
+            return self._apps
+
+    def _installed(self, app_id: str) -> dict:
+        # Read again from the registry: the command that runs is the one Windows has now, never one sent by the page.
+        voce = next((a for a in apps.read_installed() if a["id"] == app_id), None)
+        if voce is None:
+            raise ApiError(404, "Program not found: it may be already removed. Scan again.")
+        return voce
+
+    def app_uninstall(self, app_id: str) -> dict:
+        voce = self._installed(app_id)
+        if not voce["uninstall"]:
+            raise ApiError(409, f"{voce['name']} has no uninstaller: use Remove entry if the program is already gone.")
+        return self._logged_change("apps.uninstall", f"Start the uninstaller of {voce['name']} {voce['version']}".strip(),
+                                   lambda: apps.run_uninstaller(voce))
+
+    def app_remove_entry(self, app_id: str) -> dict:
+        voce = self._installed(app_id)
+        if not voce["broken"]:
+            raise ApiError(409, "Only entries whose uninstaller is gone can be removed this way: use Uninstall.")
+        return self._logged_change("apps.remove_entry", f"Remove the leftover entry of {voce['name']}",
+                                   lambda: self.registry.delete_key(voce["key"]))
+
+    def app_open_folder(self, app_id: str) -> dict:
+        voce = self._installed(app_id)
+        if not voce["folder"] or not os.path.isdir(voce["folder"]):
+            raise ApiError(404, "The install folder of this program is not known or no longer exists.")
+        subprocess.Popen(["explorer.exe", voce["folder"]])
+        return {"ok": True, "folder": voce["folder"]}
+
+    def app_size(self, app_id: str) -> dict:
+        voce = self._installed(app_id)
+        return {"id": app_id, "size_mb": apps.folder_size(voce["folder"])}
+
+    def store_remove(self, app_id: str) -> dict:
+        elenco = self.apps()["store"]
+        voce = next((s for s in elenco if s["id"] == app_id), None)
+        if voce is None:
+            raise ApiError(404, "Store app not found. Scan again.")
+        return self._logged_change("apps.store_remove", f"Remove the Store app {voce['name']}", lambda: apps.remove_store_app(voce["package"]))
+
+    def browser_clean(self, browser_id: str) -> dict:
+        if browser_id not in {b[0] for b in apps.BROWSER_PROFILES}:
+            raise ApiError(404, "Unknown browser.")
+        nome = next(b[1] for b in apps.BROWSER_PROFILES if b[0] == browser_id)
+        esito = self._logged_change("apps.browser_cache", f"Clear the {nome} cache", lambda: apps.clean_browser(browser_id))
+        with self._apps_lock:
+            if self._apps is not None:
+                self._apps["browsers"] = apps.browser_caches()
+        return esito
+
+    def app_updates(self) -> dict:
+        try:
+            return {"updates": apps.winget_updates()}
+        except subprocess.TimeoutExpired:
+            raise ApiError(504, "winget did not answer within two minutes.") from None
+        except OSError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def app_update(self, package_id) -> dict:
+        if not isinstance(package_id, str) or not re.fullmatch(r"[\w.\-+]{2,128}", package_id):
+            raise ApiError(400, "Invalid winget package id.")
+        return self._logged_change("apps.update", f"Update {package_id} with winget", lambda: apps.winget_upgrade(package_id))
 
     # ---------- system tools: events, processes, services, registry ----------
 
@@ -815,6 +888,8 @@ class Handler(BaseHTTPRequestHandler):
     agent: Agent
     server_version = "WMM/" + VERSION
     protocol_version = "HTTP/1.1"
+    # An idle keep-alive connection frees its thread after two minutes instead of holding it forever.
+    timeout = 120
 
     def log_message(self, formato, *args):  # keep the console readable
         if args and str(args[1] if len(args) > 1 else "").startswith(("4", "5")):
@@ -919,11 +994,19 @@ class Handler(BaseHTTPRequestHandler):
             if self.command not in ("GET", "HEAD"):
                 raise ApiError(405, "Method not allowed.")
             self._static(percorso)
+        except DISCONNECTED:
+            self.close_connection = True  # the browser went away: nobody is left to answer
         except ApiError as errore:
-            self._json(errore.status, {"error": errore.message, "status": errore.status})
+            self._answer_error(errore.status, {"error": errore.message, "status": errore.status})
         except Exception as errore:  # never leave the browser without an answer
             sys.stderr.write(f"Internal error on {self.command} {self.path}: {errore!r}\n")
-            self._json(500, {"error": f"Internal error: {errore}"})
+            self._answer_error(500, {"error": f"Internal error: {errore}"})
+
+    def _answer_error(self, status: int, dati: dict) -> None:
+        try:
+            self._json(status, dati)
+        except DISCONNECTED:
+            self.close_connection = True
 
     do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = _dispatch
 
@@ -1200,6 +1283,26 @@ class Handler(BaseHTTPRequestHandler):
     def toggle_startup(self, query, item_id):
         self._json(200, self.agent.toggle_startup(item_id, self._body().get("enabled")))
 
+    def app_list(self, query):
+        self._json(200, self.agent.apps(refresh=query.get("refresh") == "1"))
+
+    def app_operation(self, query, app_id, operazione):
+        metodo = {"uninstall": self.agent.app_uninstall, "remove-entry": self.agent.app_remove_entry,
+                  "open-folder": self.agent.app_open_folder, "size": self.agent.app_size}[operazione]
+        self._json(200, metodo(app_id))
+
+    def store_remove(self, query, app_id):
+        self._json(200, self.agent.store_remove(app_id))
+
+    def browser_clean(self, query, browser_id):
+        self._json(200, self.agent.browser_clean(browser_id))
+
+    def app_updates(self, query):
+        self._json(200, self.agent.app_updates())
+
+    def app_update(self, query):
+        self._json(200, self.agent.app_update(self._body().get("id")))
+
     def list_schedules(self, query):
         self._json(200, {"schedules": self.agent.schedules(), "installation": self.agent.installation()})
 
@@ -1283,6 +1386,12 @@ ROUTES: List[Route] = [
     _route("GET", "/agent/autostart", Handler.get_autostart),
     _route("PUT", "/agent/autostart", Handler.put_autostart),
     _route("POST", r"/startup/([0-9a-f]{16})/toggle", Handler.toggle_startup),
+    _route("GET", "/apps", Handler.app_list),
+    _route("GET", "/apps/updates", Handler.app_updates),
+    _route("POST", "/apps/update", Handler.app_update),
+    _route("POST", r"/apps/([0-9a-f]{16})/(uninstall|remove-entry|open-folder|size)", Handler.app_operation),
+    _route("POST", r"/apps/store/([0-9a-f]{16})/remove", Handler.store_remove),
+    _route("POST", r"/apps/browsers/([a-z]{3,10})/clean", Handler.browser_clean),
     _route("GET", "/schedules", Handler.list_schedules),
     _route("GET", "/routines", Handler.list_routines),
     _route("POST", "/schedules", Handler.create_schedule),
@@ -1293,9 +1402,23 @@ ROUTES: List[Route] = [
 ]
 
 
+DISCONNECTED = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, TimeoutError)
+
+
+class AgentServer(ThreadingHTTPServer):
+    # The console opens many requests at once (pages, live charts, activity): a longer queue never refuses one.
+    request_queue_size = 64
+
+    def handle_error(self, request, client_address) -> None:
+        # A tab closed or reloaded mid-answer is normal: no traceback in the console or the log.
+        if isinstance(sys.exc_info()[1], DISCONNECTED):
+            return
+        super().handle_error(request, client_address)
+
+
 def make_server(agent: Agent, port: int) -> ThreadingHTTPServer:
     gestore = type("BoundHandler", (Handler,), {"agent": agent})
-    server = ThreadingHTTPServer(("127.0.0.1", port), gestore)
+    server = AgentServer(("127.0.0.1", port), gestore)
     server.daemon_threads = True
     agent.port = server.server_address[1]
     agent.server = server

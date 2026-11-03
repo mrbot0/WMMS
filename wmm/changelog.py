@@ -2,6 +2,40 @@
 
 CHANGELOG = [
     {
+        "version": "2.0.0",
+        "date": "2026-11-03",
+        "title": "Applications page, 40 new tools, a sturdier agent and 20 new console functions",
+        "highlights": [
+            "New Applications page: every installed program with a safety verdict (end of support, versions with known holes, adware), "
+            "when it was last used, uninstall, Store apps, app updates with winget and browser cache cleanup.",
+            "40 new toolbox tools (321 in total): DNS benchmark, Wi-Fi channels, suspicious scheduled tasks, unquoted service paths, "
+            "failed sign-ins, Windows and Office end of support, duplicate files, TCP/IP reset, search index rebuild and more.",
+            "Sturdier agent: closed tabs no longer leave errors in the log, more requests answered in parallel, idle connections freed, "
+            "History in write-ahead mode, reads that hang end with a clear message.",
+            "20 new console functions: notes for this PC, On this page, table search highlight, Markdown and JSON export, "
+            "programs in the command palette, links to a page tab and more.",
+        ],
+        "changes": [
+            "Applications: suggestions (unsafe programs, two antivirus, remote access tools, programs unused for months, several versions "
+            "of the same product, leftover entries, preinstalled Store extras, large browser caches).",
+            "Applications: last use from Windows (Start menu, taskbar, running programs; Prefetch when run as administrator), "
+            "programs installed in the last 30 days, size of an install folder on request.",
+            "Applications: uninstall starts the program's own uninstaller read again from Windows, never a command sent by the page; "
+            "leftover entries are removed with a registry backup; every change is recorded in History and simulated in preview.",
+            "Applications: clear the cache of Chrome, Edge, Brave, Vivaldi, Opera and Firefox (logins, passwords and history stay), "
+            "and the list of old setup files left in Downloads.",
+            "Toolbox: 11 fixes (TCP/IP and adapters, IPv4 preference, power plans, performance counters, search index, winget sources, "
+            "component store reset, Driver Verifier off, RemoteSigned policy) and 29 reports.",
+            "Toolbox: duplicate files compares a quick fingerprint before the full hash and stops after a minute; folder sizes use robocopy.",
+            "Tables: the search text is highlighted, a double-click copies a cell, MD copies a Markdown table, JSON downloads the rows, "
+            "the sort is remembered.",
+            "Navigation: links open a page tab (#/apps?tab=security), Shift and the arrows change tab, Shift J jumps to a card, "
+            "Shift F searches the table, the menu shows the number of unsafe programs.",
+            "Console: notes for this PC (Shift N), auto-refresh of a page, agent response time in the status bar, a log of page errors "
+            "to copy for support, scroll progress, refresh after five minutes away, offline notice.",
+        ],
+    },
+    {
         "version": "1.9.0",
         "date": "2026-11-03",
         "title": "47 new tools, tabs on long pages, a better script editor and a hidden start with Windows",

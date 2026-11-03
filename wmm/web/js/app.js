@@ -16,7 +16,12 @@
     "scripts.schedule": { id: "scripts.schedule", title: "Script schedule changed", area: "scripts", risk: "moderate" },
     "scripts.shutdown_timer": { id: "scripts.shutdown_timer", title: "Shutdown timer", area: "scripts", risk: "moderate" },
     "integrity.schedule_test": { id: "integrity.schedule_test", title: "Scheduled task started (test)", area: "integrity", risk: "safe" },
-    "hardware.monitor_tool": { id: "hardware.monitor_tool", title: "Sensor tool (LibreHardwareMonitor)", area: "performance", risk: "moderate" }
+    "hardware.monitor_tool": { id: "hardware.monitor_tool", title: "Sensor tool (LibreHardwareMonitor)", area: "performance", risk: "moderate" },
+    "apps.uninstall": { id: "apps.uninstall", title: "Program uninstalled", area: "startup", risk: "moderate" },
+    "apps.remove_entry": { id: "apps.remove_entry", title: "Leftover program entry removed", area: "startup", risk: "moderate" },
+    "apps.store_remove": { id: "apps.store_remove", title: "Store app removed", area: "startup", risk: "moderate" },
+    "apps.browser_cache": { id: "apps.browser_cache", title: "Browser cache cleared", area: "cleanup", risk: "safe" },
+    "apps.update": { id: "apps.update", title: "App updated (winget)", area: "updates", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };
@@ -46,6 +51,7 @@
           ? '<span class="nav-score ' + (score == null ? "none" : UI.tone(score)) + '" title="Score">' + (score == null ? "–" : score) + "</span>" : "";
         if (item[0] === "activity" && state.activeCount) chip = '<span class="nav-live" title="Operations in progress">' + state.activeCount + "</span>";
         if (item[0] === "toolbox" && Object.keys(state.actions).length) chip = '<span class="nav-score none" title="Tools">' + Object.keys(state.actions).length + "</span>";
+        if (item[0] === "apps" && state.appsRisk) chip = '<span class="nav-score error" title="Unsafe programs">' + state.appsRisk + "</span>";
         return '<a href="#/' + item[0] + '" class="nav-item' + (item[0] === page ? " active" : "") + '"' + (item[0] === page ? ' aria-current="page"' : "") +
           ' title="' + esc(item[1]) + '">' + UI.icon(item[0]) + '<span class="nav-label">' + esc(item[1]) + "</span>" + chip + "</a>";
       }).join(""));
@@ -95,6 +101,8 @@
     document.getElementById("statusbar").innerHTML =
       '<span class="st"><span class="led' + (state.connected ? "" : " off") + '"></span>' + (state.connected ? "Agent connected" : "Agent not reachable") + "</span>" +
       '<span class="st">' + (info.preview ? "Preview mode" : info.admin ? "Administrator" : "Read-only") + "</span>" +
+      (state.latency != null && state.connected ? '<span class="st" title="How long the agent takes to answer">' + (state.latency < 1 ? "<1" : Math.round(state.latency)) + " ms</span>" : "") +
+      (state.autoRefresh ? '<span class="st" title="This page refreshes every minute (command palette to stop)"><span class="led busy"></span>Auto-refresh</span>' : "") +
       (state.health ? '<a class="st" href="#/settings" title="Health check">' + '<span class="led' + (state.health.summary.error ? " off" : "") + '"' +
         (state.health.summary.warning && !state.health.summary.error ? ' style="background:var(--warning);box-shadow:0 0 0 3px var(--warning-soft)"' : "") + "></span>Health: " +
         (state.health.summary.error ? state.health.summary.error + " failed" : state.health.summary.warning ? state.health.summary.warning + " warnings" : "all checks passed") + "</a>" : "") +
@@ -700,6 +708,7 @@
         run: function () { Components.store("settingsSection", sct[0]); location.hash = "#/settings?s=" + sct[0]; if (current() === "settings") render(); } });
     });
     list.push({ group: "Commands", title: "Open the user guide", icon: "support", keywords: "help faq", run: function () { location.hash = "#/support"; } });
+    if (window.Upgrade) list = list.concat(Upgrade.commands(current()));
     if (state.info && state.info.admin && !state.info.preview && API.hasToken()) {
       list.push({ group: "Commands", title: "Stop Windows Maintenance Manager", icon: "power", keywords: "shutdown quit exit kill power off", run: powerOff });
     }
@@ -782,6 +791,7 @@
   var App = window.App = {
     openDrawer: openDrawer, follow: follow, pollActivity: pollActivity, requestAccess: requestAccess, restartAsAdmin: restartAsAdmin,
     state: state, render: render, isCurrent: isCurrent, onLeave: onLeave, runActions: runActions, runSafe: runSafe, schedule: schedule,
+    renderNav: function () { renderNav(); }, renderStatus: function () { renderStatus(); }, current: function () { return current(); },
     scanAll: scanAll, setSubtitle: setSubtitle, action: action, commands: commands, pageTitle: pageTitle, refreshScores: refreshScores,
     order: order, copyText: copyText, saveText: saveText, toggleCards: toggleCards, actionDetail: actionDetail,
     favorites: favorites, toggleFavorite: toggleFavorite, applyLook: function () { applyLook(); }, togglePrivacy: function () { togglePrivacy(); },
@@ -861,6 +871,25 @@
     if (e.key === "R") { render(); UI.toast("Page refreshed.", "info"); }
     if (e.key === "S") scanAll();
     if (e.key === "C") toggleCards();
+  });
+
+  /* A script error must not pass unnoticed: one short message (not one per repeat), the details stay in the console.
+     Lost connection and missing access have their own banner, so they are not repeated here. */
+  var lastError = { text: "", at: 0 };
+  function reportError(text) {
+    var now = Date.now();
+    if (!text || /not reachable|not connected|aborted/i.test(text) || (text === lastError.text && now - lastError.at < 15000)) return;
+    lastError = { text: text, at: now };
+    if (window.Upgrade) Upgrade.logError(text, current());
+    UI.toast("Something went wrong on this page: " + text + " (Shift R reloads it).", "error");
+  }
+  window.addEventListener("error", function (e) {
+    if (!e.filename || e.filename.indexOf(location.origin) !== 0) return;  // browser extensions and cross-origin noise
+    reportError(e.message);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var reason = e.reason;
+    reportError(reason && reason.message ? reason.message : String(reason || ""));
   });
 
   /* Collapses every card of the page, or expands them all when they are already collapsed. */
@@ -995,9 +1024,11 @@
     if (!Components.store("desktopNotify") || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden || quiet()) return;
     try { new Notification(title, { body: text }); } catch (e) { /* not supported */ }
   }
+  // The same check measures how fast the agent answers (shown in the status bar).
   setInterval(function () {
-    API.get("/agent/info").then(function (info) { state.info = info; state.connected = true; renderStatus(); },
-      function () { state.connected = false; renderStatus(); });
+    var sent = performance.now();
+    API.get("/agent/info").then(function (info) { state.info = info; state.connected = true; state.latency = performance.now() - sent; renderStatus(); },
+      function () { state.connected = false; state.latency = null; renderStatus(); });
   }, 20000);
 
   Promise.all([API.get("/agent/info"), API.get("/actions")]).then(function (results) {
