@@ -115,7 +115,7 @@
             '<div class="start-grid">' +
             start('data-start="quick"', "cleanup", "bolt", "Quick tune-up", "Safe cleanup and optimization, no restart") +
             start('data-start="scan"', "performance", "refresh", "Scan all areas", "Assess the nine areas in about a minute") +
-            start('data-href="#/actions"', "services", "actions", "Browse actions", "All maintenance actions, run or schedule") +
+            start('data-href="#/toolbox"', "services", "toolbox", "Open the Toolbox", "Every maintenance tool, to run, schedule or combine") +
             start('data-href="#/playbooks"', "integrity", "playbooks", "Open playbooks", "Full maintenance, repair, security…") +
             "</div></section>";
         }

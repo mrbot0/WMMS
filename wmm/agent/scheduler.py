@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from xml.sax.saxutils import escape
 
 from .jobs import RunInProgress
@@ -270,6 +270,70 @@ def sync_state(schedules: List[dict], script: str) -> Dict[int, str]:
         else:
             stati[schedule["id"]] = "ok"
     return stati
+
+
+# What Task Scheduler and wmm.py --run-schedule report as "last result", in words.
+RESULT_TEXT = {
+    0: ("ok", "Completed"),
+    1: ("error", "Finished with errors (see History)"),
+    2: ("error", "The schedule no longer exists in the console"),
+    0x41300: ("ok", "Ready to run"),
+    0x41301: ("running", "Running now"),
+    0x41302: ("warning", "Disabled"),
+    0x41303: ("skipped", "Has not run yet"),
+    0x41304: ("skipped", "No more runs planned"),
+    0x41306: ("error", "Stopped by Task Scheduler (time limit or user)"),
+    0x8004131F: ("warning", "Skipped: the previous run was still going"),
+    0x800710E0: ("warning", "Refused by Windows (conditions not met, for example on battery)"),
+    0x80070002: ("error", "Python or the program was not found (moved or uninstalled)"),
+    0x80070005: ("error", "Access denied"),
+    0xC000013A: ("warning", "Interrupted (the PC was shutting down)"),
+}
+
+SCRIPT_TASK_STATUS = r"""
+$out = @(Get-ScheduledTask -TaskPath '\WindowsMaintenanceManager\' -ErrorAction SilentlyContinue | ForEach-Object {
+  $i = $_ | Get-ScheduledTaskInfo
+  [ordered]@{ name = $_.TaskName; state = "$($_.State)"; result = [int64]$i.LastTaskResult
+    last = if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('s') } else { '' }
+    next = if ($i.NextRunTime) { $i.NextRunTime.ToString('s') } else { '' } } })
+ConvertTo-Json -InputObject $out -Compress
+"""
+
+
+def result_text(code) -> Tuple[str, str]:
+    """(tone, words) for a Task Scheduler last-result code."""
+    try:
+        code = int(code) & 0xFFFFFFFF
+    except (TypeError, ValueError):
+        return ("skipped", "Unknown")
+    return RESULT_TEXT.get(code, ("error", f"Failed with code 0x{code:X}"))
+
+
+def task_status() -> Dict[str, dict]:
+    """Every task of the WindowsMaintenanceManager folder with Task Scheduler's own view: state, last run, last result, next run.
+    One PowerShell call for all of them; an empty dict when Task Scheduler cannot be read."""
+    try:
+        dati = json.loads(_powershell(SCRIPT_TASK_STATUS) or "[]")
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        return {}
+    voci = dati if isinstance(dati, list) else [dati]
+    stati = {}
+    for v in voci:
+        if not isinstance(v, dict) or not v.get("name"):
+            continue
+        tono, testo = result_text(v.get("result"))
+        if v.get("result") == 0x41303 or not v.get("last"):
+            tono, testo = "skipped", "Has not run yet"
+        stati[v["name"]] = {"state": v.get("state", ""), "last": v.get("last") or None, "next": v.get("next") or None,
+                            "result": v.get("result"), "result_tone": tono, "result_text": testo}
+    return stati
+
+
+def run_task_now(schedule_id: int) -> None:
+    """Starts the Task Scheduler task at once, as SYSTEM: the real test that a schedule works."""
+    risultato = _schtasks("/Run", "/TN", task_name(schedule_id))
+    if risultato.returncode != 0:
+        raise RuntimeError(_text(risultato.stdout).strip() or f"schtasks exit code {risultato.returncode}")
 
 
 def next_run(schedule: dict, ref: datetime) -> Optional[str]:

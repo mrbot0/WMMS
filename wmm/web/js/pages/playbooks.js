@@ -5,7 +5,7 @@
   var esc = UI.esc;
   // Playbooks are shown by purpose; one not listed here lands in "More".
   var GROUPS = [
-    ["My playbooks", "user", "Saved from Actions or copied from a playbook below; kept in this browser.", []],
+    ["My playbooks", "user", "Saved from the Toolbox or copied from a playbook below; kept in this browser.", []],
     ["Every visit", "sparkle", "Routine maintenance and updates.", ["quick", "full", "deep_clean", "update_all"]],
     ["Fix a problem", "integrity", "When something does not work.", ["repair", "network_fix", "print_fix"]],
     ["Check (read-only)", "reports", "Reports only: nothing on the PC changes.", ["health_check", "security_audit"]],
@@ -13,7 +13,7 @@
     ["Secure", "security", "Protection for a new or exposed PC.", ["security", "new_pc"]]
   ];
 
-  /* My playbooks: action lists saved in this browser (from Actions, or copied from a built-in playbook). */
+  /* My playbooks: action lists saved in this browser (from the Toolbox, or copied from a built-in playbook). */
   function mine() { return Components.store("myPlaybooks") || []; }
   function saveMine(title, actions) {
     var list = mine().filter(function (p) { return p.title !== title; });
@@ -52,7 +52,7 @@
             '<div class="page-actions" style="margin-top:14px"><button class="btn btn-primary" data-playbook="' + esc(p.id) + '">' + UI.icon("play") + "Run playbook</button>" +
             '<button class="btn btn-ghost" data-copy-playbook="' + esc(p.id) + '" title="The steps as a checklist, to follow by hand or attach to a ticket">' + UI.icon("copy") + "Copy steps</button>" +
             (p.own ? '<button class="btn btn-ghost" data-delete-mine="' + esc(p.id) + '">' + UI.icon("trash") + "Delete</button>"
-              : '<button class="btn btn-ghost" data-copy-mine="' + esc(p.id) + '" title="Copy it to My playbooks, then change it from Actions">' + UI.icon("plus") + "Make my copy</button>") +
+              : '<button class="btn btn-ghost" data-copy-mine="' + esc(p.id) + '" title="Copy it to My playbooks, then build your own version in the Toolbox">' + UI.icon("plus") + "Make my copy</button>") +
             // Own playbooks live in this browser, so Task Scheduler (running as SYSTEM) cannot run them.
             (p.own ? "" : '<button class="btn" data-schedule-playbook="' + esc(p.id) + '" title="Run it as a routine: every day, week, month or at startup">' + UI.icon("clock") + "Schedule</button>") +
             "</div></div></section>";

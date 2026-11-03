@@ -681,11 +681,14 @@ class Agent:
     def schedules(self) -> List[dict]:
         elenco = self.store.schedules()
         stati = scheduler.sync_state(elenco, self.script) if elenco else {}
+        # Task Scheduler's own view (last run, last result): one call for every task of the folder.
+        windows = scheduler.task_status() if elenco else {}
         risultato = []
         for voce in elenco:
             descritta = routines.describe(voce["action_id"])
             risultato.append(dict(voce, title=descritta["title"], risk=descritta["risk"], area=descritta["area"],
                                   routine=descritta["routine"], steps=len(descritta["actions"]),
+                                  task=windows.get(scheduler.task_name(voce["id"]).rsplit("\\", 1)[-1]),
                                   sync=stati.get(voce["id"], "ok"), next_run=scheduler.next_run(voce, datetime.now())))
         return risultato
 
@@ -714,6 +717,8 @@ class Agent:
             scheduler.validate(kind, at, days, ritardo)
         except ValueError as errore:
             raise ApiError(400, str(errore)) from None
+        if kind == "once" and at < datetime.now().strftime("%Y-%m-%dT%H:%M"):
+            raise ApiError(400, "That time has already passed: choose a time in the future for a one-time schedule.")
         self._guard_changes()
         if self.preview:
             raise ApiError(409, "Schedules cannot be created in preview mode.")
@@ -749,6 +754,19 @@ class Agent:
         self._guard_changes()
         scheduler.unregister(schedule_id)
         self.store.delete_schedule(schedule_id)
+
+    def test_schedule(self, schedule_id: int) -> dict:
+        """Starts the Windows task now, as SYSTEM: proves the schedule really runs, not only that the console can run the action."""
+        voce = self._schedule_or_404(schedule_id)
+        descritta = routines.describe(voce["action_id"])
+
+        def cambia():
+            try:
+                scheduler.run_task_now(schedule_id)
+            except RuntimeError as errore:
+                raise OSError(str(errore)) from None
+            return {"started": True}
+        return self._logged_change("integrity.schedule_test", f"Start the scheduled task of {descritta['title']} now (test)", cambia)
 
     def resync_schedule(self, schedule_id: int) -> None:
         voce = self._schedule_or_404(schedule_id)
@@ -1203,6 +1221,9 @@ class Handler(BaseHTTPRequestHandler):
         self.agent.resync_schedule(int(schedule_id))
         self._json(200, {"ok": True})
 
+    def test_schedule(self, query, schedule_id):
+        self._json(200, self.agent.test_schedule(int(schedule_id)))
+
 
 def _route(metodo: str, schema: str, funzione: Callable) -> Route:
     return metodo, re.compile("/api/v1" + schema), funzione
@@ -1268,6 +1289,7 @@ ROUTES: List[Route] = [
     _route("PATCH", r"/schedules/(\d+)", Handler.update_schedule),
     _route("DELETE", r"/schedules/(\d+)", Handler.delete_schedule),
     _route("POST", r"/schedules/(\d+)/resync", Handler.resync_schedule),
+    _route("POST", r"/schedules/(\d+)/test", Handler.test_schedule),
 ]
 
 

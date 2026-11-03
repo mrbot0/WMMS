@@ -135,8 +135,9 @@
               '<span class="hint">The hours may span midnight, for example 22:00 to 07:00. Runs still finish and appear in Activity and History.</span></div>'),
 
           maintenance: UI.card("Schedule defaults", '<div class="form">' +
-            '<label>Default time of new schedules<input type="time" id="default-time" value="' + esc(store("defaultTime") || "03:00") + '">' +
-            '<span class="hint">Pre-filled when you schedule an action or a script; suggested routines keep their own time.</span></label>' +
+            '<label>Default time of new schedules<input type="time" id="default-time" value="' + esc(store("defaultTime") || "12:00") + '">' +
+            '<span class="hint">Pre-filled for daily, weekly and monthly schedules; choose a time when the PC is usually on. ' +
+            "One-time schedules start an hour from now; suggested routines keep their own time.</span></label>" +
             "<label>Wait after startup or sign-in" + group("defaultDelay", [[0, "None"], [2, "2 min"], [5, "5 min"], [10, "10 min"], [15, "15 min"]], store("defaultDelay") != null ? store("defaultDelay") : 0) +
             '<span class="hint">Pre-filled for “At every startup” and “At every sign-in”, so the PC can finish starting first.</span></label></div>') +
             UI.card("Runs", '<div class="form">' +

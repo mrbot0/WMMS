@@ -15,6 +15,7 @@
     "scripts.run": { id: "scripts.run", title: "Script run", area: "scripts", risk: "moderate" },
     "scripts.schedule": { id: "scripts.schedule", title: "Script schedule changed", area: "scripts", risk: "moderate" },
     "scripts.shutdown_timer": { id: "scripts.shutdown_timer", title: "Shutdown timer", area: "scripts", risk: "moderate" },
+    "integrity.schedule_test": { id: "integrity.schedule_test", title: "Scheduled task started (test)", area: "integrity", risk: "safe" },
     "hardware.monitor_tool": { id: "hardware.monitor_tool", title: "Sensor tool (LibreHardwareMonitor)", area: "performance", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,

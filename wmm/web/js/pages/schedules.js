@@ -134,15 +134,75 @@
     });
   }
 
+  /* A searchable list in a dialog: typing filters it, a click (or Enter on the first match) picks an item. */
+  function picker(title, intro, items) {
+    var body = '<p class="modal-text">' + esc(intro) + '</p><label class="dt-search pick-search">' + UI.icon("search") +
+      '<input type="search" data-pick-q placeholder="Type to filter…" autocomplete="off"></label><div class="pick-list" role="listbox">' +
+      items.map(function (it, i) {
+        return (it.group && (i === 0 || items[i - 1].group !== it.group) ? '<div class="pick-group">' + esc(it.group) + "</div>" : "") +
+          '<button type="button" class="pick-item" role="option" data-pick-index="' + i + '" data-text="' + esc((it.title + " " + (it.sub || "") + " " + (it.group || "")).toLowerCase()) + '">' +
+          '<span class="grow"><span class="cell-title">' + esc(it.title) + "</span>" + (it.sub ? '<span class="cell-sub">' + esc(it.sub) + "</span>" : "") + "</span>" + (it.badge || "") + "</button>";
+      }).join("") + '<p class="empty" data-pick-empty hidden>Nothing matches.</p></div>';
+    var chosen = null;
+    var done = UI.modal(title, body, [{ label: "Cancel", cls: "btn-ghost" }, { label: "Next", cls: "btn-primary", value: function () { return chosen; } }]);
+    var root = document.querySelector("#modal-root .modal");
+    root.classList.add("modal-wide");
+    var q = root.querySelector("[data-pick-q]"), next = root.querySelector(".modal-foot .btn-primary");
+    next.disabled = true;
+    function choose(btn) {
+      root.querySelectorAll(".pick-item").forEach(function (b) { b.classList.toggle("on", b === btn); b.setAttribute("aria-selected", String(b === btn)); });
+      chosen = items[Number(btn.getAttribute("data-pick-index"))];
+      next.disabled = false;
+    }
+    q.addEventListener("input", function () {
+      var words = q.value.toLowerCase().split(/\s+/).filter(Boolean), shown = 0;
+      root.querySelectorAll(".pick-item").forEach(function (b) {
+        var ok = words.every(function (w) { return b.getAttribute("data-text").indexOf(w) >= 0; });
+        b.hidden = !ok;
+        if (ok) shown++;
+      });
+      root.querySelectorAll(".pick-group").forEach(function (g) {
+        var n = g.nextElementSibling, any = false;
+        while (n && n.classList.contains("pick-item")) { if (!n.hidden) any = true; n = n.nextElementSibling; }
+        g.hidden = !any;
+      });
+      root.querySelector("[data-pick-empty]").hidden = shown > 0;
+    });
+    q.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      var first = root.querySelector(".pick-item:not([hidden])");
+      if (first) { choose(first); next.click(); }
+    });
+    root.querySelector(".pick-list").addEventListener("click", function (e) {
+      var b = e.target.closest(".pick-item");
+      if (b) choose(b);
+    });
+    root.querySelector(".pick-list").addEventListener("dblclick", function (e) {
+      var b = e.target.closest(".pick-item");
+      if (b) { choose(b); next.click(); }
+    });
+    setTimeout(function () { q.focus(); }, 50);
+    return done;
+  }
   function pickAction(App) {
-    var options = Object.keys(App.state.actions).map(function (id) {
-      var a = App.state.actions[id];
-      return '<option value="' + esc(id) + '">' + esc(UI.AREA_LABEL[a.area] + " › " + a.title + " (" + UI.RISK_LABEL[a.risk] + ")") + "</option>";
-    }).join("");
-    return UI.modal("New schedule", '<form class="form" onsubmit="return false"><label>Action<select name="action">' + options + "</select></label></form>", [
-      { label: "Cancel", cls: "btn-ghost" },
-      { label: "Next", cls: "btn-primary", value: function (wrap) { return wrap.querySelector("select").value; } }
-    ]);
+    var items = Object.keys(App.state.actions).map(function (id) { return App.state.actions[id]; }).sort(function (a, b) {
+      return UI.AREAS.indexOf(a.area) - UI.AREAS.indexOf(b.area) || a.title.localeCompare(b.title);
+    }).map(function (a) {
+      return { id: a.id, title: a.title, sub: a.description, group: UI.AREA_LABEL[a.area], badge: a.kind === "report" ? UI.kindBadge("report") : UI.riskBadge(a.risk) };
+    });
+    return picker("Schedule a maintenance action", "Pick the tool to run automatically: search by name, area or what it does.", items)
+      .then(function (it) { return it ? it.id : null; });
+  }
+  function pickRoutine(cat) {
+    var items = cat.routines.map(function (r) {
+      return { routine: r, title: r.title, sub: when(suggestedSchedule(r.suggested)) + " · " + r.actions.length + " steps", group: r.group,
+        badge: r.reports_only ? UI.kindBadge("report") : UI.riskBadge(r.risk) };
+    }).concat(cat.playbooks.map(function (p) {
+      return { routine: p, title: p.title, sub: p.actions.length + " steps · any frequency", group: "Playbooks", badge: UI.riskBadge(p.risk) };
+    }));
+    return picker("Schedule a routine", "A routine runs several tools together. Each one comes with a suggested frequency you can change.", items)
+      .then(function (it) { return it ? it.routine : null; });
   }
 
   window.Pages.schedules = {
@@ -183,8 +243,13 @@
               UI.riskBadge(s.risk), esc(when(s)),
               s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">' + (s.kind === "startup" ? "Next startup" : s.kind === "logon" ? "Next sign-in" : "—") + "</span>",
               s.last_run ? UI.statusBadge(s.last_status) + ' <span class="cell-sub">' + esc(UI.relative(s.last_run)) + "</span>" : '<span class="cell-sub">Not run yet</span>',
-              '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>",
+              // What Windows itself says: the result of the last run of the task, which is the real proof it works.
+              '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>" + (s.task && s.sync === "ok"
+                ? '<div class="cell-sub task-result task-' + esc(s.task.result_tone) + '" title="Task Scheduler: ' + esc(s.task.state) + '">' + esc(s.task.result_text) +
+                  (s.task.last ? " · " + esc(UI.relative(s.task.last)) : "") + "</div>" : ""),
               '<button class="btn btn-sm" data-run-now="' + s.id + '" title="Run it now in this console, without waiting for its time">' + UI.icon("play") + "Run now</button>" +
+                (s.sync === "ok" ? '<button class="btn btn-sm btn-ghost" data-test-task="' + s.id + '" title="Start the Windows task now, as SYSTEM, exactly as it will run at its time">' +
+                  UI.icon("bolt") + "Test</button>" : "") +
                 '<button class="btn btn-sm btn-ghost" data-dup="' + s.id + '" title="A second schedule of the same action or routine, at another time">' + UI.icon("plus") + "</button>" +
                 (s.sync !== "ok" ? '<button class="btn btn-sm" data-resync="' + s.id + '">' + UI.icon("refresh") + "Resync</button>" : "") +
                 '<button class="btn btn-sm" data-delete="' + s.id + '">' + UI.icon("trash") + "Delete</button>"
@@ -245,7 +310,7 @@
               { label: "A maintenance action", cls: "btn-primary", value: function () { return "action"; } }]).then(function (what) {
             if (what === "action") pickAction(App).then(function (id) { if (id) App.schedule(id).then(rerender); });
             if (what === "script") pickScript(scriptList).then(function (s) { if (s) scheduleScript(s, rerender); });
-            if (what === "routine") el.querySelector('[data-card$="|Suggested routines"]').scrollIntoView({ behavior: "smooth", block: "start" });
+            if (what === "routine") pickRoutine(cat).then(function (r) { if (r) applyRoutine(r, rerender); });
           });
         });
         el.querySelector('[data-card$="|Scheduled scripts"]').addEventListener("click", function (e) {
@@ -275,6 +340,16 @@
               API.del("/schedules/" + btn.getAttribute("data-delete")).then(function () { UI.toast("Schedule deleted.", "ok"); rerender(); },
                 function (e) { UI.toast(e.message, "error"); });
             });
+          });
+        });
+        el.querySelectorAll("[data-test-task]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            btn.disabled = true;
+            API.post("/schedules/" + btn.getAttribute("data-test-task") + "/test").then(function (r) {
+              if (r.preview) { UI.toast("Preview mode: the task was not started.", "info"); btn.disabled = false; return; }
+              UI.toast("Task started by Windows as SYSTEM. Its result appears here and in History in a few seconds.", "ok");
+              setTimeout(rerender, 8000);
+            }, function (er) { UI.toast(er.message, "error"); btn.disabled = false; });
           });
         });
         el.querySelectorAll("[data-run-now]").forEach(function (btn) {

@@ -337,7 +337,10 @@
     var date = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
     var kind = sug.kind || "once", selDays = (sug.days || "MON").split(",");
     // Settings › Maintenance: default time and wait when the action brings no suggestion of its own.
-    if (!sug.time) sug = Object.assign({}, sug, { time: pref("defaultTime") || "03:00" });
+    // "Once" starts an hour from now (rounded to the quarter): a fixed time of day would often be in the past already.
+    // The other frequencies use Settings › Maintenance, or midday, when most PCs are on (at night many are off or asleep).
+    var soon = new Date(Math.ceil((Date.now() + 3600e3) / 900e3) * 900e3), soonTime = pad(soon.getHours()) + ":" + pad(soon.getMinutes());
+    if (!sug.time) sug = Object.assign({}, sug, { time: kind === "once" ? soonTime : pref("defaultTime") || "12:00" });
     if (sug.delay == null && pref("defaultDelay") != null) sug = Object.assign({}, sug, { delay: pref("defaultDelay") });
     var warning = action.risk !== "safe"
       ? '<div class="callout callout-warning">' + icon("info") + "<div><strong>" + esc(RISK_LABEL[action.risk]) + " action.</strong> " + esc(action.warning) +
@@ -383,6 +386,10 @@
       var sync = function () {
         var k = form.kind.value, ev = !!EVENT_KINDS[k];
         if (ev && form.date.value > today) form.date.value = today;  // a startup routine is active from today unless chosen otherwise
+        if (k === "once" && new Date(form.date.value + "T" + form.time.value) < new Date()) {
+          form.date.value = soon.getFullYear() + "-" + pad(soon.getMonth() + 1) + "-" + pad(soon.getDate());
+          form.time.value = soonTime;
+        }
         form.querySelector(".days").hidden = k !== "weekly";
         form.querySelector(".time-field").hidden = ev;
         form.querySelector(".delay-field").hidden = !ev;
