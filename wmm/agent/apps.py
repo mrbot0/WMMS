@@ -842,10 +842,11 @@ def recycle(percorso: str) -> None:
     """To the Recycle Bin, so a wrong guess can be put back from there."""
     if not safe_leftover(percorso):
         raise ValueError(f"{percorso} is not a program folder that can be removed.")
-    testo = percorso.replace("'", "''")
+    # The path travels as an environment variable, never inside the script: a quote in a folder name cannot run a command.
     risultato = subprocess.run(powershell_command(
-        "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('" + testo +
-        "', 'OnlyErrorDialogs', 'SendToRecycleBin')"), capture_output=True, text=True, timeout=600)
+        "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory("
+        "$env:WMM_LEFTOVER_PATH, 'OnlyErrorDialogs', 'SendToRecycleBin')"),
+        capture_output=True, text=True, timeout=600, env=dict(os.environ, WMM_LEFTOVER_PATH=percorso))
     if risultato.returncode != 0 or os.path.isdir(percorso):
         raise OSError((risultato.stderr or "").strip()[-300:] or f"{percorso} is still there (files in use?)")
 
