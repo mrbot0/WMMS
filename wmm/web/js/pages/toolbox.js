@@ -1,11 +1,26 @@
-/* Toolbox: every tool by area, with Fixes / Reports, search, sorting, multi-select and keyboard navigation. */
+/* Toolbox: the whole catalog of tools (it replaces the old Actions page). A side panel picks the area and the filters,
+   the main column searches and shows the tools as cards or a list, and a selection bar runs, saves or copies a batch. */
 (function () {
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
-  var KINDS = [["", "All tools"], ["fix", "Fixes"], ["report", "Reports"]];
+  var KINDS = [["", "All"], ["fix", "Fixes"], ["report", "Reports"]];
+  var RISKS = [["", "Any"], ["safe", "Safe"], ["moderate", "Moderate"], ["high", "High"]];
+  var SORTS = [["name", "Name"], ["duration", "Shortest first"], ["risk", "Safest first"], ["recent", "Recently run"]];
+  var RISK_RANK = { safe: 0, moderate: 1, high: 2 };
 
-  function saved() { return Components.store("toolbox") || { area: "", kind: "", query: "", sort: "name", never: false }; }
+  function saved() {
+    var v = Components.store("toolbox") || {};
+    // Views saved before 1.9 had a "safe only" switch: it becomes the Safe risk filter.
+    return { area: v.area || "", kind: v.kind || "", risk: v.risk || (v.safe ? "safe" : ""), query: v.query || "", sort: v.sort || "name",
+      never: !!v.never, favs: !!v.favs, list: !!v.list };
+  }
+  function minutes(total) { return total < 1 ? "< 1 min" : total < 60 ? "~" + Math.round(total) + " min" : "~" + (total / 60).toFixed(1) + " h"; }
+  function choice(name, options, current) {
+    return '<div class="segmented tb-seg" role="radiogroup" aria-label="' + name + '">' + options.map(function (o) {
+      return '<button type="button" role="radio" data-' + name + '="' + o[0] + '" aria-checked="' + (current === o[0]) + '">' + esc(o[1]) + "</button>";
+    }).join("") + "</div>";
+  }
 
   window.Pages.toolbox = {
     title: "Toolbox",
@@ -22,46 +37,54 @@
           if (new Date(r.started).getTime() > week) recent[r.action_id] = 1;
         });
         var reports = all.filter(function (a) { return a.kind === "report"; }).length;
-        var picked = {};
+        var safeFixes = all.filter(function (a) { return a.kind !== "report" && a.risk === "safe"; }).length;
+        var picked = {}, visible = [];
         App.setSubtitle(all.length + " tools: " + (all.length - reports) + " fixes and " + reports + " read-only reports");
 
-        var kpis = '<div class="grid grid-4">' +
+        var kpis = '<div class="grid grid-5">' +
           UI.kpi("Tools", Components.num(all.length), UI.AREAS.length + " areas", "info") +
-          UI.kpi("Fixes", Components.num(all.length - reports), "Change settings or delete files", "warning") +
+          UI.kpi("Fixes", Components.num(all.length - reports), safeFixes + " safe, the others ask first", "warning") +
           UI.kpi("Reports", Components.num(reports), "Read-only diagnostics", "ok") +
+          UI.kpi("Favorites", '<span id="tb-fav-count">' + App.favorites().length + "</span>", "Starred tools, shown first and on the dashboard", "info") +
           UI.kpi("Used this week", Components.num(Object.keys(recent).length), "Different tools run in 7 days", "info") + "</div>";
-        var tabs = '<div class="tabs" role="tablist" aria-label="Area">' + [["", "All", "dashboard"]].concat(UI.AREAS.map(function (a) { return [a, UI.AREA_LABEL[a], a]; })).map(function (t) {
-          var n = all.filter(function (a) { return !t[0] || a.area === t[0]; }).length;
-          return '<button type="button" role="tab" class="tab" data-area="' + t[0] + '" aria-selected="' + (view.area === t[0]) + '" tabindex="' + (view.area === t[0] ? 0 : -1) + '">' +
-            UI.icon(t[2]) + "<span>" + esc(t[1]) + '</span><span class="tab-count">' + n + "</span></button>";
-        }).join("") + "</div>";
-        var segmented = '<div class="segmented" role="radiogroup" aria-label="Kind">' + KINDS.map(function (k) {
-          return '<button type="button" role="radio" data-kind="' + k[0] + '" aria-checked="' + (view.kind === k[0]) + '">' + esc(k[1]) + "</button>";
-        }).join("") + "</div>";
 
-        el.innerHTML = UI.pageHeader("Toolbox", "Every maintenance tool in one place",
-          '<span class="muted small" id="tb-info">Nothing selected</span>' +
-          UI.button(view.list ? "Cards" : "List", 'id="tb-layout" title="Compact list or cards with descriptions"', "", view.list ? "dashboard" : "playbooks") +
-          UI.button("Copy", 'id="tb-copy" disabled title="Names and IDs of the selected tools, for a ticket or a script"', "", "copy") +
-          UI.button("Run diagnostics", 'id="tb-reports"', "", "reports") +
-          UI.button("Clear", 'id="tb-clear" disabled', "", "x") + UI.button("Run selected", 'id="tb-run" disabled', "btn-primary", "play")) + kpis +
-          '<section class="card toolbox"><div class="card-body">' + tabs +
-          '<div class="tb-bar">' + segmented + UI.hint("Fixes change a setting or delete files. Reports only read the PC and open their output when they finish.") +
-          '<label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search tools</span>' +
-          '<input type="search" id="tb-q" placeholder="Search tools… (press / )" value="' + esc(view.query) + '"></label>' +
-          '<label class="tb-sort">Sort<select id="tb-sort">' + [["name", "Name"], ["duration", "Shortest first"], ["recent", "Recently run"]].map(function (o) {
+        var areas = '<nav class="tb-areas" role="tablist" aria-label="Area" aria-orientation="vertical">' +
+          [["", "All areas", "dashboard"]].concat(UI.AREAS.map(function (a) { return [a, UI.AREA_LABEL[a], a]; })).map(function (t) {
+            var n = all.filter(function (a) { return !t[0] || a.area === t[0]; }).length;
+            return '<button type="button" role="tab" class="tb-area" data-area="' + t[0] + '" aria-selected="' + (view.area === t[0]) + '" tabindex="' + (view.area === t[0] ? 0 : -1) + '">' +
+              UI.icon(t[2]) + '<span class="grow">' + esc(t[1]) + '</span><span class="tab-count">' + n + "</span></button>";
+          }).join("") + "</nav>";
+        var filters = '<div class="tb-filters">' +
+          '<div class="tb-filter"><span class="tb-label">Kind ' + UI.hint("Fixes change a setting or delete files. Reports only read the PC and open their output when they finish.") + "</span>" + choice("kind", KINDS, view.kind) + "</div>" +
+          '<div class="tb-filter"><span class="tb-label">Risk ' + UI.hint("Safe tools run without asking. Moderate and high ones ask first and create a restore point.") + "</span>" + choice("risk", RISKS, view.risk) + "</div>" +
+          '<div class="tb-filter"><label class="tb-label" for="tb-sort">Sort</label><select id="tb-sort">' + SORTS.map(function (o) {
             return '<option value="' + o[0] + '"' + (view.sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-          }).join("") + '</select></label><label class="check"><input type="checkbox" id="tb-never"' + (view.never ? " checked" : "") + "> Never run</label>" +
-          '<label class="check"><input type="checkbox" id="tb-favs"' + (view.favs ? " checked" : "") + "> Favorites</label>" +
-          '<label class="check" title="Only tools that run without confirmation"><input type="checkbox" id="tb-safe"' + (view.safe ? " checked" : "") + "> Safe only</label></div>" +
-          '<div id="tb-list" aria-live="polite"></div></div></section>';
-        var list = el.querySelector("#tb-list"), visibleReports = [];
+          }).join("") + "</select></div>" +
+          '<label class="check"><input type="checkbox" id="tb-favs"' + (view.favs ? " checked" : "") + "> Favorites only</label>" +
+          '<label class="check"><input type="checkbox" id="tb-never"' + (view.never ? " checked" : "") + "> Never run</label>" +
+          '<button type="button" class="btn btn-sm btn-ghost" id="tb-reset">' + UI.icon("x") + "Reset filters</button></div>";
+
+        el.innerHTML = UI.pageHeader("Toolbox", "Every maintenance tool in one place: find it, run it, schedule it or combine several",
+          UI.button("Run diagnostics", 'id="tb-reports" title="Run every read-only report in the current view"', "", "reports") +
+          UI.button(view.list ? "Cards" : "List", 'id="tb-layout" title="Compact list or cards with descriptions"', "", view.list ? "dashboard" : "playbooks")) + kpis +
+          '<div class="tb-layout">' +
+          '<aside class="card tb-side"><div class="card-body">' + areas + filters + "</div></aside>" +
+          '<section class="tb-main"><div class="tb-search-row"><label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search tools</span>' +
+          '<input type="search" id="tb-q" placeholder="Search by name, description or ID… (press / )" value="' + esc(view.query) + '"></label>' +
+          '<span class="muted small" id="tb-count"></span>' + UI.button("Select visible", 'id="tb-pick-visible"', "btn-sm", "check") + "</div>" +
+          '<div id="tb-list" aria-live="polite"></div>' +
+          '<div class="tb-selbar" id="tb-selbar" hidden><span id="tb-info"></span><span class="grow"></span>' +
+          UI.button("Clear", 'id="tb-clear"', "btn-sm btn-ghost", "x") + UI.button("Copy", 'id="tb-copy" title="Names and IDs of the selected tools, for a ticket or a script"', "btn-sm", "copy") +
+          UI.button("Save as playbook", 'id="tb-save" title="Keep the selection as one of My playbooks, to run it again with one click"', "btn-sm", "playbooks") +
+          UI.button("Run selected", 'id="tb-run"', "btn-sm btn-primary", "play") + "</div></section></div>";
+        var list = el.querySelector("#tb-list");
 
         function shown() {
           var words = view.query.toLowerCase().split(/\s+/).filter(Boolean), favs = App.favorites();
           var sorts = {
             name: function (x, y) { return x.title.localeCompare(y.title); },
             duration: function (x, y) { return x.minutes - y.minutes || x.title.localeCompare(y.title); },
+            risk: function (x, y) { return RISK_RANK[x.risk] - RISK_RANK[y.risk] || x.title.localeCompare(y.title); },
             recent: function (x, y) {
               var a = last[x.id] ? last[x.id].started : "", b = last[y.id] ? last[y.id].started : "";
               return a < b ? 1 : a > b ? -1 : x.title.localeCompare(y.title);
@@ -69,37 +92,46 @@
           };
           return all.filter(function (a) {
             var text = (a.title + " " + a.description + " " + a.id).toLowerCase();
-            return (!view.area || a.area === view.area) && (!view.kind || a.kind === view.kind) && (!view.never || !last[a.id]) &&
-              (!view.favs || favs.indexOf(a.id) >= 0) && (!view.safe || a.risk === "safe") &&
-              words.every(function (w) { return text.indexOf(w) >= 0; });
-          }).sort(sorts[view.sort] || sorts.name);
+            return (!view.area || a.area === view.area) && (!view.kind || a.kind === view.kind) && (!view.risk || a.risk === view.risk) &&
+              (!view.never || !last[a.id]) && (!view.favs || favs.indexOf(a.id) >= 0) && words.every(function (w) { return text.indexOf(w) >= 0; });
+          }).sort(function (x, y) {
+            // Favorites first, like on the old Actions page, then the chosen order.
+            return (favs.indexOf(y.id) >= 0) - (favs.indexOf(x.id) >= 0) || (sorts[view.sort] || sorts.name)(x, y);
+          });
         }
         function draw() {
-          Components.store("toolbox", { area: view.area, kind: view.kind, query: view.query, sort: view.sort, never: view.never, favs: view.favs, safe: view.safe, list: view.list });
-          var items = shown();
-          visibleReports = items.filter(function (a) { return a.kind === "report"; }).map(function (a) { return a.id; });
-          var areas = view.area ? [view.area] : UI.AREAS;
-          var html = areas.map(function (area) {
+          Components.store("toolbox", view);
+          var items = shown(), favs = App.favorites();
+          visible = items.map(function (a) { return a.id; });
+          var groups = view.area ? [view.area] : UI.AREAS;
+          var html = groups.map(function (area) {
             var group = items.filter(function (a) { return a.area === area; });
             if (!group.length) return "";
             return (view.area ? "" : '<div class="section-title">' + UI.icon(area) + esc(UI.AREA_LABEL[area]) + '<span class="extra">' + group.length + " tools</span></div>") +
-              '<div class="action-grid">' + group.map(function (a) { return UI.toolCard(a, last[a.id], { pick: true, picked: !!picked[a.id] }); }).join("") + "</div>";
+              '<div class="action-grid">' + group.map(function (a) {
+                return UI.toolCard(a, last[a.id], { pick: true, picked: !!picked[a.id], star: favs.indexOf(a.id) >= 0 });
+              }).join("") + "</div>";
           }).join("");
-          list.innerHTML = html || '<div class="empty-state">' + UI.icon("search") + "<h2>No tool matches</h2><p>Change the area, the kind or the search text.</p></div>";
-          list.classList.toggle("tb-list", !!view.list);
-          el.querySelector("#tb-reports").disabled = !visibleReports.length;
-          el.querySelector("#tb-reports").title = visibleReports.length + " read-only reports in the current view";
+          list.innerHTML = html || '<div class="empty-state">' + UI.icon("search") + "<h2>No tool matches</h2><p>Change the area, the filters or the search text.</p></div>";
+          list.classList.toggle("tb-list", view.list);
+          el.querySelector("#tb-count").textContent = items.length + " of " + all.length + " tools";
+          var reportIds = items.filter(function (a) { return a.kind === "report"; });
+          el.querySelector("#tb-reports").disabled = !reportIds.length;
+          el.querySelector("#tb-reports").title = reportIds.length + " read-only reports in the current view";
+          el.querySelector("#tb-fav-count").textContent = favs.length;
           update();
         }
         function update() {
           var ids = Object.keys(picked);
           var total = ids.reduce(function (s, id) { return s + App.state.actions[id].minutes; }, 0);
-          el.querySelector("#tb-info").textContent = ids.length ? ids.length + " selected · " + UI.duration(total) : "Nothing selected";
-          el.querySelector("#tb-run").disabled = el.querySelector("#tb-clear").disabled = el.querySelector("#tb-copy").disabled = !ids.length;
+          var risky = ids.filter(function (id) { return App.state.actions[id].risk !== "safe"; }).length;
+          el.querySelector("#tb-selbar").hidden = !ids.length;
+          el.querySelector("#tb-info").innerHTML = "<strong>" + ids.length + " selected</strong> · " + esc(minutes(total)) +
+            (risky ? ' · <span class="badge badge-moderate">' + risky + " ask first</span>" : "");
         }
-        function selectTab(btn) {
+        function selectArea(btn) {
           view.area = btn.getAttribute("data-area");
-          el.querySelectorAll(".tab").forEach(function (t) {
+          el.querySelectorAll(".tb-area").forEach(function (t) {
             var on = t === btn;
             t.setAttribute("aria-selected", String(on));
             t.tabIndex = on ? 0 : -1;
@@ -107,42 +139,51 @@
           btn.focus();
           draw();
         }
+        function setChoice(name, value) {
+          view[name] = value;
+          el.querySelectorAll("[data-" + name + "]").forEach(function (x) { x.setAttribute("aria-checked", String(x.getAttribute("data-" + name) === value)); });
+          draw();
+        }
 
-        var tabList = el.querySelector(".tabs");
-        tabList.addEventListener("click", function (e) { var t = e.target.closest(".tab"); if (t) selectTab(t); });
-        // Arrow keys move between tabs, Home / End jump to the ends (WAI-ARIA tabs pattern).
-        tabList.addEventListener("keydown", function (e) {
-          var tabs = Array.prototype.slice.call(tabList.querySelectorAll(".tab")), i = tabs.indexOf(document.activeElement);
+        var areaList = el.querySelector(".tb-areas");
+        areaList.addEventListener("click", function (e) { var t = e.target.closest(".tb-area"); if (t) selectArea(t); });
+        // Arrow keys move between areas, Home / End jump to the ends (WAI-ARIA tabs pattern, vertical).
+        areaList.addEventListener("keydown", function (e) {
+          var tabs = Array.prototype.slice.call(areaList.querySelectorAll(".tb-area")), i = tabs.indexOf(document.activeElement);
           if (i < 0) return;
-          var next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
+          var next = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
           if (next == null) return;
           e.preventDefault();
-          selectTab(tabs[(next + tabs.length) % tabs.length]);
+          selectArea(tabs[(next + tabs.length) % tabs.length]);
         });
-        el.querySelector(".segmented").addEventListener("click", function (e) {
-          var b = e.target.closest("[data-kind]");
-          if (!b) return;
-          view.kind = b.getAttribute("data-kind");
-          el.querySelectorAll("[data-kind]").forEach(function (x) { x.setAttribute("aria-checked", String(x === b)); });
-          draw();
+        el.querySelector(".tb-filters").addEventListener("click", function (e) {
+          var k = e.target.closest("[data-kind]"), r = e.target.closest("[data-risk]");
+          if (k) setChoice("kind", k.getAttribute("data-kind"));
+          if (r) setChoice("risk", r.getAttribute("data-risk"));
         });
         el.querySelector("#tb-q").addEventListener("input", function (e) { view.query = e.target.value; draw(); });
+        el.querySelector("#tb-sort").addEventListener("change", function (e) { view.sort = e.target.value; draw(); });
+        el.querySelector("#tb-favs").addEventListener("change", function (e) {
+          view.favs = e.target.checked;
+          if (view.favs && !App.favorites().length) UI.toast("No favorites yet: press the star on a tool.", "info");
+          draw();
+        });
+        el.querySelector("#tb-never").addEventListener("change", function (e) { view.never = e.target.checked; draw(); });
+        el.querySelector("#tb-reset").addEventListener("click", function () {
+          view = { area: "", kind: "", risk: "", query: "", sort: "name", never: false, favs: false, list: view.list };
+          Components.store("toolbox", view);
+          App.render();
+        });
         el.querySelector("#tb-layout").addEventListener("click", function (e) {
           view.list = !view.list;
           e.currentTarget.lastChild.textContent = view.list ? "Cards" : "List";
           draw();
         });
-        el.querySelector("#tb-copy").addEventListener("click", function () {
-          App.copyText(Object.keys(picked).map(function (id) { var a = App.state.actions[id]; return a.title + " (" + id + ", " + a.risk + ", ~" + Math.max(1, Math.round(a.minutes)) + " min)"; }).join("\n"), "Tools");
-        });
-        el.querySelector("#tb-sort").addEventListener("change", function (e) { view.sort = e.target.value; draw(); });
-        el.querySelector("#tb-favs").addEventListener("change", function (e) {
-          view.favs = e.target.checked;
-          if (view.favs && !App.favorites().length) UI.toast("No favorites yet: star a tool in its details or in Actions.", "info");
+        el.querySelector("#tb-pick-visible").addEventListener("click", function () {
+          var allPicked = visible.length && visible.every(function (id) { return picked[id]; });
+          visible.forEach(function (id) { if (allPicked) delete picked[id]; else picked[id] = 1; });
           draw();
         });
-        el.querySelector("#tb-safe").addEventListener("change", function (e) { view.safe = e.target.checked; draw(); });
-        el.querySelector("#tb-never").addEventListener("change", function (e) { view.never = e.target.checked; draw(); });
         list.addEventListener("change", function (e) {
           if (!e.target.hasAttribute("data-pick")) return;
           var card = e.target.closest("[data-id]"), id = card.getAttribute("data-id");
@@ -152,15 +193,36 @@
         });
         list.addEventListener("click", function (e) {
           var info = e.target.closest("[data-detail]");
-          if (info) App.actionDetail(info.closest("[data-id]").getAttribute("data-id"));
+          if (info) { App.actionDetail(info.closest("[data-id]").getAttribute("data-id")); return; }
+          var star = e.target.closest("[data-star]");
+          if (!star) return;
+          var on = App.toggleFavorite(star.closest("[data-id]").getAttribute("data-id"));
+          if (on) FX.burst(star);
+          UI.toast(on ? "Added to favorites: shown first here and on the dashboard." : "Removed from favorites.", "ok");
+          draw();
         });
         // Enter on a focused card opens its details.
         list.addEventListener("keydown", function (e) {
           if (e.key === "Enter" && e.target.classList && e.target.classList.contains("tool-card")) App.actionDetail(e.target.getAttribute("data-id"));
         });
         el.querySelector("#tb-clear").addEventListener("click", function () { picked = {}; draw(); });
+        el.querySelector("#tb-copy").addEventListener("click", function () {
+          App.copyText(Object.keys(picked).map(function (id) { var a = App.state.actions[id]; return a.title + " (" + id + ", " + a.risk + ", " + minutes(a.minutes) + ")"; }).join("\n"), "Tools");
+        });
+        el.querySelector("#tb-save").addEventListener("click", function () {
+          var ids = App.order(Object.keys(picked));
+          UI.modal("Save as playbook", '<form class="form" onsubmit="return false"><label>Name<input name="n" maxlength="60" placeholder="e.g. Monthly visit at the office" required></label>' +
+            '<p class="muted small" style="margin:0">' + ids.length + " tools, in a safe order. It appears in Playbooks › My playbooks.</p></form>",
+            [{ label: "Cancel", cls: "btn-ghost" }, { label: "Save", cls: "btn-primary", value: function (w) { return w.querySelector("input").value.trim(); } }]).then(function (name) {
+            if (!name) return;
+            Pages.playbooks.saveMine(name, ids);
+            UI.toast("Saved in Playbooks › My playbooks.", "ok");
+          });
+        });
         el.querySelector("#tb-run").addEventListener("click", function () { App.runActions(App.order(Object.keys(picked))); picked = {}; draw(); });
-        el.querySelector("#tb-reports").addEventListener("click", function () { App.runActions(visibleReports); });
+        el.querySelector("#tb-reports").addEventListener("click", function () {
+          App.runActions(visible.filter(function (id) { return App.state.actions[id].kind === "report"; }));
+        });
         // "/" focuses the search box while this page is open.
         function slash(e) {
           if (e.key !== "/" || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || !App.isCurrent("toolbox")) return;
@@ -172,6 +234,17 @@
         App.onLeave(function () { document.removeEventListener("keydown", slash, true); });
         draw();
       });
+    }
+  };
+
+  /* The old Actions page lives on as an address: links and bookmarks to #/actions open the Toolbox. */
+  window.Pages.actions = {
+    title: "Toolbox",
+    alias: "toolbox",
+    render: function (el, App) {
+      history.replaceState(null, "", "#/toolbox" + (location.hash.indexOf("?") > 0 ? location.hash.slice(location.hash.indexOf("?")) : ""));
+      App.state.page = "toolbox";  // so the page's own checks (App.isCurrent) and the menu see the Toolbox
+      return window.Pages.toolbox.render(el, App);
     }
   };
 })();

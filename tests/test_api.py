@@ -43,6 +43,7 @@ class ApiTests(unittest.TestCase):
             mock.patch.object(api.scheduler, "register"),
             mock.patch.object(api.scheduler, "unregister"),
             mock.patch.object(api.scheduler, "sync_state", return_value={}),
+            mock.patch.object(api.scheduler, "task_status", return_value={}),
             mock.patch.object(api.scheduler, "unprotected_paths", return_value=[r"C:\Users\x\Desktop\wmm.py"]),
             mock.patch.object(inventory, "collect_performance", return_value=dict(PERFORMANCE)),
             mock.patch.object(inventory, "collect_storage", return_value={"categories": [], "volumes": [], "errors": []}),

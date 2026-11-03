@@ -26,7 +26,6 @@
         ["registry", "Registry", "Browse, search and edit the registry, with a backup before every change."]] },
     { id: "operations", title: "Operations", icon: "play", text: "Run, combine, schedule and document the maintenance work.",
       pages: [["toolbox", "Toolbox", "Every tool by area: fixes and read-only reports."],
-        ["actions", "Actions", "The whole catalog with filters, favorites and multi-select runs."],
         ["activity", "Activity", "Runs and scans in progress, with their live log."],
         ["playbooks", "Playbooks", "Ready-made sequences: quick tune-up, full maintenance, repair, hardening."],
         ["schedules", "Schedules", "Maintenance that runs on its own through Windows Task Scheduler."],

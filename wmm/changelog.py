@@ -27,6 +27,11 @@ CHANGELOG = [
             "Activity: copy the session summary. Reports: notes saved as a draft, common phrases. Support: Windows settings shortcuts, problem report.",
             "Category pages: weakest page and copy summary. Focus mode (F), [ and ] for the previous and next page, recent runs and Windows settings in the search.",
             "The console can run hidden (--hidden): output goes to dati\\wmm-console.log and the programs it starts open no window.",
+            "Toolbox and Actions are one page: areas and filters on the side (kind, risk, sort, favorites, never run), stars on every tool, "
+            "Select visible, Save as playbook and a selection bar. Old links to Actions open the Toolbox.",
+            "Schedules: New schedule offers a searchable list of actions and of routines; the Task Scheduler column shows what Windows itself "
+            "reports (last result in words); Test starts the Windows task now, as SYSTEM.",
+            "Schedules: one-time schedules start an hour from now and cannot be set in the past; the default time of the others is midday.",
         ],
     },
     {

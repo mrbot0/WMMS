@@ -329,7 +329,7 @@
 
   var GOTO = { d: "dashboard", r: "recommendations", p: "performance", c: "cleanup", s: "storage", a: "startup", v: "services", k: "toolbox",
     l: "events", m: "processes", w: "registry", y: "hardware",
-    i: "integrity", e: "security", u: "updates", n: "network", x: "activity", z: "actions", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
+    i: "integrity", e: "security", u: "updates", n: "network", x: "activity", b: "playbooks", t: "schedules", h: "history", o: "reports", ",": "settings" };
   var pendingG = 0;
 
   function shortcutsHelp() {

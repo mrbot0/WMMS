@@ -28,6 +28,14 @@ All notable changes to Windows Maintenance Manager. The console shows the same n
   - output goes to `dati\wmm-console.log` (rotated at 2 MB);
   - child programs start with `CREATE_NO_WINDOW`;
   - an existing task is updated by turning the option off and on again.
+- **Toolbox = Actions**: one page with a side panel (areas, kind, risk, sort, favorites, never run), stars, Select
+  visible, Save as playbook and a sticky selection bar; `#/actions` opens the Toolbox.
+- **Schedules fixed**:
+  - New schedule now offers searchable pickers: "A routine" no longer only scrolls the page.
+  - The Task Scheduler column shows the last result reported by Windows (`Get-ScheduledTaskInfo`), and
+    `POST /schedules/{id}/test` starts the task as SYSTEM.
+  - One-time schedules default to an hour from now and are refused in the past; the default time is midday instead
+    of 03:00, when many PCs are off.
 - **21 settings and 40 page functions** more (see the release notes in the console).
 
 ## 1.8.0 — 2026-11-03

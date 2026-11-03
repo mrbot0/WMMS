@@ -180,7 +180,7 @@
         var title = function (id) { var a = App.action(id); return a ? a.title : id; };
 
         var favs = (Components.store("favorites") || []).map(function (id) { return App.action(id); }).filter(Boolean);
-        var pinned = favs.length ? section("actions", "Favorite actions", '<a href="#/actions">Manage</a>') + '<div class="quick-grid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:var(--gap)">' +
+        var pinned = favs.length ? section("actions", "Favorite actions", '<a href="#/toolbox">Manage in the Toolbox</a>') + '<div class="quick-grid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:var(--gap)">' +
           favs.map(function (a) {
             return '<button type="button" class="quick" data-run="' + esc(a.id) + '" data-area="' + a.area + '"><span class="tile-icon">' + UI.icon(a.area) + "</span><span>" + esc(a.title) + "</span></button>";
           }).join("") + "</div>" : "";
