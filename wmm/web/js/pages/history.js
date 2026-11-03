@@ -14,6 +14,27 @@
     return found;
   }
 
+  /* Undo: System Restore brings the whole PC back to the point made before the change (Windows restarts to apply it). */
+  function undo(started, what) {
+    API.get("/restore-points").then(function (r) {
+      var points = r.points || [], at = String(started).slice(0, 19);
+      var point = points.filter(function (p) { return p.created && p.created <= at; })[0];
+      var body = point
+        ? '<p class="modal-text">To undo <strong>' + esc(what) + "</strong> (" + esc(UI.formatDate(started, true)) + "), choose this restore point in System Restore:</p>" +
+          UI.definition([["Restore point", "#" + esc(point.seq)], ["Created", esc(UI.formatDate(point.created, true))], ["Description", esc(point.description || "—")]]) +
+          '<div class="callout callout-warning">' + UI.icon("alert") + "<div>Windows restarts to apply it. Programs installed and settings changed after that moment are undone too; " +
+          "your documents are not touched. Save your work first.</div></div>"
+        : '<div class="callout callout-warning">' + UI.icon("alert") + "<div>" + esc(r.note || "No restore point older than this change was found.") +
+          " System Restore can still show the points Windows keeps.</div></div>";
+      return UI.modal("Undo " + what, body, [{ label: "Cancel", cls: "btn-ghost" }, { label: "Open System Restore", cls: "btn-primary", value: function () { return true; } }]);
+    }).then(function (ok) {
+      if (!ok) return;
+      return API.post("/restore-points/open").then(function (x) {
+        UI.toast(x.preview ? "Preview mode: System Restore was not opened." : "System Restore is open on the PC: pick the point and follow the steps.", x.preview ? "info" : "ok");
+      });
+    }).catch(function (e) { UI.toast(e.message, "error"); });
+  }
+
   window.Pages.history = {
     title: "History",
     render: function (el, App) {
@@ -137,11 +158,19 @@
               return '<details class="log-details" data-log-run="' + r.id + '"><summary>View</summary><pre class="log">Loading…</pre>' +
                 '<button type="button" class="btn btn-sm btn-ghost" data-copy-log hidden>' + UI.icon("copy") + "Copy log</button></details>"; } },
             { key: "again", title: "", sortable: false, csv: false, render: function (r) {
-              var a = App.state.actions[r.action_id];
-              return a ? '<button type="button" class="btn btn-sm" data-run="' + esc(r.action_id) + '" title="Run ' + esc(a.title) + ' again">' + UI.icon("refresh") + "Again</button>" : "";
+              var a = App.state.actions[r.action_id], kind = App.action(r.action_id);
+              // A change that went through (not a read-only report) can be undone with the restore point made before it.
+              var undo = r.status === "ok" && kind && kind.risk !== "safe" && kind.kind !== "report"
+                ? '<button type="button" class="btn btn-sm btn-ghost" data-undo="' + esc(r.started) + '" data-undo-title="' + esc(title(r.action_id)) + '" title="Bring the PC back to the restore point made before this change">' +
+                  UI.icon("history") + "Undo…</button>" : "";
+              return '<span class="row-actions">' + (a ? '<button type="button" class="btn btn-sm" data-run="' + esc(r.action_id) + '" title="Run ' + esc(a.title) + ' again">' +
+                UI.icon("refresh") + "Again</button>" : "") + undo + "</span>";
             } }
           ],
           after: function (box) {
+            box.querySelectorAll("[data-undo]").forEach(function (b) {
+              b.addEventListener("click", function () { undo(b.getAttribute("data-undo"), b.getAttribute("data-undo-title")); });
+            });
             box.querySelectorAll("[data-log-run]").forEach(function (det) {
               det.addEventListener("toggle", function () {
                 if (!det.open || det.loaded) return;

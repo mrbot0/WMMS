@@ -3,6 +3,32 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.1.0 — 2026-11-03
+
+**Restore point and undo, complete uninstall, updatable rules, before/after report, Italian interface.**
+
+- **Restore point before manual changes** (`wmm/agent/restore.py`): uninstall, Store app removal and deleted registry
+  keys make a restore point first (one from the last hour is reused).
+  - If Windows makes none, the agent answers 412 and changes nothing; the page asks whether to go on without it.
+  - The point number is recorded in History; History › Undo shows the point made before a change and opens System
+    Restore (`GET /restore-points`, `POST /restore-points/open`).
+  - Settings › Start-up turns it off.
+- **Complete uninstall**: the page follows the uninstaller (`GET /apps/{id}/uninstall-status`) and, once the program is
+  gone, offers its leftovers (`POST /apps/{id}/leftovers`).
+  - Folders go to the Recycle Bin; registry keys are deleted with a .reg backup.
+  - Safeguards: only folders inside Program Files, ProgramData and AppData, no names shared by many programs or equal
+    to the publisher, nothing another installed program uses.
+- **Updatable rules** (`wmm/data/app_rules.json`): end of support, minimum safe versions, adware, optimizers, remote
+  access and Store extras.
+  - "Update the rules" downloads the file from the project repository, validates it (dates, versions, patterns that
+    compile, 512 KB at most) and keeps it in the data folder only when it is newer.
+- **Before / After report**: the scores of every area at the chosen moment and now, operations done by area, programs
+  removed or updated, errors and the improvements still recommended.
+- **Italian interface** (`wmm/web/js/i18n.js`): Settings › Appearance › Language (automatic, English, Italiano).
+  - A dictionary of the visible phrases plus rules for counts, relative times and dates.
+  - Data (paths, commands, program names, logs) is never touched; customer reports follow the same language.
+  - Long tool descriptions and server texts stay in English for now.
+
 ## 2.0.0 — 2026-11-03
 
 **Applications page, 40 new tools, a sturdier agent and 20 new console functions.**

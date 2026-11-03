@@ -435,6 +435,23 @@
       '" aria-pressed="' + pinned + '" title="' + (pinned ? "Unpin from the dashboard" : "Pin to the dashboard") + '">' + (pinned ? "★" : "☆") + "</button>";
     return '<div class="page-head"><div><div class="page-kicker">' + esc(sub || "") + '</div></div><div class="page-actions">' + (buttons || "") + pin + "</div></div>";
   }
+  /* Changes that make a restore point first (uninstall, Store app removal, deleted registry key). When Windows makes none
+     the agent answers 412 and changes nothing: the user decides whether to go on without one. */
+  function withRestorePoint(path, body) {
+    body = body || {};
+    toast("Creating a restore point first: it can take a minute.", "info");
+    return API.post(path, body).catch(function (e) {
+      if (e.status !== 412) throw e;
+      return confirm("No restore point", e.message.replace(/\s*\(HTTP 412\)$/, "") + " Go on without a restore point?", { ok: "Go on without it", danger: true })
+        .then(function (ok) {
+          if (!ok) { var stop = new Error("Nothing was changed."); stop.cancelled = true; throw stop; }
+          return API.post(path, Object.assign({}, body, { no_restore_point: true }));
+        });
+    }).then(function (r) {
+      if (r && r.restore_point) toast("Protected by restore point #" + r.restore_point + ": History › Undo brings the PC back to it.", "ok");
+      return r;
+    });
+  }
   function button(label, attrs, cls, iconName) {
     return '<button type="button" class="btn ' + (cls || "") + '" ' + (attrs || "") + ">" + (iconName ? icon(iconName) : "") + esc(label) + "</button>";
   }
@@ -621,7 +638,7 @@
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
     kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog, scheduleText: scheduleText,
-    loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button,
+    loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button, withRestorePoint: withRestorePoint,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL
   };
 })();

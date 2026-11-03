@@ -34,7 +34,7 @@ import ottimizza_pc as op
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ..agent import (actions, advisor, apps, autostart, collectors, core, events, hardware, health, inventory, live, processes, registry,
+from ..agent import (actions, advisor, apps, autostart, restore, collectors, core, events, hardware, health, inventory, live, processes, registry,
                      routines, scheduler, scripts, shutdown)
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
@@ -110,6 +110,10 @@ class Agent:
         self._protect: dict = {"active": False, "status": "idle", "log": []}
         self._apps_lock = threading.Lock()
         self._apps: Optional[dict] = None
+        # Rules of the Applications page: a newer copy downloaded into the data folder wins over the built-in one.
+        apps.RULES_OVERRIDE = self.data_dir / "app_rules.json"
+        apps.load_rules()
+        self._uninstalls: Dict[str, dict] = {}  # app id -> the program and its uninstaller, until the page has seen the end
 
     # ---------- data ----------
 
@@ -307,12 +311,57 @@ class Agent:
             raise ApiError(404, "Program not found: it may be already removed. Scan again.")
         return voce
 
-    def app_uninstall(self, app_id: str) -> dict:
+    def app_uninstall(self, app_id: str, senza_punto: bool = False) -> dict:
         voce = self._installed(app_id)
         if not voce["uninstall"]:
             raise ApiError(409, f"{voce['name']} has no uninstaller: use Remove entry if the program is already gone.")
-        return self._logged_change("apps.uninstall", f"Start the uninstaller of {voce['name']} {voce['version']}".strip(),
-                                   lambda: apps.run_uninstaller(voce))
+        esito = self._logged_change("apps.uninstall", f"Start the uninstaller of {voce['name']} {voce['version']}".strip(),
+                                    lambda: apps.run_uninstaller(voce), punto=True, senza_punto=senza_punto)
+        if not esito.get("preview"):
+            self._uninstalls[app_id] = {"app": voce, "pid": esito.get("pid"), "started": time.time()}
+        return esito
+
+    def uninstall_status(self, app_id: str) -> dict:
+        """Is the uninstaller still running, is the program gone, and what did it leave behind?"""
+        voce = self._uninstalls.get(app_id)
+        if voce is None:
+            raise ApiError(404, "No uninstall of this program was started by this console.")
+        in_corso = apps.is_running(voce["pid"])
+        installati = apps.read_installed()
+        rimosso = not any(a["id"] == app_id for a in installati)
+        stato = {"running": in_corso, "removed": rimosso, "name": voce["app"]["name"], "seconds": int(time.time() - voce["started"])}
+        if rimosso and not in_corso:
+            if "leftovers" not in voce:
+                voce["leftovers"] = apps.leftovers(voce["app"], installati)
+                with self._apps_lock:
+                    self._apps = None  # the next visit scans again
+            stato["leftovers"] = voce["leftovers"]
+        return stato
+
+    def clean_leftovers(self, app_id: str, ids) -> dict:
+        voce = self._uninstalls.get(app_id)
+        if voce is None or "leftovers" not in voce:
+            raise ApiError(409, "Leftovers are offered only after the program is gone.")
+        if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+            raise ApiError(400, "'ids' must be a list.")
+        scelti = [l for l in voce["leftovers"] if l["id"] in ids]
+        if not scelti:
+            raise ApiError(400, "Select at least one leftover.")
+
+        def cambia() -> dict:
+            fatti, errori = [], []
+            for voce_ in scelti:
+                try:
+                    if voce_["kind"] == "folder":
+                        apps.recycle(voce_["path"])
+                    else:
+                        self.registry.delete_key(voce_["path"])
+                    fatti.append(voce_["path"])
+                except (OSError, ValueError, registry.RegistryError) as errore:
+                    errori.append(f"{voce_['path']}: {errore}")
+            voce["leftovers"] = [l for l in voce["leftovers"] if l["path"] not in fatti]
+            return {"removed": fatti, "errors": errori}
+        return self._logged_change("apps.leftovers", f"Remove {len(scelti)} leftover(s) of {voce['app']['name']}", cambia)
 
     def app_remove_entry(self, app_id: str) -> dict:
         voce = self._installed(app_id)
@@ -332,12 +381,13 @@ class Agent:
         voce = self._installed(app_id)
         return {"id": app_id, "size_mb": apps.folder_size(voce["folder"])}
 
-    def store_remove(self, app_id: str) -> dict:
+    def store_remove(self, app_id: str, senza_punto: bool = False) -> dict:
         elenco = self.apps()["store"]
         voce = next((s for s in elenco if s["id"] == app_id), None)
         if voce is None:
             raise ApiError(404, "Store app not found. Scan again.")
-        return self._logged_change("apps.store_remove", f"Remove the Store app {voce['name']}", lambda: apps.remove_store_app(voce["package"]))
+        return self._logged_change("apps.store_remove", f"Remove the Store app {voce['name']}", lambda: apps.remove_store_app(voce["package"]),
+                                   punto=True, senza_punto=senza_punto)
 
     def browser_clean(self, browser_id: str) -> dict:
         if browser_id not in {b[0] for b in apps.BROWSER_PROFILES}:
@@ -347,6 +397,20 @@ class Agent:
         with self._apps_lock:
             if self._apps is not None:
                 self._apps["browsers"] = apps.browser_caches()
+        return esito
+
+    def app_rules(self) -> dict:
+        return dict(apps.RULES_INFO, url=apps.RULES_URL)
+
+    def update_app_rules(self) -> dict:
+        """Downloads the rules from the project repository (only data: patterns and dates, never code)."""
+        try:
+            esito = apps.update_rules()
+        except (OSError, ValueError) as errore:
+            raise ApiError(502, f"The rules could not be updated: {errore}") from None
+        if esito.get("updated"):
+            with self._apps_lock:
+                self._apps = None  # the verdicts change: scan again on the next visit
         return esito
 
     def app_updates(self) -> dict:
@@ -362,17 +426,45 @@ class Agent:
             raise ApiError(400, "Invalid winget package id.")
         return self._logged_change("apps.update", f"Update {package_id} with winget", lambda: apps.winget_upgrade(package_id))
 
+    # ---------- System Restore: list and way back ----------
+
+    def restore_points(self) -> dict:
+        if not self.admin:
+            return {"points": [], "note": "Only a console running as administrator can read the restore points."}
+        try:
+            return {"points": restore.points()}
+        except (OSError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"Could not read the restore points: {errore}") from None
+
+    def open_system_restore(self) -> dict:
+        def apri() -> dict:
+            restore.open_wizard()
+            return {"opened": "rstrui.exe"}
+        return self._logged_change("integrity.system_restore", "Open System Restore", apri)
+
     # ---------- system tools: events, processes, services, registry ----------
 
-    def _logged_change(self, action_id: str, descrizione: str, cambia: Callable[[], dict]) -> dict:
-        """Runs one manual change with the same rules as actions: administrator, never in preview, recorded in History."""
+    def _logged_change(self, action_id: str, descrizione: str, cambia: Callable[[], dict], punto: bool = False,
+                       senza_punto: bool = False) -> dict:
+        """Runs one manual change with the same rules as actions: administrator, never in preview, recorded in History.
+        `punto`: a restore point first (Settings › Start-up), unless the user chose to go on without one."""
         self._guard_changes()
         run_id = self.store.open_run(self.machine_id, action_id, "manual")
         if self.preview:
             self.store.close_run(run_id, "preview", f"{descrizione} (preview: nothing changed)", 0, "")
             return {"ok": True, "preview": True}
+        protezione = None
+        if punto and not senza_punto and self.store.settings().get("restore_before_changes") != "0":
+            try:
+                protezione = restore.ensure_point(descrizione)
+            except (restore.RestoreError, OSError, subprocess.SubprocessError) as errore:
+                self.store.close_run(run_id, "error", f"{descrizione}: not done, no restore point ({errore})", 0, "")
+                # 412: the page offers to go on without a restore point.
+                raise ApiError(412, f"No restore point, nothing was changed. {errore}") from None
         try:
             esito = cambia() or {}
+            if protezione:
+                esito = dict(esito, restore_point=protezione["seq"])
         except (processes.ControlError, registry.RegistryError, scripts.ScriptError, hardware.MonitorToolError) as errore:
             self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
             raise ApiError(409, str(errore)) from None
@@ -383,7 +475,8 @@ class Agent:
             self.store.close_run(run_id, "error", f"{descrizione}: {errore}", 0, "")
             raise ApiError(500, f"{descrizione} failed: {errore}") from None
         dettaglio = esito.get("backup")
-        self.store.close_run(run_id, "ok", descrizione + (f" · backup {dettaglio}" if dettaglio else ""), 0,
+        nota = descrizione + (f" · backup {dettaglio}" if dettaglio else "") + (f" · restore point #{protezione['seq']}" if protezione else "")
+        self.store.close_run(run_id, "ok", nota, 0,
                              json.dumps(esito, ensure_ascii=False))
         return dict(esito, ok=True)
 
@@ -463,7 +556,9 @@ class Agent:
         if operazione not in operazioni:
             raise ApiError(404, "Unknown registry operation.")
         cambia, descrizione = operazioni[operazione]
-        return self._logged_change("integrity.registry", descrizione, cambia)
+        # Deleting a whole key is the one registry change worth a restore point (the .reg backup covers the key only).
+        return self._logged_change("integrity.registry", descrizione, cambia, punto=operazione == "delete-key",
+                                   senza_punto=corpo.get("no_restore_point") is True)
 
     # ---------- scripts and shutdown timer ----------
 
@@ -1287,18 +1382,38 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, self.agent.apps(refresh=query.get("refresh") == "1"))
 
     def app_operation(self, query, app_id, operazione):
-        metodo = {"uninstall": self.agent.app_uninstall, "remove-entry": self.agent.app_remove_entry,
-                  "open-folder": self.agent.app_open_folder, "size": self.agent.app_size}[operazione]
+        if operazione == "uninstall":
+            self._json(200, self.agent.app_uninstall(app_id, self._body().get("no_restore_point") is True))
+            return
+        metodo = {"remove-entry": self.agent.app_remove_entry, "open-folder": self.agent.app_open_folder, "size": self.agent.app_size}[operazione]
         self._json(200, metodo(app_id))
 
+    def uninstall_status(self, query, app_id):
+        self._json(200, self.agent.uninstall_status(app_id))
+
+    def clean_leftovers(self, query, app_id):
+        self._json(200, self.agent.clean_leftovers(app_id, self._body().get("ids")))
+
     def store_remove(self, query, app_id):
-        self._json(200, self.agent.store_remove(app_id))
+        self._json(200, self.agent.store_remove(app_id, self._body().get("no_restore_point") is True))
+
+    def restore_list(self, query):
+        self._json(200, self.agent.restore_points())
+
+    def restore_open(self, query):
+        self._json(200, self.agent.open_system_restore())
 
     def browser_clean(self, query, browser_id):
         self._json(200, self.agent.browser_clean(browser_id))
 
     def app_updates(self, query):
         self._json(200, self.agent.app_updates())
+
+    def app_rules(self, query):
+        self._json(200, self.agent.app_rules())
+
+    def update_app_rules(self, query):
+        self._json(200, self.agent.update_app_rules())
 
     def app_update(self, query):
         self._json(200, self.agent.app_update(self._body().get("id")))
@@ -1386,10 +1501,16 @@ ROUTES: List[Route] = [
     _route("GET", "/agent/autostart", Handler.get_autostart),
     _route("PUT", "/agent/autostart", Handler.put_autostart),
     _route("POST", r"/startup/([0-9a-f]{16})/toggle", Handler.toggle_startup),
+    _route("GET", "/restore-points", Handler.restore_list),
+    _route("POST", "/restore-points/open", Handler.restore_open),
     _route("GET", "/apps", Handler.app_list),
     _route("GET", "/apps/updates", Handler.app_updates),
+    _route("GET", "/apps/rules", Handler.app_rules),
+    _route("POST", "/apps/rules/update", Handler.update_app_rules),
     _route("POST", "/apps/update", Handler.app_update),
     _route("POST", r"/apps/([0-9a-f]{16})/(uninstall|remove-entry|open-folder|size)", Handler.app_operation),
+    _route("GET", r"/apps/([0-9a-f]{16})/uninstall-status", Handler.uninstall_status),
+    _route("POST", r"/apps/([0-9a-f]{16})/leftovers", Handler.clean_leftovers),
     _route("POST", r"/apps/store/([0-9a-f]{16})/remove", Handler.store_remove),
     _route("POST", r"/apps/browsers/([a-z]{3,10})/clean", Handler.browser_clean),
     _route("GET", "/schedules", Handler.list_schedules),

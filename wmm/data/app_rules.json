@@ -1,0 +1,146 @@
+{
+ "version": "2026-11-03",
+ "about": "Rules of the Applications page: which programs are unsafe or unwanted. Patterns are Python regular expressions matched on the lower-case program name; dates are the end of security support.",
+ "end_of_life": [
+  [
+   "adobe flash",
+   "2020-12-31",
+   "Adobe Flash Player is dead since 2020 and full of known holes."
+  ],
+  [
+   "silverlight",
+   "2021-10-12",
+   "Microsoft Silverlight left support in October 2021."
+  ],
+  [
+   "quicktime",
+   "2016-04-14",
+   "QuickTime for Windows gets no fixes since 2016 and has known holes."
+  ],
+  [
+   "^skype(?! for business)\\b",
+   "2025-05-05",
+   "Skype was retired in May 2025: Microsoft Teams replaced it."
+  ],
+  [
+   "windows live|windows essentials",
+   "2017-01-10",
+   "Windows Essentials (Live Mail, Movie Maker) left support in 2017."
+  ],
+  [
+   "\\bpicasa\\b",
+   "2016-03-15",
+   "Picasa is discontinued since 2016."
+  ],
+  [
+   "adobe reader (?:x|xi|9|8)\\b|acrobat (?:x|xi)\\b|acrobat (?:reader )?(?:dc )?2017",
+   "2022-06-06",
+   "This Adobe Reader or Acrobat version gets no security fixes."
+  ],
+  [
+   "java(?:\\(tm\\))? ?[4-7] update|j2se runtime",
+   "2015-04-30",
+   "Java 7 and older get no security fixes."
+  ],
+  [
+   "microsoft office .*2007",
+   "2017-10-10",
+   "Office 2007 left support in 2017."
+  ],
+  [
+   "microsoft office .*2010",
+   "2020-10-13",
+   "Office 2010 left support in 2020."
+  ],
+  [
+   "microsoft office .*2013",
+   "2023-04-11",
+   "Office 2013 left support in April 2023."
+  ],
+  [
+   "microsoft office .*(?:2016|2019)",
+   "2025-10-14",
+   "Office 2016 and 2019 left support in October 2025: no more security fixes."
+  ],
+  [
+   "microsoft office .*2021",
+   "2026-10-13",
+   "Office 2021 left support in October 2026: no more security fixes."
+  ],
+  [
+   "\\.net core (?:1|2|3)\\.|\\.net (?:runtime|core runtime) - (?:1|2|3)\\.",
+   "2022-12-13",
+   ".NET Core 3.1 and older get no security fixes."
+  ],
+  [
+   "(?:\\.net|desktop runtime|asp\\.net core).* - 5\\.",
+   "2022-05-10",
+   ".NET 5 gets no security fixes."
+  ],
+  [
+   "(?:\\.net|desktop runtime|asp\\.net core).* - 6\\.",
+   "2024-11-12",
+   ".NET 6 left support in November 2024."
+  ],
+  [
+   "(?:\\.net|desktop runtime|asp\\.net core).* - 7\\.",
+   "2024-05-14",
+   ".NET 7 left support in May 2024."
+  ],
+  [
+   "(?:\\.net|desktop runtime|asp\\.net core).* - [89]\\.",
+   "2026-11-10",
+   ".NET 8 and 9 leave support on 10 November 2026."
+  ]
+ ],
+ "python_eol": {
+  "2.7": "2020-01-01",
+  "3.6": "2021-12-23",
+  "3.7": "2023-06-27",
+  "3.8": "2024-10-07",
+  "3.9": "2025-10-31",
+  "3.10": "2026-10-31",
+  "3.11": "2027-10-31",
+  "3.12": "2028-10-31",
+  "3.13": "2029-10-31"
+ },
+ "node_eol": {
+  "14": "2023-04-30",
+  "16": "2023-09-11",
+  "17": "2022-06-01",
+  "18": "2025-04-30",
+  "19": "2023-06-01",
+  "20": "2026-04-30",
+  "21": "2024-06-01",
+  "22": "2027-04-30",
+  "23": "2025-06-01",
+  "24": "2028-04-30",
+  "25": "2026-06-01"
+ },
+ "min_versions": [
+  [
+   "^winrar\\b",
+   "7.13",
+   "WinRAR before 7.13 can be taken over by a booby-trapped archive (CVE-2025-8088, used in real attacks)."
+  ],
+  [
+   "^7-zip\\b",
+   "25.01",
+   "7-Zip before 25.01 can write files outside the folder when extracting a crafted archive (CVE-2025-0411, CVE-2025-55188)."
+  ],
+  [
+   "^vlc media player",
+   "3.0.21",
+   "VLC before 3.0.21 can run code from a crafted video file."
+  ],
+  [
+   "^putty\\b",
+   "0.81",
+   "PuTTY before 0.81 can leak your private SSH key (CVE-2024-31497)."
+  ]
+ ],
+ "unwanted": "ask toolbar|babylon|conduit|mywebsearch|web ?companion|onelaunch|wave browser|shift browser|pc app store|segurazo|santivirus|bytefence|reimage|restoro|search protect|hola vpn|mypc backup|slimcleaner|yahoo.*toolbar|pc accelerate|wajam|dealply",
+ "optimizers": "driver booster|driverpack|driver easy|driver updater|advanced systemcare|pc optimizer|pc cleaner|ccleaner|iobit|wise care|glary",
+ "remote_access": "teamviewer|anydesk|rustdesk|splashtop|logmein|ultraviewer|remote utilities|tightvnc|realvnc|ultravnc|chrome remote desktop|supremo|ammyy",
+ "store_bloat": "king\\.com|candycrush|bubblewitch|disney|tiktok|facebook|instagram|spotify|netflix|primevideo|amazon|linkedin|microsoft\\.(?:bingnews|bingweather|bingsports|bingfinance|getstarted|gethelp|microsoftsolitairecollection|mixedreality\\.portal|microsoft3dviewer|print3d|people|skypeapp|windowsfeedbackhub|zunevideo|microsoftofficehub|todos|powerautomatedesktop|messaging|oneconnect|wallet|549981c3f5f10|bingsearch|windowsmaps)|clipchamp|picsart|adobeexpress|duolingo|royalrevolt|marchofempires|hiddencity|farmville|asphalt|phototastic"
+}

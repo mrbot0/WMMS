@@ -3,7 +3,7 @@
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
-  var SCOPES = ["full", "dashboard"].concat(UI.AREAS);
+  var SCOPES = ["visit", "full", "dashboard"].concat(UI.AREAS);
   /* Sentences technicians write in almost every report: one click adds them to the notes. */
   var PHRASES = [
     ["Cleanup done", "Temporary files, caches and old logs were removed to free disk space."],
@@ -16,6 +16,10 @@
     ["Next visit", "We recommend the next maintenance in 6 months."]
   ];
 
+  function startOfToday() {
+    var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T00:00";
+  }
   function remembered(key) { try { return localStorage.getItem("wmm." + key) || ""; } catch (e) { return ""; } }
   function remember(key, value) { try { localStorage.setItem("wmm." + key, value); } catch (e) { /* storage unavailable */ } }
 
@@ -27,8 +31,10 @@
         '<div class="grid grid-1-2"><div>' + UI.card("Report options",
           '<form class="form" id="report-form" onsubmit="return false">' +
           '<label>Report<select name="scope">' + SCOPES.map(function (s) {
-            return '<option value="' + s + '">' + esc(Report.SCOPE_LABEL[s]) + (s === "full" ? " (all areas)" : "") + "</option>";
+            return '<option value="' + s + '">' + esc(Report.SCOPE_LABEL[s]) + (s === "full" ? " (all areas)" : s === "visit" ? " (what this visit changed)" : "") + "</option>";
           }).join("") + "</select></label>" +
+          '<label data-since-row>Changes since<input type="datetime-local" name="since" value="' + esc(startOfToday()) + '"></label>' +
+          '<span class="muted small" data-since-row>Scores at that moment are compared with the latest ones; every operation since then is listed.</span>' +
           '<label>Technician<input name="technician" maxlength="80" placeholder="Name shown on the report" value="' + esc(remembered("technician")) + '"></label>' + '<span class="muted small">Empty: the default technician from Settings is used.</span>' +
           '<label>Notes for the customer<textarea name="notes" maxlength="4000" placeholder="Work performed, advice, next steps…">' + esc(remembered("reportNotes")) + "</textarea></label>" +
           '<div class="phrases" aria-label="Common phrases">' + PHRASES.map(function (p, i) {
@@ -50,10 +56,11 @@
       var form = el.querySelector("#report-form"), frame = el.querySelector("iframe");
       function options() {
         remember("technician", form.technician.value.trim());
-        return { technician: form.technician.value.trim(), notes: form.notes.value.trim() };
+        return { technician: form.technician.value.trim(), notes: form.notes.value.trim(), since: form.since.value || null };
       }
       function links() {
         var scope = form.scope.value;
+        el.querySelectorAll("[data-since-row]").forEach(function (n) { n.hidden = scope !== "visit"; });
         var area = UI.AREAS.indexOf(scope) >= 0 ? scope : "all";
         el.querySelector("#csv").href = API.url("/export/" + area + ".csv");
         el.querySelector("#json").href = API.url("/export/" + area + ".json");
@@ -64,6 +71,7 @@
           function (e) { frame.srcdoc = '<p style="font-family:Segoe UI;padding:24px;color:#C42B1C">' + esc(e.message) + "</p>"; });
       }
       form.scope.addEventListener("change", function () { links(); preview(); });
+      form.since.addEventListener("change", preview);
       // The notes survive a reload or a closed tab: they are written for one visit and kept until cleared.
       var noteTimer = null;
       form.notes.addEventListener("input", function () {

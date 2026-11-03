@@ -2,6 +2,25 @@
 
 CHANGELOG = [
     {
+        "version": "2.1.0",
+        "date": "2026-11-03",
+        "title": "Restore point and undo, complete uninstall, updatable rules, before/after report, Italian interface",
+        "highlights": [
+            "A restore point before uninstalling a program, removing a Store app or deleting a registry key; History › Undo opens System Restore on it.",
+            "Uninstall waits for the program's uninstaller, then offers its leftovers: folders to the Recycle Bin, registry keys with a backup.",
+            "The rules of the Applications page (end of support, minimum safe versions, adware) are a data file that can be updated from the project.",
+            "Before / After report for the customer: scores at the start of the visit and now, everything done, what is still recommended.",
+            "The console speaks Italian: Settings › Appearance › Language (automatic, English, Italiano); the report follows the same language.",
+        ],
+        "changes": [
+            "A restore point made in the last hour is reused; when Windows makes none, nothing changes until you choose to go on without it.",
+            "Settings › Start-up: turn the restore point before manual changes off or on.",
+            "Leftovers are only folders and keys that belong to the removed program: never a publisher folder, never something another installed program uses.",
+            "The rules file is checked before use (dates, versions, patterns) and used only when newer than the one shipped with the program.",
+            "The Italian layer translates menus, pages, buttons, tables, dates and the report; paths, commands and program names stay as they are.",
+        ],
+    },
+    {
         "version": "2.0.0",
         "date": "2026-11-03",
         "title": "Applications page, 40 new tools, a sturdier agent and 20 new console functions",

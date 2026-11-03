@@ -69,7 +69,7 @@
       UI.kpi("To review", Components.num(review), "remote access, optimizers, unknown publishers", review ? "warning" : "ok") +
       UI.kpi("Not used for months", Components.num(unused.length), unusedMb ? size(unusedMb) + " to free" : "", unused.length ? "warning" : "ok") +
       UI.kpi("Browser caches", size(cacheMb), browsers.length + " browsers", cacheMb > 1024 ? "warning" : "info") + "</div>" +
-      overview(apps, d) + programs() + security(apps) + updates(d) + storeCard(store) + browserCards(browsers, inst);
+      overview(apps, d) + programs() + security(apps, d) + updates(d) + storeCard(store) + browserCards(browsers, inst);
     el.innerHTML = "";
     el.appendChild(root);
 
@@ -137,16 +137,59 @@
         .then(function (ok) {
           if (!ok) return;
           busy(btn, true);
-          API.post("/apps/" + a.id + "/uninstall").then(function (r) {
+          UI.withRestorePoint("/apps/" + a.id + "/uninstall").then(function (r) {
             done(r, "the uninstall");
             if (!r.preview) {
-              UI.toast("Uninstaller of " + a.name + " started. When it ends, use Scan again.", "ok");
+              UI.toast("Uninstaller of " + a.name + " started: follow its window. This page waits for it and then looks for leftovers.", "ok");
               Components.notifications.add("Uninstall started", a.name, "ok");
+              follow(a);
             }
             busy(btn, false);
-          }, function (e) { UI.toast(e.message, "error"); busy(btn, false); });
+          }, function (e) { UI.toast(e.message, e.cancelled ? "info" : "error"); busy(btn, false); });
         });
     }
+    /* Waits for the uninstaller (checking every 3 seconds, up to 30 minutes), then offers what it left behind. */
+    function follow(a) {
+      var limit = Date.now() + 1000 * 60 * 30;
+      (function check() {
+        API.get("/apps/" + a.id + "/uninstall-status").then(function (st) {
+          // Some uninstallers hand over to a copy of themselves and end at once: the registry entry says when the program is gone.
+          if (!st.removed) {
+            if (Date.now() < limit) setTimeout(check, st.running ? 3000 : 5000);
+            else UI.toast(a.name + " is still installed: the uninstall was cancelled or needs a restart.", "warning");
+            return;
+          }
+          if (st.running) { setTimeout(check, 3000); return; }
+          var left = st.leftovers || [];
+          Components.notifications.add("Program removed", a.name + (left.length ? ", " + left.length + " leftover(s) found" : ""), "ok");
+          if (!left.length) { UI.toast(a.name + " removed, nothing left behind.", "ok"); rescan(); return; }
+          offerLeftovers(a, left);
+        }, function () { if (Date.now() < limit) setTimeout(check, 5000); });
+      })();
+    }
+    function offerLeftovers(a, left) {
+      var body = '<p class="modal-text"><strong>' + esc(a.name) + "</strong> is removed. Its uninstaller left these behind:</p>" +
+        '<div class="leftover-list">' + left.map(function (l) {
+          // Settings in AppData are kept by default: they matter if the program comes back.
+          var keep = l.kind === "folder" && /\\AppData\\/i.test(l.path);
+          return '<label class="check"><input type="checkbox" data-leftover="' + esc(l.id) + '"' + (keep ? "" : " checked") + "> " +
+            '<span><span class="badge">' + (l.kind === "folder" ? "Folder" : "Registry key") + '</span> <span class="cell-mono">' + esc(l.path) + "</span>" +
+            (l.size_mb ? ' <span class="cell-sub">' + size(l.size_mb) + "</span>" : "") + (keep ? ' <span class="cell-sub">(settings)</span>' : "") + "</span></label>";
+        }).join("") + "</div>" +
+        '<p class="cell-sub">Folders go to the Recycle Bin; registry keys are deleted with a backup (Registry › Backups).</p>';
+      UI.modal("Leftovers of " + a.name, body, [{ label: "Keep everything", cls: "btn-ghost" }, { label: "Remove selected", cls: "btn-primary", value: function (w) {
+        return Array.prototype.filter.call(w.querySelectorAll("[data-leftover]"), function (c) { return c.checked; }).map(function (c) { return c.getAttribute("data-leftover"); });
+      } }]).then(function (ids) {
+        if (!ids || !ids.length) { rescan(); return; }
+        API.post("/apps/" + a.id + "/leftovers", { ids: ids }).then(function (r) {
+          done(r, "the cleanup");
+          if (!r.preview) UI.toast((r.removed || []).length + " leftover(s) removed" + ((r.errors || []).length ? ", " + r.errors.length + " could not be removed (in use?)" : "") + ".",
+            (r.errors || []).length ? "warning" : "ok");
+          rescan();
+        }, function (e) { UI.toast(e.message, "error"); });
+      });
+    }
+    function rescan() { if (App.isCurrent("apps")) { page._refresh = true; App.render(); } }
     function removeEntry(a, btn) {
       UI.confirm("Remove the leftover entry", a.name + " is no longer on this PC but is still listed in Settings › Apps. The entry is removed from the registry; " +
         "a backup is kept in Registry › Backups.", { ok: "Remove entry" }).then(function (ok) {
@@ -212,7 +255,16 @@
       if ((id = t.getAttribute("data-store-remove"))) { removeStore(id, t); return; }
       if ((id = t.getAttribute("data-browser-clean"))) { cleanBrowsers([id], t); return; }
       if (t.hasAttribute("data-browser-all")) { cleanBrowsers(browsers.filter(function (b) { return b.cache_mb > 0; }).map(function (b) { return b.id; }), t); return; }
-      if (t.hasAttribute("data-copy-apps")) App.copyText(summary(apps, store, d), "Applications summary");
+      if (t.hasAttribute("data-copy-apps")) { App.copyText(summary(apps, store, d), "Applications summary"); return; }
+      if (t.hasAttribute("data-rules-update")) {
+        busy(t, true);
+        API.post("/apps/rules/update").then(function (r) {
+          if (!r.updated) { UI.toast("The rules are already the latest (" + UI.formatDate(r.version, false) + ").", "info"); busy(t, false); return; }
+          UI.toast("New rules of " + UI.formatDate(r.version, false) + ": scanning again with them.", "ok");
+          page._refresh = true;
+          App.render();
+        }, function (e) { UI.toast(e.message, "error"); busy(t, false); });
+      }
     });
 
     // ---------- updates (winget) ----------
@@ -255,14 +307,14 @@
       UI.confirm("Remove " + s.name, "The app is removed for this account. You can install it again from the Microsoft Store.", { ok: "Remove", danger: true }).then(function (ok) {
         if (!ok) return;
         busy(btn, true);
-        API.post("/apps/store/" + id + "/remove").then(function (r) {
+        UI.withRestorePoint("/apps/store/" + id + "/remove").then(function (r) {
           done(r, "the removal");
           if (r.preview) { busy(btn, false); return; }
           UI.toast(s.name + " removed.", "ok");
           var row = btn.closest("tr");
           if (row) row.remove();
           store.splice(store.indexOf(s), 1);
-        }, function (e) { UI.toast(e.message, "error"); busy(btn, false); });
+        }, function (e) { UI.toast(e.message, e.cancelled ? "info" : "error"); busy(btn, false); });
       });
     }
     Components.dataTable(root.querySelector("#store-table"), {
@@ -353,7 +405,7 @@
       }).join("") + '</div></div><div id="apps-table"></div>', "", "card-flush") + "</div></div>";
   }
 
-  function security(apps) {
+  function security(apps, d) {
     var groups = [["eol", "End of support", "No more security fixes: replace them with a supported version or remove them."],
       ["vulnerable", "Versions with known holes", "A newer version fixes them: update."],
       ["unwanted", "Adware and unwanted programs", "Remove them, then check the home page and search engine of every browser."],
@@ -378,7 +430,15 @@
       UI.card("How the verdict works", '<ul class="plain-list"><li><strong>Unsafe</strong>: end of support (Office 2016, 2019 and 2021, .NET 6, Python 3.10 and older, Flash, ' +
         "Skype…), versions with holes used in real attacks (WinRAR, 7-Zip, VLC, PuTTY) or known adware.</li><li><strong>Review</strong>: remote access tools, " +
         "\"optimizers\", programs without a publisher, support ending within three months.</li><li><strong>Safe</strong>: " + safe +
-        " programs with none of these problems. Keep them updated from the Updates tab.</li></ul>") + "</div></div>";
+        " programs with none of these problems. Keep them updated from the Updates tab.</li></ul>" + rulesLine(d.rules),
+        '<button class="btn btn-sm" type="button" data-rules-update title="Download the latest rules from the project repository">' + UI.icon("download") + "Update the rules</button>") +
+      "</div></div>";
+  }
+
+  function rulesLine(r) {
+    if (!r || !r.version) return "";
+    return '<p class="cell-sub" data-rules-line>Rules of ' + esc(UI.formatDate(r.version, false)) + " (" + (r.source === "downloaded" ? "downloaded" : "built in") + "): " +
+      esc(r.end_of_life + " end-of-support products and " + r.min_versions + " minimum safe versions") + ".</p>";
   }
 
   function updates(d) {

@@ -3,7 +3,7 @@
   "use strict";
   var esc = UI.esc;
   var AREAS = UI.AREAS;
-  var SCOPE_LABEL = { dashboard: "Executive Summary", full: "Full Maintenance" };
+  var SCOPE_LABEL = { dashboard: "Executive Summary", full: "Full Maintenance", visit: "Before / After" };
   AREAS.forEach(function (a) { SCOPE_LABEL[a] = UI.AREA_LABEL[a]; });
 
   var CSS = [
@@ -31,6 +31,7 @@
     ".cover h1{font-size:40px;line-height:1.1;margin:18px 0 8px}.cover .lead{font-size:16px;color:#55606B;max-width:620px}",
     ".cover .facts{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 30px;max-width:620px;margin-top:40px}.cover .facts small{display:block;color:#7A8590;text-transform:uppercase;font-size:10.5px;letter-spacing:.5px;font-weight:600}",
     ".cover .score{display:flex;align-items:center;gap:24px;margin-top:40px}.cover .score .chart{width:220px}",
+    ".up{color:#107C41;font-weight:600}.down{color:#C42B1C;font-weight:600}.same{color:#7A8590}",
     ".area-scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 20px;margin:14px 0}.area-scores div{display:flex;justify-content:space-between;border-bottom:1px solid #E9ECEF;padding:5px 0}",
     "section{break-inside:avoid-page}@media print{.page{padding:0}h2{break-after:avoid}@page{margin:14mm}}"
   ].join("\n");
@@ -190,8 +191,75 @@
       "<h3>Top recommended improvements</h3>" + recTable(dash.recommendations) + "</section>";
   }
 
+  /* Score of an area at a moment: the last scan before it, else the first scan after it (the baseline of this visit). */
+  function scoreAt(trend, when) {
+    var before = null, after = null;
+    (trend || []).forEach(function (p) {
+      var t = new Date(p.created).getTime();
+      if (t <= when) before = p.score; else if (after == null) after = p.score;
+    });
+    return before != null ? before : after;
+  }
+  function delta(a, b) {
+    if (a == null || b == null) return '<span class="same">—</span>';
+    var d = b - a;
+    return d > 0 ? '<span class="up">+' + d + "</span>" : d < 0 ? '<span class="down">' + d + "</span>" : '<span class="same">0</span>';
+  }
+  function average(list) {
+    var v = list.filter(function (x) { return x != null; });
+    return v.length ? Math.round(v.reduce(function (a, b) { return a + b; }, 0) / v.length) : null;
+  }
+  function visitBody(since, dash, history) {
+    var when = since.getTime();
+    var rows = AREAS.map(function (a) {
+      var trend = history.trends[a] || [], last = trend.length ? trend[trend.length - 1].score : dash.scores[a];
+      return { area: a, before: scoreAt(trend, when), after: last };
+    }).filter(function (r) { return r.before != null || r.after != null; });
+    var runs = history.runs.filter(function (r) { return new Date(r.started).getTime() >= when && r.status !== "preview"; });
+    var ok = runs.filter(function (r) { return r.status === "ok" || r.status === "warning"; });
+    var failed = runs.filter(function (r) { return r.status === "error"; });
+    var freed = runs.reduce(function (s, r) { return s + (r.bytes_freed || 0); }, 0);
+    var programs = runs.filter(function (r) { return /^apps\.(uninstall|store_remove|update|leftovers|remove_entry)$/.test(r.action_id) && r.status === "ok"; });
+    var avgBefore = average(rows.map(function (r) { return r.before; })), avgAfter = average(rows.map(function (r) { return r.after; }));
+    // The sentence mixes numbers and bold text, so the dictionary cannot translate it: it is written in both languages here.
+    var it = window.I18N && I18N.lang() === "it", quando = esc(since.toLocaleString(it ? "it-IT" : undefined));
+    var lead = avgBefore == null
+      ? (it ? "Non è ancora stata fatta una scansione: scansiona il PC per misurare il risultato della manutenzione."
+        : "No scan was made yet: scan the PC to measure the result of the maintenance.")
+      : it
+        ? "La salute media è passata da <b>" + avgBefore + "</b> a <b>" + avgAfter + "</b> (" + delta(avgBefore, avgAfter) + ") dal " + quando + ". " +
+          ok.length + (ok.length === 1 ? " operazione completata" : " operazioni completate") + (failed.length ? ", " + failed.length + " con errori" : "") +
+          (freed ? ", " + UI.formatBytes(freed) + " di spazio liberato" : "") + "."
+        : "Average health went from <b>" + avgBefore + "</b> to <b>" + avgAfter + "</b> (" + delta(avgBefore, avgAfter) + ") since " + quando + ". " +
+          ok.length + " operation(s) completed" + (failed.length ? ", " + failed.length + " with errors" : "") + (freed ? ", " + UI.formatBytes(freed) + " of disk space freed" : "") + ".";
+    var byArea = {};
+    ok.forEach(function (r) { (byArea[r.area] = byArea[r.area] || []).push(r); });
+    var done = Object.keys(byArea).map(function (a) {
+      return "<h3>" + esc(UI.AREA_LABEL[a] || a) + " (" + byArea[a].length + ")</h3>" + runTable(byArea[a]);
+    }).join("") || '<p class="muted">No change was made in this period.</p>';
+    return "<section><h2>Result of the maintenance</h2><div class=\"summary\">" + lead + "</div>" +
+      kpis([["Health before", avgBefore != null ? avgBefore + " / 100" : "—"], ["Health after", avgAfter != null ? avgAfter + " / 100" : "—"],
+        ["Operations done", String(ok.length)], ["Space freed", freed ? UI.formatBytes(freed) : "—"]]) +
+      "<table><thead><tr><th>Area</th><th class=\"num\">Before</th><th class=\"num\">After</th><th class=\"num\">Change</th></tr></thead><tbody>" +
+      rows.map(function (r) {
+        return "<tr><td>" + esc(UI.AREA_LABEL[r.area]) + '</td><td class="num">' + (r.before != null ? r.before : "—") + '</td><td class="num">' +
+          (r.after != null ? r.after : "—") + '</td><td class="num">' + delta(r.before, r.after) + "</td></tr>";
+      }).join("") + "</tbody></table></section>" +
+      (programs.length ? "<section><h2>Programs</h2>" + runTable(programs) + "</section>" : "") +
+      "<section><h2>What was done</h2>" + done + "</section>" +
+      (failed.length ? "<section><h2>Operations with errors</h2>" + runTable(failed) + "</section>" : "") +
+      "<section><h2>Still recommended</h2>" + recTable(dash.recommendations || []) + "</section>";
+  }
+
   function build(scope, options) {
     options = options || {};
+    if (scope === "visit") {
+      var since = options.since ? new Date(options.since) : new Date(new Date().setHours(0, 0, 0, 0));
+      return Promise.all([API.get("/agent/info"), API.get("/settings"), API.get("/dashboard"), API.get("/history?limit=5000")]).then(function (r) {
+        return wrap(scope, r[0], r[1], options, r[2].scores.overall, visitBody(since, r[2], r[3]) +
+          (options.notes ? "<section><h2>Technician notes</h2><div class=\"notes\">" + esc(options.notes) + "</div></section>" : ""));
+      });
+    }
     var withSummary = scope === "dashboard" || scope === "full";
     var first = [API.get("/agent/info"), API.get("/settings"), withSummary ? API.get("/dashboard") : Promise.resolve(null)];
     return Promise.all(first).then(function (r) {
@@ -201,14 +269,20 @@
       return Promise.all(areas.map(function (a) { return API.get("/areas/" + a); }).concat([withSummary ? API.get("/history?limit=50") : Promise.resolve(null)])).then(function (rest) {
         var history = rest.pop(), views = {};
         areas.forEach(function (a, n) { views[a] = rest[n]; });
-        var technician = options.technician || settings.technician;
-        var now = new Date();
         var body = "";
         if (dash) body += summary(dash);
         areas.forEach(function (a, n) { body += areaSection(views[a], a, scope === "full" ? n + 1 : 0); });
         if (history && scope === "dashboard") body += "<section><h2>Recent activity</h2>" + runTable(history.runs.slice(0, 15)) + "</section>";
         if (options.notes) body += "<section><h2>Technician notes</h2><div class=\"notes\">" + esc(options.notes) + "</div></section>";
         var score = dash && dash.scores.overall != null ? dash.scores.overall : views[scope] ? views[scope].score : null;
+        return wrap(scope, info, settings, options, score, body);
+      });
+    });
+  }
+
+  function wrap(scope, info, settings, options, score, body) {
+        var technician = options.technician || settings.technician;
+        var now = new Date();
         var cover = '<div class="cover"><div><div class="brand">' + LOGO + "<div><b>Windows Maintenance Manager</b><span>" + esc(SCOPE_LABEL[scope]) + " report</span></div></div></div><div>" +
           (settings.company ? '<div class="company">' + esc(settings.company) + "</div>" : "") + "<h1>" + esc(SCOPE_LABEL[scope]) + " report</h1>" +
           '<div class="lead">Windows maintenance assessment of <b>' + esc(info.hostname) + "</b>." + (settings.report_header ? "<br>" + esc(settings.report_header) : "") + "</div>" +
@@ -223,8 +297,6 @@
         return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>" + esc(title) +
           "</title><style>" + CSS + '</style></head><body><div class="page">' + cover + head + body +
           '<div class="foot"><span>' + esc(settings.report_footer || "Windows Maintenance Manager " + info.version) + "</span><span>" + esc(now.toLocaleDateString()) + "</span></div></div></body></html>";
-      });
-    });
   }
 
   function fileName(scope) {
@@ -235,7 +307,7 @@
 
   function download(scope, options) {
     UI.toast("Preparing the report…", "info");
-    return build(scope, options).then(function (html) {
+    return translated(scope, options).then(function (html) {
       var url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
       var a = document.createElement("a");
       a.href = url;
@@ -251,7 +323,7 @@
     var win = window.open("", "_blank");
     if (!win) { UI.toast("Allow pop-ups for this page to print the report.", "warning"); return Promise.resolve(); }
     win.document.write("<p style=\"font-family:Segoe UI;padding:20px\">Preparing the report…</p>");
-    return build(scope, options).then(function (html) {
+    return translated(scope, options).then(function (html) {
       win.document.open();
       win.document.write(html);
       win.document.close();
@@ -259,5 +331,10 @@
     }).catch(function (e) { win.close(); UI.toast(e.message, "error"); });
   }
 
-  window.Report = { build: build, download: download, print: print, SCOPE_LABEL: SCOPE_LABEL };
+  /* The customer reads the report in the language of the console (Settings › Appearance › Language). */
+  function translated(scope, options) {
+    return build(scope, options).then(function (html) { return window.I18N ? I18N.translateHtml(html) : html; });
+  }
+
+  window.Report = { build: translated, download: download, print: print, SCOPE_LABEL: SCOPE_LABEL };
 })();

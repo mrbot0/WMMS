@@ -66,6 +66,8 @@
             '<div class="page-actions"><button class="btn btn-primary" type="submit">' + UI.icon("check") + "Save</button></div></form>"),
 
           appearance: UI.card("Appearance", '<div class="form">' +
+            "<label>Language" + group("lang", [["auto", "Automatic"], ["en", "English"], ["it", "Italiano"]], window.I18N ? I18N.choice() : "auto") +
+            '<span class="hint">Automatic follows the browser language. Data, paths and program names stay as Windows writes them.</span></label>' +
             "<label>Theme" + group("theme", [["system", "System"], ["light", "Light"], ["dark", "Dark"]], theme) + "</label>" +
             "<label>Animations" + group("fx", [["fun", "Fun"], ["subtle", "Subtle"], ["off", "Off"]], FX.level()) +
             '<button type="button" class="btn btn-sm btn-ghost" id="fx-try" style="align-self:flex-start">' + UI.icon("sparkle") + "Try them</button>" +
@@ -158,6 +160,8 @@
           startup: UI.card("Start-up", '<div class="form">' +
             check("restore-on-start", s.restore_on_start === "1", "Create a restore point every time the console starts",
               "Runs as an automatic action when the console starts as administrator; it shows in Activity and History.") +
+            check("restore-before-changes", s.restore_before_changes !== "0", "Create a restore point before uninstalling programs, removing Store apps and deleting registry keys",
+              "A point made in the last hour is reused. History › Undo opens System Restore on the point made before a change.") +
             '<label class="check"><input type="checkbox" id="autostart"' + (auto.enabled ? " checked" : "") + (autoBlocked ? " disabled" : "") + "> " +
             "Start Windows Maintenance Manager when I sign in to Windows</label>" +
             '<span class="hint">' + esc(autoBlocked || "30 seconds after sign-in the console opens in your browser, as administrator and without a prompt. " +
@@ -230,6 +234,7 @@
         /* ---------- button groups ---------- */
         var applyPref = {
           theme: function (v) { Components.theme.set(v); },
+          lang: function (v) { if (window.I18N) I18N.set(v); },  // reloads the console in the chosen language
           fx: function (v) { FX.set(v); UI.toast(v === "fun" ? "Animations: fun. Enjoy!" : v === "subtle" ? "Animations: subtle." : "Animations are off.", "ok"); },
           fontSize: function (v) { store("fontSize", v); document.body.classList.remove("font-small", "font-large"); if (v !== "normal") document.body.classList.add("font-" + v); },
           density: function (v) { Components.density.set(v); },
@@ -382,6 +387,11 @@
         on("restore-on-start", function (v, box) {
           API.put("/settings", { restore_on_start: v ? "1" : "0" }).then(function () {
             UI.toast(v ? "A restore point is created at every start." : "No restore point at start.", "ok");
+          }, function (err) { box.checked = !v; UI.toast(err.message, "error"); });
+        });
+        on("restore-before-changes", function (v, box) {
+          API.put("/settings", { restore_before_changes: v ? "1" : "0" }).then(function () {
+            UI.toast(v ? "A restore point protects uninstalls and deleted keys." : "No restore point before manual changes.", "ok");
           }, function (err) { box.checked = !v; UI.toast(err.message, "error"); });
         });
         on("autostart", function (v, box) {

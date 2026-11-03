@@ -1413,3 +1413,6 @@ mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3p
 @keyframes card-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: var(--shadow); } }
 @media (prefers-reduced-motion: reduce) { .card-flash { animation: none; } .scroll-progress { transition: none; } }
 @media print { .scroll-progress { display: none; } }
+.leftover-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: 46vh; overflow: auto; }
+.leftover-list .check { align-items: flex-start; }
+.leftover-list .cell-mono { word-break: break-all; }
