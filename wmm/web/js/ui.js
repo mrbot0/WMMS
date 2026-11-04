@@ -201,6 +201,17 @@
       '<button class="btn btn-sm" data-run="' + esc(a.id) + '">' + icon("play") + 'Run</button><button class="btn btn-sm" data-schedule="' + esc(a.id) + '" title="Schedule" aria-label="Schedule ' +
       esc(a.title) + '">' + icon("clock") + "</button></div></div>";
   }
+  /* The before/after check of a fix (wmm/agent/verify.py): fixed, already fine, not fixed... with both readings in the tooltip. */
+  var VERDICT = {
+    fixed: ["Fixed", "ok"], already_ok: ["Already fine", "ok"], applied: ["Applied", "ok"], already_set: ["Already set", "info"],
+    changed: ["Changed", "info"], unchanged: ["Nothing changed", "warning"], not_fixed: ["Not fixed", "warning"], worse: ["Worse than before", "error"],
+    unknown: ["Not verified", "muted"]
+  };
+  function verdictBadge(v) {
+    if (!v || !VERDICT[v.verdict]) return "";
+    var tip = v.label + " — before: " + (v.before == null ? "?" : v.before) + " · after: " + (v.after == null ? "?" : v.after);
+    return '<span class="badge badge-verdict badge-verdict-' + VERDICT[v.verdict][1] + '" title="' + esc(tip) + '">' + icon("check") + esc(VERDICT[v.verdict][0]) + "</span>";
+  }
   function statusBadge(status) { return '<span class="badge badge-status-' + esc(status) + '">' + esc(STATUS_LABEL[status] || status || "—") + "</span>"; }
   function impactBadge(impact) { return '<span class="badge badge-impact-' + esc(impact) + '">' + esc(impact.charAt(0).toUpperCase() + impact.slice(1)) + " impact</span>"; }
 
@@ -640,7 +651,7 @@
     AREAS: AREAS, statusIcon: statusIcon, checklist: checklist, toneOf: toneOf,
     esc: esc, formatBytes: formatBytes, formatDate: formatDate, relative: relative, duration: duration, icon: icon, tone: tone,
     kpi: kpi, card: card, table: table, definition: definition, riskBadge: riskBadge, statusBadge: statusBadge, impactBadge: impactBadge,
-    kindBadge: kindBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
+    kindBadge: kindBadge, verdictBadge: verdictBadge, toolCard: toolCard, installCallout: installCallout, hint: hint,
     recommendations: recommendations, toast: toast, modal: modal, confirm: confirm, scheduleDialog: scheduleDialog, scheduleText: scheduleText,
     loading: loading, errorBox: errorBox, pageHeader: pageHeader, button: button, withRestorePoint: withRestorePoint,
     RISK_LABEL: RISK_LABEL, STATUS_LABEL: STATUS_LABEL, AREA_LABEL: AREA_LABEL

@@ -40,8 +40,19 @@ SETTINGS_MAX_LENGTH = 500
 NOTES_MAX_LENGTH = 4000
 FLAG_SETTINGS = {"restore_on_start", "restore_before_changes"}  # "1" on, "0" off
 
-RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed"
+RUN_FIELDS = "id, machine_id, action_id, area, origin, started, finished, status, note, bytes_freed, verify, undo_count, undone"
+RUN_COLUMNS_2_6 = (("verify", "TEXT NOT NULL DEFAULT ''"), ("undo", "TEXT NOT NULL DEFAULT ''"),
+                   ("undo_count", "INTEGER NOT NULL DEFAULT 0"), ("undone", "TEXT"))
 SCHEDULE_FIELDS = {"action_id", "kind", "at", "days", "confirmed", "enabled", "last_status", "last_run", "delay"}
+
+
+def _run_row(riga: sqlite3.Row) -> dict:
+    dati = dict(riga)
+    try:
+        dati["verify"] = json.loads(dati["verify"]) if dati.get("verify") else None
+    except ValueError:
+        dati["verify"] = None
+    return dati
 
 
 def now() -> str:
@@ -63,6 +74,11 @@ class Store:
             colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(schedules)")}
             if "delay" not in colonne:  # added in 1.7: minutes after startup or sign-in
                 db.execute("ALTER TABLE schedules ADD COLUMN delay INTEGER NOT NULL DEFAULT 0")
+            # Added in 2.6: the before/after check of a fix and the registry values it changed, for a precise undo.
+            colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(runs)")}
+            for nome, tipo in RUN_COLUMNS_2_6:
+                if nome not in colonne:
+                    db.execute(f"ALTER TABLE runs ADD COLUMN {nome} {tipo}")
 
     @contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
@@ -113,12 +129,27 @@ class Store:
             )
             return int(cursore.lastrowid)
 
-    def close_run(self, run_id: int, status: str, note: str, bytes_freed: int, log: str) -> None:
+    def close_run(self, run_id: int, status: str, note: str, bytes_freed: int, log: str,
+                  verify: Optional[dict] = None, undo: Optional[list] = None) -> None:
         with self._db() as db:
             db.execute(
-                "UPDATE runs SET finished = ?, status = ?, note = ?, bytes_freed = ?, log = ? WHERE id = ?",
-                (now(), status, note, int(bytes_freed), log, run_id),
+                "UPDATE runs SET finished = ?, status = ?, note = ?, bytes_freed = ?, log = ?, verify = ?, undo = ?, undo_count = ? WHERE id = ?",
+                (now(), status, note, int(bytes_freed), log, json.dumps(verify, ensure_ascii=False) if verify else "",
+                 json.dumps(undo, ensure_ascii=False) if undo else "", len(undo or []), run_id),
             )
+
+    def run_undo(self, run_id: int) -> Optional[dict]:
+        """The registry values a run changed (for the precise undo) and when they were put back, if they were."""
+        with self._db() as db:
+            riga = db.execute("SELECT id, action_id, undo, undone FROM runs WHERE id = ?", (run_id,)).fetchone()
+        if riga is None:
+            return None
+        return {"id": riga["id"], "action_id": riga["action_id"], "entries": json.loads(riga["undo"]) if riga["undo"] else [],
+                "undone": riga["undone"]}
+
+    def mark_undone(self, run_id: int) -> None:
+        with self._db() as db:
+            db.execute("UPDATE runs SET undone = ? WHERE id = ?", (now(), run_id))
 
     def close_stale_runs(self, note: str) -> int:
         with self._db() as db:
@@ -141,7 +172,7 @@ class Store:
         query += " ORDER BY id DESC LIMIT ?"
         parametri.append(limit)
         with self._db() as db:
-            return [dict(riga) for riga in db.execute(query, parametri).fetchall()]
+            return [_run_row(riga) for riga in db.execute(query, parametri).fetchall()]
 
     def average_seconds(self, machine_id: str, action_id: str, last: int = 5) -> Optional[float]:
         """Average duration of the latest completed runs of an action (for progress estimates)."""
@@ -168,7 +199,7 @@ class Store:
                 f"SELECT {RUN_FIELDS} FROM runs WHERE id IN (SELECT MAX(id) FROM runs WHERE machine_id = ? GROUP BY action_id)",
                 (machine_id,),
             ).fetchall()
-        return {riga["action_id"]: dict(riga) for riga in righe}
+        return {riga["action_id"]: _run_row(riga) for riga in righe}
 
     # ---------- schedules ----------
 

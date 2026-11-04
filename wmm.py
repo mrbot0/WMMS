@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="install or update the protected copy in Program Files, then start it (used by start_wmm.bat)")
     parser.add_argument("--hidden", action="store_true",
                         help="no console window: messages go to dati\\wmm-console.log (used when starting with Windows)")
+    parser.add_argument("--sandbox-test", action="store_true",
+                        help="run every fix for real in Windows Sandbox and report what worked (this PC is not touched)")
+    parser.add_argument("--only", metavar="IDS", default="", help="with --sandbox-test: comma-separated tool IDs")
+    parser.add_argument("--quick", action="store_true", help="with --sandbox-test: only the fixes that take up to 5 minutes")
     parser.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--wait-port", action="store_true", help=argparse.SUPPRESS)
     return parser
@@ -200,6 +204,9 @@ def main(argomenti: Optional[Sequence[str]] = None) -> int:
     os.chdir(ROOT)
     if opzioni.run_schedule is not None:
         return run_schedule(opzioni.run_schedule)
+    if opzioni.sandbox_test:
+        from wmm import sandbox
+        return sandbox.launch(opzioni.only.split(","), opzioni.quick)
     # The protected Python recorded by "Fix automatically" runs the console, whatever started it.
     from wmm import runtime
     preferito = runtime.configured(ROOT)

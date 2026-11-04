@@ -36,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..agent import (actions, advisor, apps, autostart, restore, collectors, core, events, hardware, health, inventory, live, processes, registry,
                      routines, scheduler, scripts, shutdown)
+from ..agent import verify
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 from .errors import ApiError  # noqa: F401 - part of this module's interface
@@ -1002,7 +1003,9 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
         elenco = [a for a in actions.CATALOG.values()
                   if all(not query.get(campo) or getattr(a, campo) == query[campo] for campo in ("area", "kind", "risk"))
                   and (not testo or testo in f"{a.id} {a.title} {a.description}".lower())]
-        self._json(200, {"actions": [a.as_dict() for a in elenco], "total": len(actions.CATALOG)})
+        # "check": the before/after check that tells whether a fix worked (wmm/agent/verify.py), when it has one.
+        self._json(200, {"actions": [dict(a.as_dict(), check=verify.CHECKS[a.id].label if a.id in verify.CHECKS else "") for a in elenco],
+                         "total": len(actions.CATALOG)})
 
     def changelog(self, query):
         self._json(200, {"version": VERSION, "releases": CHANGELOG})

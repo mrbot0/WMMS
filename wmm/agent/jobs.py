@@ -16,9 +16,11 @@ import wmm  # noqa: F401
 import ottimizza_pc as op
 from ottimizza_pc import Esito, SequenzaFermata, Stato
 
-from . import actions
+from . import actions, undo, verify
 from .core import STATUS, JobContext, translate
 from .store import Store
+
+op.REGISTRO_PRIMA_DI_SCRIVERE = undo.before_write  # ottimizza_pc's own registry writes join the undo journal
 
 MAX_LOG_LINES = 2000
 LIST_LOG_LINES = 6
@@ -276,6 +278,54 @@ class JobManager:
             job.active = False
             self._release()
 
+    @staticmethod
+    def probe(action_id: str) -> verify.Probe:
+        """The before check of a fix (a hook, so tests replace the PowerShell reads)."""
+        return verify.Probe(action_id)
+
+    @staticmethod
+    def _after_fix(job: Job, controllo, giornale, esito: Esito) -> Tuple[list, Optional[dict]]:
+        """What the fix changed in the registry (kept for the undo) and its before/after verdict."""
+        modifiche: list = []
+        if giornale is not None and giornale.entries:
+            try:
+                modifiche = undo.changed(giornale.with_current())
+            except Exception as errore:  # the fix already ran: a failed read only loses the undo
+                job.write(f"Registry values could not be read again ({errore})")
+            for voce in modifiche[:10]:
+                job.write("  " + undo.describe(voce))
+            if modifiche:
+                job.write(f"{len(modifiche)} registry values changed: History can put back exactly these (Undo).")
+        verifica = None
+        if controllo is not None and esito.stato in (Stato.OK, Stato.AVVISO):
+            try:
+                verifica = controllo.finish(modifiche, len(giornale.entries) if giornale else 0)
+            except Exception as errore:
+                job.write(f"The after check failed ({errore})")
+            if verifica:
+                job.write(verify.summary(verifica))
+        return modifiche, verifica
+
+    def undo_run(self, run_id: int) -> dict:
+        """Puts back the registry values one run changed, nothing else. One change at a time, like any job."""
+        dati = self.store.run_undo(run_id)
+        if dati is None:
+            raise KeyError(run_id)
+        if dati["undone"]:
+            raise ValueError(f"Already undone on {dati['undone']}.")
+        if not dati["entries"]:
+            raise ValueError("This run changed no registry value that can be put back.")
+        if self.preview:
+            return {"restored": 0, "errors": [], "preview": True, "entries": len(dati["entries"])}
+        self._acquire()
+        try:
+            fatti, errori = undo.restore(dati["entries"])
+            if fatti:
+                self.store.mark_undone(run_id)
+        finally:
+            self._release()
+        return {"restored": fatti, "errors": errori, "entries": len(dati["entries"])}
+
     def _run_action(self, job: Job, ctx: JobContext, action: actions.Action, fermata: str) -> None:
         job.current = action.id
         job.begin_step()
@@ -292,9 +342,18 @@ class JobManager:
         job.write(f"== {action.title} ==")
         partenza = time.monotonic()
         prima = free_bytes()
+        controllo, giornale = None, None
         if fermata:
             esito = Esito(Stato.SALTATO, fermata)
         else:
+            if action.kind == "fix" and not self.preview:
+                # Read the state the fix should change, and the registry values it declares, before it runs.
+                try:
+                    controllo = self.probe(action.id)
+                except Exception as errore:  # a broken check never stops the fix
+                    job.write(f"The before check failed ({errore})")
+                giornale = undo.begin()
+                undo.declare(action.id, giornale)
             try:
                 esito = action.run(ctx)
             except SequenzaFermata as motivo:
@@ -303,14 +362,19 @@ class JobManager:
                 esito = Esito(Stato.ERRORE, "timed out")
             except Exception as errore:  # one failing action must not stop the others
                 esito = Esito(Stato.ERRORE, f"{type(errore).__name__}: {errore}")
+            finally:
+                if giornale is not None:
+                    undo.end()
         liberati = max(0, free_bytes() - prima) if esito.stato is Stato.OK else 0
         esito.nota = translate(esito.nota)
         stato = STATUS[esito.stato]
         job.write(f"Result: {stato} {esito.nota}".rstrip())
+        modifiche, verifica = self._after_fix(job, controllo, giornale, esito)
         risultato = {"action_id": action.id, "status": stato, "note": esito.nota,
-                     "seconds": round(time.monotonic() - partenza, 1), "bytes_freed": liberati, "run_id": run_id}
+                     "seconds": round(time.monotonic() - partenza, 1), "bytes_freed": liberati, "run_id": run_id,
+                     "verify": verifica, "undo_count": len(modifiche)}
         job.results.append(risultato)
         try:
-            self.store.close_run(run_id, stato, esito.nota, liberati, "\n".join(job.log[inizio_log:]))
+            self.store.close_run(run_id, stato, esito.nota, liberati, "\n".join(job.log[inizio_log:]), verifica, modifiche)
         except sqlite3.Error as errore:
             job.write(f"Warning: the result could not be saved to history ({errore})")

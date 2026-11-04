@@ -294,7 +294,9 @@
       '<ul class="job-results">' + job.results.map(function (r) {
         var a = action(r.action_id);
         return "<li>" + UI.statusBadge(r.status) + "<span>" + esc(a ? a.title : r.action_id) + '</span><span class="muted small">' +
-          esc(r.note || "") + (r.bytes_freed ? " · freed " + UI.formatBytes(r.bytes_freed) : "") + "</span>" +
+          esc(r.note || "") + (r.bytes_freed ? " · freed " + UI.formatBytes(r.bytes_freed) : "") + "</span>" + UI.verdictBadge(r.verify) +
+          (r.run_id && r.undo_count ? '<button type="button" class="btn btn-sm btn-ghost" data-precise-undo="' + esc(r.run_id) + '" data-title="' + esc(a ? a.title : r.action_id) +
+            '" title="Put back only the ' + r.undo_count + ' registry values this fix changed">' + UI.icon("history") + "Undo</button>" : "") +
           (r.run_id ? '<button type="button" class="btn btn-sm btn-ghost" data-output="' + esc(r.run_id) + '" data-title="' + esc(a ? a.title : r.action_id) +
             '" title="Output of this tool">' + UI.icon("reports") + "</button>" : "") + "</li>";
       }).join("") + "</ul>" +

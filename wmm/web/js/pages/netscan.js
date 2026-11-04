@@ -8,6 +8,7 @@
   var ICON = { "Router / gateway": "network", "This PC": "cpu", "Printer": "print", "NAS": "storage", "Camera": "security", "Windows PC": "cpu" };
   var LEVEL = { ok: "ok", review: "warning", risk: "error", info: "info" };
 
+  var FOLLOW_SCANS = 3;  // the same threshold as wmm/agent/radio.py
   function num(v) { return typeof v === "number" && isFinite(v); }
   function when(d) { return d && d.scanned ? "scanned " + UI.formatDate(d.scanned, true) : "not scanned yet"; }
   function errorBox(d) {
@@ -98,6 +99,19 @@
             return;
           }
           if ((ip = b.getAttribute("data-device"))) detail(root._devices.filter(function (x) { return x.ip === ip; })[0]);
+          if (b.hasAttribute("data-upnp-scan")) {
+            b.disabled = true;
+            UI.toast("Asking the router which ports it opened: a few seconds.", "info");
+            API.post("/network/upnp/scan").then(function (u) { upnpBox(root.querySelector("#ns-upnp"), u); b.disabled = false; },
+              function (err) { UI.toast(err.message, "error"); b.disabled = false; });
+          }
+          var addr = b.getAttribute("data-bt-known");
+          if (addr) {
+            API.post("/network/bluetooth/ignore", { address: addr, ignore: true }).then(function (d) {
+              sections.bluetooth(root.querySelector("#ns-bluetooth"), d);
+              UI.toast("Marked as known: it is no longer reported as following.", "ok");
+            }, function (err) { UI.toast(err.message, "error"); });
+          }
         });
         // The device list is redrawn by its scan button; the detail dialog reads the latest one.
         Object.defineProperty(root, "_devices", { get: function () { return root.querySelector("#ns-devices")._list || []; } });
@@ -134,7 +148,13 @@
       '<div class="grid">' + UI.card("Devices on the network", '<div class="ns-table" data-table="devices"></div>', "", "card-flush") + "</div>" +
       ((d.missing || []).length ? '<div class="grid">' + UI.card("Not seen in the last scan", UI.table([{ title: "Device" }, { title: "Last IP" }, { title: "Last seen" }],
         d.missing.slice(0, 20).map(function (m) { return [esc(m.name || m.key), '<span class="cell-mono">' + esc(m.ip) + "</span>", esc(UI.formatDate(m.last_seen, true))]; })),
-        '<span class="muted small">Switched off, out of range or gone</span>') + "</div>" : "");
+        '<span class="muted small">Switched off, out of range or gone</span>') + "</div>" : "") +
+      '<div class="grid grid-2">' + UI.card("Ports the router opened to the internet (UPnP)", '<div id="ns-upnp"><p class="muted">Loading…</p></div>',
+        UI.button("Read the router", 'data-upnp-scan', "btn-sm", "refresh")) +
+      UI.card("Network watch", '<p class="modal-text">Schedule <strong>Network watch: new devices</strong> (for example every hour): each time it scans the network ' +
+        "and sends an e-mail or Telegram alert when a device never seen before joins. Alerts are set in Settings › Alerts.</p>",
+        UI.button("Schedule it", 'data-schedule="network.watch"', "btn-sm", "clock")) + "</div>";
+    API.get("/network/upnp").then(function (u) { upnpBox(box.querySelector("#ns-upnp"), u); }, function () { upnpBox(box.querySelector("#ns-upnp"), {}); });
     if (!list.length) return;
     Components.dataTable(box.querySelector('[data-table="devices"]'), {
       rows: list, exportName: "wmm-network-devices", placeholder: "Search IP, name, maker, type…", sort: "ip", pageSize: 50,
@@ -204,7 +224,10 @@
         var tone = LEVEL[a.level] || "info";
         return '<li class="suggest suggest-' + tone + '"><span class="suggest-icon">' + UI.icon(tone === "info" ? "recommendations" : "alert") + "</span><div><p>" + esc(a.text) + "</p></div></li>";
       }).join("") + "</ul>" : "") +
-      '<div class="grid grid-2-1">' + UI.card("Wi-Fi networks nearby", '<div class="ns-table" data-table="wifi"></div>', "", "card-flush") + UI.card("Channels in use", grafico) + "</div>";
+      '<div class="grid grid-2-1">' + UI.card("Wi-Fi networks nearby", '<div class="ns-table" data-table="wifi"></div>', "", "card-flush") + UI.card("Channels in use", grafico) + "</div>" +
+      '<div class="grid">' + UI.card("Wi-Fi history", '<div id="ns-wifi-history"><p class="muted">Loading…</p></div>',
+        UI.button("Schedule samples", 'data-schedule="network.wifi_watch" title="Record a sample every 15-30 minutes"', "btn-sm", "clock")) + "</div>";
+    API.get("/network/wifi/history").then(function (h) { wifiHistory(box.querySelector("#ns-wifi-history"), h); }, function () { wifiHistory(box.querySelector("#ns-wifi-history"), {}); });
     if (!reti.length) return;
     Components.dataTable(box.querySelector('[data-table="wifi"]'), {
       rows: reti, exportName: "wmm-wifi-networks", placeholder: "Search networks, BSSID, channel…", sort: "signal", desc: true, pageSize: 25,
@@ -227,6 +250,58 @@
     });
   }
 
+  // ---------- router ports (UPnP) and Wi-Fi history ----------
+
+  function upnpBox(box, u) {
+    if (!box) return;
+    if (!u || !u.scanned) {
+      box.innerHTML = '<p class="modal-text">Press <strong>Read the router</strong>: it asks the router, through UPnP, which ports it opened to the internet ' +
+        "and which device asked for each one. Cameras, NAS and consoles often do it by themselves. Nothing is changed.</p>";
+      return;
+    }
+    var m = u.mappings || [];
+    var head = '<p class="cell-sub">' + esc((u.router ? (u.router.name || u.router.model || "Router") + (u.router.manufacturer ? " · " + u.router.manufacturer : "") +
+      (u.router.external_ip ? " · public address " + u.router.external_ip : "") + " · " : "") + when(u)) + "</p>";
+    var note = '<div class="callout ' + (u.risky ? "callout-warning" : "callout-info") + '">' + UI.icon(u.risky ? "alert" : "info") + "<div><span>" + esc(u.note || "") + "</span>" +
+      (u.risky ? " <span>Turn UPnP off on the router, or remove these forwards, unless you really need to reach the device from outside.</span>" : "") + "</div></div>";
+    box.innerHTML = head + note + (m.length ? UI.table([{ title: "Port" }, { title: "Device" }, { title: "Description" }], m.map(function (x) {
+      return ['<span class="cell-mono">' + esc(x.protocol + " " + x.external_port) + "</span>" + (x.enabled ? "" : ' <span class="badge">off</span>'),
+        '<span class="cell-mono">' + esc(x.internal_client + ":" + x.internal_port) + "</span>" + (x.device ? '<div class="cell-sub">' + esc(x.device) + "</div>" : ""),
+        esc(x.description || "—") + (x.risk ? '<div class="risk-note">' + UI.icon("alert") + esc(x.risk) + "</div>" : "")];
+    })) : "");
+  }
+
+  function wifiHistory(box, h) {
+    if (!box) return;
+    var samples = (h && h.samples) || [];
+    if (samples.length < 2) {
+      box.innerHTML = '<p class="modal-text">Every Wi-Fi scan records the signal, the channel and how crowded it is. Schedule <strong>Wi-Fi history: record a sample</strong> ' +
+        "every 15-30 minutes: after a day you see whether the drops depend on the hour, on a neighbour changing channel or on the router.</p>" +
+        '<p class="muted small">' + samples.length + " samples so far.</p>";
+      return;
+    }
+    var hours = {};
+    (h.by_hour || []).forEach(function (x) { hours[x.hour] = x; });
+    var worst = h.worst_hour, bars = "", axis = "";
+    for (var i = 0; i < 24; i++) {
+      var x = hours[i];
+      bars += x && num(x.signal) ? '<span class="' + (x.signal < 50 ? "weak" : "") + '" style="height:' + Math.max(3, x.signal) + '%" title="' +
+        esc(i + ":00 · signal " + x.signal + "% · " + x.samples + " samples · " + (x.same_channel || 0) + " networks on the same channel") + '"></span>'
+        : '<span class="empty" style="height:3%"></span>';
+      axis += "<span>" + (i % 3 === 0 ? i : "") + "</span>";
+    }
+    var last = samples[samples.length - 1], changes = (h.changes || []).slice(-8).reverse();
+    box.innerHTML = '<div class="grid grid-3">' +
+      UI.kpi("Samples", Components.num(samples.length), "since " + UI.formatDate(samples[0].t, true), "info") +
+      UI.kpi("Weakest hour", worst ? worst.hour + ":00" : "—", worst ? "average signal " + worst.signal + "%" : "", worst && worst.signal < 50 ? "warning" : "ok") +
+      UI.kpi("Channel or access point changes", Components.num((h.changes || []).length), esc("last: " + last.ssid + " · channel " + last.channel),
+        (h.changes || []).length > 3 ? "warning" : "info") + "</div>" +
+      '<div class="muted small">Average signal by hour of the day (orange: below 50%)</div><div class="wifi-hours">' + bars + '</div><div class="wifi-hours-axis">' + axis + "</div>" +
+      (changes.length ? "<h3>Latest changes</h3>" + UI.table([{ title: "When" }, { title: "From" }, { title: "To" }], changes.map(function (c) {
+        return [esc(UI.formatDate(c.t, true)), '<span class="cell-mono">' + esc(c.from) + "</span>", '<span class="cell-mono">' + esc(c.to) + "</span>"];
+      })) : "");
+  }
+
   // ---------- Bluetooth ----------
 
   function bluetooth(box, d) {
@@ -234,7 +309,11 @@
     var accoppiati = list.filter(function (x) { return x.paired; });
     var nuovi = list.filter(function (x) { return x.new; });
     var vicini = list.filter(function (x) { return !x.paired; });
+    var seguaci = list.filter(function (x) { return x.follower; });
     box.innerHTML = scanButton("bluetooth", "Scan Bluetooth") + errorBox(d) +
+      (seguaci.length ? '<div class="callout callout-warning">' + UI.icon("alert") + "<div><strong>Unknown devices that keep showing up:</strong> " +
+        seguaci.map(function (x) { return esc((x.name || x.kind) + " · " + x.address + " · " + x.sightings + " scans in " + x.span_minutes + " min"); }).join("; ") +
+        ". <span>A tracker (AirTag, Tile, SmartTag) hidden in a bag or a car behaves like this. If one is yours or a neighbour's, mark it as known.</span></div></div>" : "") +
       (d.scanned ? '<p class="cell-sub">' + esc(when(d) + (d.radio ? " · " + d.radio.name + " (" + d.radio.status + ")" : "") + (d.seconds ? " · " + d.seconds + " s" : "")) + "</p>"
         : intro("Press <strong>Scan Bluetooth</strong>: in about half a minute you see your paired devices and the ones nearby (phones, headphones, watches, lights, trackers).")) +
       '<div class="grid grid-4">' +
@@ -242,6 +321,8 @@
       UI.kpi("Paired", Components.num(accoppiati.length), accoppiati.filter(function (x) { return x.connected; }).length + " connected now", "info") +
       UI.kpi("Nearby", Components.num(vicini.length), "not paired with this PC", "info") +
       UI.kpi("New devices", Components.num(nuovi.length), "since the previous scan", nuovi.length ? "warning" : "ok") + "</div>" +
+      '<p class="cell-sub">' + UI.icon("info") + " Unpaired devices seen in " + FOLLOW_SCANS + " or more scans over an hour are flagged as possibly following. " +
+      '<button type="button" class="link-btn" data-schedule="network.bt_watch">Schedule Bluetooth scans</button> to get an alert.</p>' +
       '<div class="grid">' + UI.card("Bluetooth devices", '<div class="ns-table" data-table="bluetooth"></div>',
         '<span class="muted small">Distance is a rough guess from the signal: walls and bodies change it a lot</span>', "card-flush") + "</div>";
     if (!list.length) return;
@@ -252,7 +333,11 @@
       columns: [
         { key: "name", title: "Device", value: function (x) { return x.name || ""; }, render: function (x) {
           return '<span class="cell-title">' + esc(x.name || "Unnamed device") + "</span>" + (x.new ? ' <span class="badge badge-status-warning">New</span>' : "") +
-            '<div class="cell-sub">' + esc(x.kind) + "</div>"; } },
+            (x.follower ? ' <span class="badge badge-status-error">May be following</span>' : "") + '<div class="cell-sub">' + esc(x.kind) + "</div>"; } },
+        { key: "sightings", title: "Seen", cls: "num", value: function (x) { return x.sightings || 0; }, render: function (x) {
+          if (!x.sightings) return "—";
+          return esc(x.sightings + " scans") + '<div class="cell-sub">' + esc("over " + x.span_minutes + " min") + "</div>" +
+            (x.follower ? '<button type="button" class="btn btn-sm btn-ghost" data-bt-known="' + esc(x.address) + '">Mark as known</button>' : ""); } },
         { key: "paired", title: "State", value: function (x) { return x.connected ? "Connected" : x.paired ? "Paired" : "Nearby"; }, render: function (x) {
           return x.connected ? '<span class="badge badge-status-ok">Connected</span>' : x.paired ? '<span class="badge badge-status-info">Paired</span>' : '<span class="badge">Nearby</span>'; } },
         { key: "rssi", title: "Signal", cls: "num", render: function (x) { return num(x.rssi) ? esc(x.rssi + " dBm") : "—"; } },

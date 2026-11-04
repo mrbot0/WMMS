@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import tools, tools_extra, tools_extra2, tools_extra3
+from . import tools, tools_extra, tools_extra2, tools_extra3, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -1062,6 +1062,23 @@ _ACTIONS += (
            "high", 3, _F14(_Z.SCRIPT_OLD_DRIVER_PACKAGES), "Rolling a device back to a removed version is no longer possible."),
 )
 FIXES_14 = tuple(action.id for action in _ACTIONS[-30:])
+
+# ---------- 2.6: watching the network over time (read-only, meant to be scheduled) ----------
+_ACTIONS += (
+    Action("network.watch", "network", "Network watch: new devices",
+           "Scans the devices of the network and sends an e-mail or Telegram alert when one never seen before joins. Schedule it every hour.",
+           "safe", 1, watch.network_watch),
+    Action("network.bt_watch", "network", "Bluetooth trackers that follow you",
+           "Listens for Bluetooth devices and warns when an unknown tracker (AirTag, Tile, SmartTag) keeps showing up in scans at different times.",
+           "safe", 1, watch.bluetooth_watch),
+    Action("network.wifi_watch", "network", "Wi-Fi history: record a sample",
+           "Records signal, channel and crowding of the connected Wi-Fi. Scheduled every 15-30 minutes it shows when and why the Wi-Fi drops.",
+           "safe", 0.3, watch.wifi_watch),
+    Action("network.upnp_report", "network", "Ports the router opened (UPnP)",
+           "Lists the ports the router opens to the internet through UPnP and which device asked for each one: cameras and NAS often do it by themselves.",
+           "safe", 0.3, watch.upnp_report),
+)
+WATCH_26 = ("network.watch", "network.bt_watch", "network.wifi_watch", "network.upnp_report")
 EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
     "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
@@ -1070,7 +1087,7 @@ EXTRA_REPORTS = REPORTS_13 | {
     "security.rdp_report", "security.defender_exclusions_report", "security.antivirus_report", "security.vbs_report", "security.users_report",
     "security.certificates_report", "integrity.unexpected_shutdowns", "integrity.disk_events", "integrity.whea_report", "integrity.chkdsk_result",
     "integrity.app_hangs", "services.failed_report", "storage.large_files", "storage.storage_sense_report", "storage.empty_folders", "storage.old_installers",
-    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives",
+    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26,
 }
 
 # Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.

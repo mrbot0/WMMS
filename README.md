@@ -163,6 +163,8 @@ python wmm.py --no-browser        do not open the browser
 python wmm.py --install           install or update C:\Program Files\WindowsMaintenanceManager
 python wmm.py --auto-install      install/update, then start the installed copy (used by start_wmm.bat)
 python wmm.py --run-schedule ID   run a scheduled action and exit (used by Task Scheduler)
+python wmm.py --sandbox-test      run every fix for real in Windows Sandbox, check it and test its undo
+                                  (--only ID,ID for some tools, --quick for the short ones; needs Windows Sandbox)
 ```
 
 The original command-line tool `ottimizza_pc.py` (Italian) is still included and works on its own;

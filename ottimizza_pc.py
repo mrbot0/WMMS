@@ -722,10 +722,15 @@ def imposta_dns(ctx: Contesto, server: Optional[Sequence[str]]) -> Esito:
 
 # ---------- Ottimizzazioni ----------
 
+REGISTRO_PRIMA_DI_SCRIVERE = None  # funzione (radice, chiave, valore) chiamata prima di ogni scrittura
+
+
 def scrivi_registro(ctx: Contesto, radice: str, chiave: str, valore: str, dato: int) -> None:
     if not ctx.modifica(f"Registro {radice}\\{chiave}\\{valore} = {dato}"):
         return
     import winreg
+    if REGISTRO_PRIMA_DI_SCRIVERE is not None:  # la console annota il valore precedente per l'annullamento
+        REGISTRO_PRIMA_DI_SCRIVERE(radice, chiave, valore)
     with winreg.CreateKeyEx(getattr(winreg, radice), chiave, 0, winreg.KEY_SET_VALUE) as handle:
         winreg.SetValueEx(handle, valore, 0, winreg.REG_DWORD, dato)
 

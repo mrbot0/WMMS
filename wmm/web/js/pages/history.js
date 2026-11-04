@@ -154,6 +154,8 @@
             { key: "status", title: "Result", render: function (r) { return UI.statusBadge(r.status); } },
             { key: "note", title: "Note", render: function (r) { return '<span class="cell-sub">' + esc(r.note || "") + "</span>"; } },
             { key: "bytes_freed", title: "Freed", cls: "num", render: function (r) { return r.bytes_freed ? esc(UI.formatBytes(r.bytes_freed)) : "—"; } },
+            { key: "verify", title: "Verified", value: function (r) { return r.verify ? r.verify.verdict : ""; }, render: function (r) {
+              return (UI.verdictBadge(r.verify) || '<span class="muted">—</span>') + (r.undone ? ' <span class="badge" title="' + esc(UI.formatDate(r.undone, true)) + '">Undone</span>' : ""); } },
             { key: "log", title: "Log", sortable: false, csv: false, render: function (r) {
               return '<details class="log-details" data-log-run="' + r.id + '"><summary>View</summary><pre class="log">Loading…</pre>' +
                 '<button type="button" class="btn btn-sm btn-ghost" data-copy-log hidden>' + UI.icon("copy") + "Copy log</button></details>"; } },
@@ -162,9 +164,12 @@
               // A change that went through (not a read-only report) can be undone with the restore point made before it.
               var undo = r.status === "ok" && kind && kind.risk !== "safe" && kind.kind !== "report"
                 ? '<button type="button" class="btn btn-sm btn-ghost" data-undo="' + esc(r.started) + '" data-undo-title="' + esc(title(r.action_id)) + '" title="Bring the PC back to the restore point made before this change">' +
-                  UI.icon("history") + "Undo…</button>" : "";
+                  UI.icon("history") + "Restore point…</button>" : "";
+              // A fix that changed registry values can put back exactly those, without a restore point.
+              var precise = r.undo_count && !r.undone ? '<button type="button" class="btn btn-sm" data-precise-undo="' + r.id + '" data-title="' + esc(title(r.action_id)) +
+                '" title="Put back only the ' + r.undo_count + ' registry values this fix changed">' + UI.icon("history") + "Undo</button>" : "";
               return '<span class="row-actions">' + (a ? '<button type="button" class="btn btn-sm" data-run="' + esc(r.action_id) + '" title="Run ' + esc(a.title) + ' again">' +
-                UI.icon("refresh") + "Again</button>" : "") + undo + "</span>";
+                UI.icon("refresh") + "Again</button>" : "") + precise + undo + "</span>";
             } }
           ],
           after: function (box) {

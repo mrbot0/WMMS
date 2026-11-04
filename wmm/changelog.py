@@ -2,6 +2,29 @@
 
 CHANGELOG = [
     {
+        "version": "2.6.0",
+        "date": "2026-11-04",
+        "title": "Toolbox in Italian, search by symptom and fixes that check themselves",
+        "highlights": [
+            "The Toolbox speaks Italian: the names, descriptions and warnings of all 355 tools, and the search finds them in both languages.",
+            "Search by symptom: type \"non vedo gli altri PC\", \"Internet lento\" or \"Start non si apre\" and the Toolbox proposes the reports to read "
+            "first and the fixes to try after, in order (43 common problems).",
+            "Every fix with a check reads the state before and after it runs and says \"Fixed\", \"Already fine\" or \"Not fixed\" (60 fixes, "
+            "from the internet connection to the camera, Defender and Windows Update).",
+            "Precise undo for registry fixes: the values a fix is about to change are saved first, and Undo puts back only those. "
+            "The restore point stays as the safety net for the whole PC.",
+        ],
+        "changes": [
+            "Network watch: a schedulable scan that sends an e-mail or Telegram alert when a device never seen before joins the network.",
+            "Router exposure: the ports the router opened to the internet through UPnP and the device behind each one, with the risky ones explained.",
+            "Bluetooth trackers: an unknown device (AirTag, Tile, SmartTag or unnamed) seen in 3 or more scans over an hour is flagged and can raise an alert; "
+            "devices you know can be marked as known.",
+            "Wi-Fi history: signal, channel and crowding of your network over time, by hour of the day, with every channel or access point change.",
+            "Real tests in Windows Sandbox: python wmm.py --sandbox-test runs every fix for real in a throw-away Windows, checks it and tests its undo.",
+            "Signed setup and winget package: the release builds a setup (signed when a code-signing certificate is configured) and the winget manifests.",
+        ],
+    },
+    {
         "version": "2.5.0",
         "date": "2026-11-04",
         "title": "30 new fixes in the Toolbox",
