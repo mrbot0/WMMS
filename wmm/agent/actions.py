@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import tools, tools_extra, tools_extra2, tools_extra3, watch
+from . import drift, kev, tools, tools_extra, tools_extra2, tools_extra3, trends, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -1079,6 +1079,23 @@ _ACTIONS += (
            "safe", 0.3, watch.upnp_report),
 )
 WATCH_26 = ("network.watch", "network.bt_watch", "network.wifi_watch", "network.upnp_report")
+
+# ---------- 2.7: connection log, suspicious changes, known exploited vulnerabilities, disk and battery trends ----------
+_ACTIONS += (
+    Action("network.connection_watch", "network", "Connection log: record a reading",
+           "Times the router, the internet and name resolution. Scheduled every 5-10 minutes it shows when the connection drops and whether "
+           "the cause is the Wi-Fi or router, the provider or DNS.", "safe", 0.2, watch.connection_watch),
+    Action("security.drift_watch", "security", "Suspicious changes: startup, tasks, extensions",
+           "Compares startup programs, scheduled tasks, services, browser extensions, proxy, hosts file, antivirus exclusions and administrators "
+           "with the previous check, and sends an alert when something appears or changes.", "safe", 0.5, drift.drift_watch),
+    Action("network.kev_report", "network", "Network devices with known exploited vulnerabilities",
+           "Compares the maker and model of routers, NAS and cameras found on the network with the CISA catalog of vulnerabilities used in "
+           "real attacks: for the devices listed a firmware update is urgent.", "safe", 0.5, kev.kev_report),
+    Action("storage.health_trend", "storage", "Disk and battery trend",
+           "Records disk wear, temperature and errors and the battery capacity once a day, and estimates when a disk will be worn out or "
+           "the battery will hold less than 60%.", "safe", 0.3, trends.health_trend),
+)
+WATCH_27 = ("network.connection_watch", "security.drift_watch", "network.kev_report", "storage.health_trend")
 EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
     "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
@@ -1087,7 +1104,7 @@ EXTRA_REPORTS = REPORTS_13 | {
     "security.rdp_report", "security.defender_exclusions_report", "security.antivirus_report", "security.vbs_report", "security.users_report",
     "security.certificates_report", "integrity.unexpected_shutdowns", "integrity.disk_events", "integrity.whea_report", "integrity.chkdsk_result",
     "integrity.app_hangs", "services.failed_report", "storage.large_files", "storage.storage_sense_report", "storage.empty_folders", "storage.old_installers",
-    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26,
+    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26, *WATCH_27,
 }
 
 # Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.

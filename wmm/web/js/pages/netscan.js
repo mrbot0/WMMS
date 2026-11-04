@@ -154,6 +154,9 @@
       UI.card("Network watch", '<p class="modal-text">Schedule <strong>Network watch: new devices</strong> (for example every hour): each time it scans the network ' +
         "and sends an e-mail or Telegram alert when a device never seen before joins. Alerts are set in Settings › Alerts.</p>",
         UI.button("Schedule it", 'data-schedule="network.watch"', "btn-sm", "clock")) + "</div>";
+    box.insertAdjacentHTML("beforeend", '<div class="grid grid-2"><div id="ins-conn"></div><div id="ins-kev"></div></div>');
+    Insights.connection(box.querySelector("#ins-conn"));
+    Insights.kev(box.querySelector("#ins-kev"));
     API.get("/network/upnp").then(function (u) { upnpBox(box.querySelector("#ns-upnp"), u); }, function () { upnpBox(box.querySelector("#ns-upnp"), {}); });
     if (!list.length) return;
     Components.dataTable(box.querySelector('[data-table="devices"]'), {

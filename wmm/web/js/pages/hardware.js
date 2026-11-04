@@ -228,7 +228,8 @@
         '<div id="hw-kpis" class="grid grid-4">' + Components.skeleton() + "</div>" +
         '<div class="grid" data-tab-group="sensors">' + UI.card("Temperatures and fans", '<div id="hw-sensors">' + Components.skeleton() + "</div>",
           '<span class="muted small" id="hw-sensor-time"></span><button class="btn btn-sm" type="button" id="hw-pause">' + UI.icon("clock") + "Pause</button>", "hw-sensor-card") + "</div>" +
-        '<div id="hw-body" data-tab-host>' + Components.skeleton() + "</div></div>";
+        '<div class="grid" id="ins-trends"></div>' + '<div id="hw-body" data-tab-host>' + Components.skeleton() + "</div></div>";
+      Insights.trends(el.querySelector("#ins-trends"));
 
       function kpis() {
         var k = el.querySelector("#hw-kpis");

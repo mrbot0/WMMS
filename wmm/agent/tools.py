@@ -168,6 +168,8 @@ def powershell_command(script: str) -> List[str]:
 
 
 def set_power_plan(ctx, plan: str) -> Esito:
+    if not ctx.anteprima:
+        undo.before_plan()
     esito = ctx.comando(["powercfg", "/setactive", POWER_GUIDS[plan]])
     if esito.stato is Stato.OK:
         esito.nota = f"{plan} power plan active"
@@ -384,6 +386,8 @@ def _registry_action(ctx, descrizione: str, scrivi, nota: str) -> Esito:
 
 
 def power_ultimate(ctx) -> Esito:
+    if not ctx.anteprima:
+        undo.before_plan()
     return ctx.comando(powershell_command(
         "$o = powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61; "
         "$g = [regex]::Match(\"$o\", '[0-9a-fA-F-]{36}').Value; if (-not $g) { throw 'Ultimate Performance is not available' }; "
@@ -932,6 +936,8 @@ def battery_report(ctx) -> Esito:
 
 def usb_suspend_off(ctx) -> Esito:
     sottogruppo, impostazione = USB_SUSPEND
+    if not ctx.anteprima:
+        undo.before_power(sottogruppo, impostazione)
     return op.comandi_in_serie(ctx, (["powercfg", "/setacvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, "0"],
                                      ["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, "0"],
                                      ["powercfg", "/setactive", "SCHEME_CURRENT"]))
@@ -1153,6 +1159,8 @@ def power_settings(ctx, impostazioni: Sequence[Tuple[str, str, int]], dc: bool =
     """Sets power plan values on the active plan (AC, and battery unless dc=False), then reapplies the plan."""
     comandi = []
     for sottogruppo, impostazione, valore in impostazioni:
+        if not ctx.anteprima:
+            undo.before_power(sottogruppo, impostazione)  # the precise undo puts back the AC and DC values of the plan
         comandi.append(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, str(valore)])
         if dc:
             comandi.append(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", sottogruppo, impostazione, str(valore)])

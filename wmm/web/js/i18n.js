@@ -290,6 +290,8 @@
   Object.keys(IT_26).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(IT, k)) IT[k] = IT_26[k]; });
   // The 351 Toolbox tools (names, descriptions, warnings) live in i18n_tools.js; the console's own phrases win on a clash.
   Object.keys(window.I18N_TOOLS || {}).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(IT, k)) IT[k] = window.I18N_TOOLS[k]; });
+  // The pages outside the Toolbox (2.7) live in i18n_pages.js.
+  Object.keys(window.I18N_PAGES || {}).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(IT, k)) IT[k] = window.I18N_PAGES[k]; });
 
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
   var MONTHS = { Jan: "gen", Feb: "feb", Mar: "mar", Apr: "apr", May: "mag", Jun: "giu", Jul: "lug", Aug: "ago", Sep: "set", Oct: "ott", Nov: "nov", Dec: "dic" };
@@ -317,6 +319,47 @@
       return t == null ? m : { Select: "Seleziona ", Schedule: "Pianifica ", Run: "Esegui " }[verb] + t;
     }],
     [/^All of (.+)$/, function (m, what) { var t = translate(what); return t == null ? m : "Tutto in " + t; }],
+    [/^(Open|More in|Hide the pages of) (.+)$/, function (m, verb, what) {
+      var t = translate(what);
+      return t == null ? m : { "Open": "Apri ", "More in": "Altro in ", "Hide the pages of": "Nascondi le pagine di " }[verb] + t;
+    }],
+    [/^Run (.+) again$/, function (m, what) { var t = translate(what); return t == null ? m : "Esegui di nuovo " + t; }],
+    // Numbers in the middle of page texts (2.7).
+    [/^(.+) score: (\d+) of 100$/, function (m, what, n) { var t = translate(what); return t == null ? m : "Punteggio " + t + ": " + n + " su 100"; }],
+    [/^Overall health: (\d+) of 100$/, "Salute generale: $1 su 100"],
+    [/^(\d+) fixes match what this PC shows now: run them in this order\.$/, "$1 fix corrispondono a ciò che mostra ora questo PC: eseguili in questo ordine."],
+    [/^(\d+) ports opened through UPnP, (\d+) worth closing\.$/, "$1 porte aperte tramite UPnP, $2 da chiudere."],
+    [/^Only minor improvements are suggested\. (\d+) of (\d+) areas assessed\.$/, "Sono suggeriti solo piccoli miglioramenti. $1 aree valutate su $2."],
+    [/^(\d+) of (\d+) assessed ·$/, "$1 su $2 valutate ·"], [/^([\d.,]+) of ([\d.,]+) GB in use$/, "$1 di $2 GB in uso"],
+    [/^([\d.,]+) of ([\d.,]+) GB · commit (\d+)%$/, "$1 di $2 GB · impegnata $3%"], [/^In (.+) · Out (.+)$/, "In entrata $1 · In uscita $2"],
+    [/^View all (\d+)$/, "Vedi tutti ($1)"], [/^Open the (\d+) improvement\(s\) of this area$/, "Apri i $1 miglioramenti di quest'area"],
+    [/^Show dismissed and snoozed \((\d+)\)$/, "Mostra nascosti e rinviati ($1)"], [/^Last quick scan (\d+) days ago$/, "Ultima analisi rapida $1 giorni fa"],
+    [/^(\d+) stability events in the last 30 days\.$/, "$1 eventi di stabilità negli ultimi 30 giorni."], [/^(\d+) actions recorded on this device\.$/, "$1 azioni registrate su questo dispositivo."],
+    [/^(\d+) updates are waiting\.$/, "$1 aggiornamenti in attesa."], [/^(\d+) programs start with Windows\. Turn off the ones you do not need in the list below\.$/,
+      "$1 programmi partono con Windows. Disattiva quelli che non ti servono nell'elenco qui sotto."],
+    [/^(\d+) programs start with Windows\. Disable unneeded ones in Task Manager > Startup apps\.$/, "$1 programmi partono con Windows. Disattiva quelli superflui in Gestione attività > App di avvio."],
+    [/^Drive C: has (\d+)% free: the component store can usually shrink by several GB\.$/, "L'unità C: ha il $1% libero: di solito l'archivio componenti può ridursi di diversi GB."],
+    [/^Browser caches use (.+)\.$/, "Le cache dei browser occupano $1."], [/^hiberfil\.sys uses (.+) on this desktop PC\.$/, "hiberfil.sys occupa $1 su questo PC desktop."],
+    [/^The firmware is (\d+) years old\.$/, "Il firmware ha $1 anni."], [/^Not updated since (\d{4}): check whether a newer version exists\.$/, "Non aggiornato dal $1: controlla se esiste una versione più recente."],
+    [/^(\d+) third-party drivers are older than 3 years \(e\.g\. (.+)\)\.$/, "$1 driver di terze parti hanno più di 3 anni (es. $2)."],
+    [/^(\d+) PCs of the network · (\d+) reachable$/, "$1 PC della rete · $2 raggiungibili"], [/^(\d+) of (\d+) others reachable$/, "$1 di $2 altri raggiungibili"],
+    [/^(.+) \(this PC\)$/, "$1 (questo PC)"], [/^At every startup, after (\d+) min$/, "A ogni avvio, dopo $1 min"], [/^At every sign-in, after (\d+) min$/, "A ogni accesso, dopo $1 min"],
+    [/^Peak in view (\d+)%$/, "Picco nella vista $1%"], [/^In use: (.+)$/, "In uso: $1"], [/^Not used: (.+)$/, "Non usati: $1"], [/^of (\d+) installed$/, "su $1 installati"],
+    [/^(\d+) safe, no confirmation$/, "$1 sicuri, senza conferma"], [/^(\d+) not readable$/, "$1 non leggibili"], [/^(\d+) run\(s\), (\d+) scan\(s\)$/, "$1 esecuzioni, $2 scansioni"],
+    [/^(\d+) service\(s\) in the restore backup$/, "$1 servizi nel backup di ripristino"], [/^(\d+) cleanup run\(s\)$/, "$1 pulizie eseguite"],
+    [/^(\d+) actions between the two dates · (.+) freed\.$/, "$1 azioni tra le due date · $2 liberati."], [/^Nothing planned in the next 7 days\.$/, "Nulla in programma nei prossimi 7 giorni."],
+    [/^Hide it for 7 days, then show it again$/, "Nascondilo per 7 giorni, poi mostralo di nuovo"],
+    [/^Updated (.+) · oldest area scan (.+)$/, function (m, a, b) { return "Aggiornato " + a + " · scansione più vecchia " + (translate(b) || b); }],
+    [/^Last check (.+) · baseline from (.+)$/, function (m, a, b) { return "Ultimo controllo " + (translate(a) || a) + " · riferimento del " + (translate(b) || b); }],
+    [/^last reading (.+)$/, function (m, a) { return "ultima rilevazione " + (translate(a) || a); }], [/^since (.+)$/, function (m, a) { return "dal " + (translate(a) || a); }],
+    [/^Last run (.+)$/, function (m, a) { return "Ultima esecuzione " + (translate(a) || a); }],
+    [/^(\d+):00 · signal (.+) · (\d+) samples · (.+) networks on the same channel$/, "$1:00 · segnale $2 · $3 rilevazioni · $4 reti sullo stesso canale"],
+    [/^(\d+) devices compared with (\d+) vulnerabilities · CISA catalog (.*)$/, "$1 dispositivi confrontati con $2 vulnerabilità · catalogo CISA $3"],
+    [/^(\d+) daily readings since (.+)$/, function (m, n, a) { return n + " rilevazioni giornaliere dal " + (translate(a) || a); }],
+    [/^(.+) \(preview: nothing changed\)$/, function (m, what) { return (translate(what) || what) + " (anteprima: nulla è cambiato)"; }],
+    [/^Restart in (\d+) minute\(s\)$/, "Riavvio tra $1 minuti"], [/^Shut down in (\d+) minute\(s\)$/, "Arresto tra $1 minuti"],
+    [/^Clear the (.+) cache$/, "Svuota la cache di $1"], [/^Start the uninstaller of (.+)$/, "Avvia il programma di disinstallazione di $1"],
+    [/^Remove (.+) \(preview: nothing changed\)$/, function (m, what) { return "Rimuovi " + what + " (anteprima: nulla è cambiato)"; }],
     // The interface choices of the network scanner: "Wi-Fi · 192.168.1.0/24 · gateway 192.168.1.1 (active)".
     [/^(?=.*(?:\(active\)$| · no gateway| · connected to | · not connected| · off$))(.*)$/, function (m, all) {
       return all.replace(/ \(active\)$/, " (attiva)").replace(" · no gateway", " · senza gateway").replace(" · connected to a network", " · connessa a una rete")

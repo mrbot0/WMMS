@@ -3,6 +3,37 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.7.0 — 2026-11-05
+
+**Guided diagnosis, your own tools and a console fully in Italian.**
+
+- **Guided diagnosis** (`wmm/agent/diagnose.py`, `POST /api/v1/symptoms/<id>/diagnose`): for every fix of a symptom that has a check,
+  the check is read now (read-only, in parallel, each script once) and the fix is marked Needed or Already fine; fixes without a check
+  stay as "try if the others do not help". The Toolbox shows it with "Guided diagnosis" and "Run the recommended fixes".
+- **More checks and a wider undo**: 22 more explicit checks (82 in all); 30 cleanups are judged by the free space on C: before and
+  after (Space freed / Nothing to free). The undo journal (`wmm/agent/undo.py`) now also records power settings changed through
+  `tools.power_settings` (AC and DC index read with `powercfg /query`, language-independent), the active power plan and the start type
+  of the services PowerShell fixes declare (`SERVICE_TOUCHES`); Undo puts them back with `powercfg` and `sc config`.
+- **Your own tools** (`wmm/agent/custom_tools.py`, `/api/v1/custom-tools`): a PowerShell script with area, kind, risk, duration, warning,
+  an optional check (one line, with the healthy value) and an optional undo script that joins the run's journal. Stored in
+  `dati\custom_tools.json`, they join the catalog as `custom.<id>`, also in scheduled runs. Toolbox › Your tools.
+- **The whole console in Italian** (`wmm/web/js/i18n_pages.js`): 1,170 phrases of the pages, help, settings, recommendations, playbooks,
+  routines, script templates, health check and the 2.7 cards, collected by visiting every page in Italian and from the Python modules
+  that produce texts; new rules for labels built from a page or a tool name.
+- **Connection log** (`network.connection_watch`, `GET/POST /api/v1/network/connection`): router, internet (1.1.1.1, else 8.8.8.8)
+  and DNS timed; outages grouped and classified as router/Wi-Fi, provider or DNS; alert "The internet connection dropped" when it is back.
+- **Suspicious changes** (`wmm/agent/drift.py`, `security.drift_watch`, Security page): Run keys, startup folders, services, non-Microsoft
+  tasks, hosts, proxy, Defender exclusions, browser extensions and local administrators; an empty read never counts as "removed".
+- **Known exploited vulnerabilities** (`wmm/agent/kev.py`, `network.kev_report`, Network › Devices): the CISA KEV feed (cached for a day)
+  matched on maker and product words of the scanned devices and of the UPnP router.
+- **Disk and battery trend** (`wmm/agent/trends.py`, `storage.health_trend`, Hardware page): SMART wear, temperature, errors and hours,
+  battery full-charge against design capacity, one reading a day, least-squares estimate of the end.
+- **Remote runs on the fleet** (`wmm/agent/fleet.py`): the sharing PC chooses Off, Reports only, or Reports and safe fixes; requests are
+  HMAC-SHA256 signed with the hash of the key (the key never travels), carry a timestamp (two minutes) and a nonce (no replay); moderate
+  and high-risk tools are always refused. PCs page › Run… and the results with their checks.
+- **Customer report with evidence** (`wmm/web/js/report.js`): a Check column in every run table and an "Evidence: before and after"
+  section with the readings of each checked fix and what can still be undone.
+
 ## 2.6.0 — 2026-11-04
 
 **Toolbox in Italian, search by symptom and fixes that check themselves.**

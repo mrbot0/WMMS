@@ -882,5 +882,13 @@ window.I18N_TOOLS = {
 "Wi-Fi history: record a sample": "Storico del Wi-Fi: registra una rilevazione",
 "Records signal, channel and crowding of the connected Wi-Fi. Scheduled every 15-30 minutes it shows when and why the Wi-Fi drops.": "Registra segnale, canale e affollamento del Wi-Fi connesso. Pianificata ogni 15-30 minuti mostra quando e perché il Wi-Fi cade.",
 "Ports the router opened (UPnP)": "Porte aperte dal router (UPnP)",
-"Lists the ports the router opens to the internet through UPnP and which device asked for each one: cameras and NAS often do it by themselves.": "Elenca le porte che il router apre verso Internet tramite UPnP e quale dispositivo le ha chieste: telecamere e NAS spesso lo fanno da soli."
+"Lists the ports the router opens to the internet through UPnP and which device asked for each one: cameras and NAS often do it by themselves.": "Elenca le porte che il router apre verso Internet tramite UPnP e quale dispositivo le ha chieste: telecamere e NAS spesso lo fanno da soli.",
+"Connection log: record a reading": "Diario della connessione: registra una rilevazione",
+"Times the router, the internet and name resolution. Scheduled every 5-10 minutes it shows when the connection drops and whether the cause is the Wi-Fi or router, the provider or DNS.": "Misura i tempi di router, Internet e risoluzione dei nomi. Pianificato ogni 5-10 minuti mostra quando la connessione cade e se la causa è il Wi-Fi o il router, il provider o il DNS.",
+"Suspicious changes: startup, tasks, extensions": "Modifiche sospette: avvio, attività, estensioni",
+"Compares startup programs, scheduled tasks, services, browser extensions, proxy, hosts file, antivirus exclusions and administrators with the previous check, and sends an alert when something appears or changes.": "Confronta programmi all'avvio, attività pianificate, servizi, estensioni dei browser, proxy, file hosts, esclusioni dell'antivirus e amministratori con il controllo precedente, e invia un avviso quando qualcosa compare o cambia.",
+"Network devices with known exploited vulnerabilities": "Dispositivi di rete con vulnerabilità sfruttate note",
+"Compares the maker and model of routers, NAS and cameras found on the network with the CISA catalog of vulnerabilities used in real attacks: for the devices listed a firmware update is urgent.": "Confronta produttore e modello di router, NAS e telecamere trovati in rete con il catalogo CISA delle vulnerabilità usate in attacchi reali: per i dispositivi elencati aggiornare il firmware è urgente.",
+"Disk and battery trend": "Andamento di dischi e batteria",
+"Records disk wear, temperature and errors and the battery capacity once a day, and estimates when a disk will be worn out or the battery will hold less than 60%.": "Registra una volta al giorno usura, temperatura ed errori dei dischi e la capacità della batteria, e stima quando un disco sarà consumato o la batteria terrà meno del 60%."
 };

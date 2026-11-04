@@ -25,6 +25,8 @@ EVENTS = {
     "unsafe_apps": "New unsafe programs were found",
     "new_device": "A new device joined the network",
     "bt_follower": "An unknown Bluetooth tracker keeps showing up",
+    "config_changed": "Suspicious changes in startup, tasks or extensions",
+    "connection_down": "The internet connection dropped",
 }
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {

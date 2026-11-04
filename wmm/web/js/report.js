@@ -47,12 +47,37 @@
       return "<tr><td><b>" + esc(r.title) + "</b></td><td>" + esc(r.reason) + "</td><td>" + badge(r.impact) + "</td><td>" + badge(r.risk, UI.RISK_LABEL[r.risk]) + "</td></tr>";
     }).join("") + "</tbody></table>";
   }
+  // The before/after check of a fix as a report badge (2.7): the proof that it worked, with both readings.
+  var VERDICT = { fixed: ["ok", "Fixed"], already_ok: ["ok", "Already fine"], applied: ["ok", "Applied"], already_set: ["skipped", "Already set"],
+    freed: ["ok", "Space freed"], nothing_freed: ["skipped", "Nothing to free"], changed: ["skipped", "Changed"], unchanged: ["warning", "Nothing changed"],
+    not_fixed: ["warning", "Not fixed"], worse: ["error", "Worse than before"], unknown: ["skipped", "Not verified"] };
+  function verdict(r) {
+    var v = r.verify, m = v && VERDICT[v.verdict];
+    return m ? badge(m[0], m[1]) : '<span class="muted">—</span>';
+  }
   function runTable(runs) {
     if (!runs.length) return '<p class="muted">No actions were run in this period.</p>';
-    return "<table><thead><tr><th>Date</th><th>Action</th><th>Origin</th><th>Result</th><th>Note</th><th class=\"num\">Freed</th></tr></thead><tbody>" + runs.map(function (r) {
+    return "<table><thead><tr><th>Date</th><th>Action</th><th>Origin</th><th>Result</th><th>Check</th><th>Note</th><th class=\"num\">Freed</th></tr></thead><tbody>" + runs.map(function (r) {
       return "<tr><td>" + esc(UI.formatDate(r.started)) + "</td><td>" + esc(title(r.action_id)) + "</td><td>" + esc(UI.ORIGIN_LABEL[r.origin] || r.origin) + "</td><td>" +
-        badge(r.status, UI.STATUS_LABEL[r.status]) + "</td><td>" + esc(r.note || "") + '</td><td class="num">' + (r.bytes_freed ? UI.formatBytes(r.bytes_freed) : "—") + "</td></tr>";
+        badge(r.status, UI.STATUS_LABEL[r.status]) + "</td><td>" + verdict(r) + "</td><td>" + esc(r.note || "") + '</td><td class="num">' +
+        (r.bytes_freed ? UI.formatBytes(r.bytes_freed) : "—") + "</td></tr>";
     }).join("") + "</tbody></table>";
+  }
+  /* Evidence of the visit: every fix whose effect was measured, with the reading before and after, and what can be undone. */
+  function evidence(runs) {
+    var checked = runs.filter(function (r) { return r.verify && r.verify.verdict; });
+    if (!checked.length) return "";
+    var good = checked.filter(function (r) { return /^(fixed|already_ok|applied|freed)$/.test(r.verify.verdict); }).length;
+    var bad = checked.filter(function (r) { return /^(not_fixed|worse|unchanged)$/.test(r.verify.verdict); }).length;
+    var undoable = runs.filter(function (r) { return r.undo_count && !r.undone; });
+    return "<section><h2>Evidence: before and after</h2>" +
+      kpis([["Fixes checked", String(checked.length)], ["Confirmed", String(good)], ["To look at", String(bad)], ["Can be undone", String(undoable.length)]]) +
+      "<table><thead><tr><th>Action</th><th>What was measured</th><th>Before</th><th>After</th><th>Check</th></tr></thead><tbody>" + checked.map(function (r) {
+        return "<tr><td>" + esc(title(r.action_id)) + "</td><td>" + esc(r.verify.label || "") + "</td><td>" + esc(r.verify.before == null ? "—" : r.verify.before) +
+          "</td><td>" + esc(r.verify.after == null ? "—" : r.verify.after) + "</td><td>" + verdict(r) + "</td></tr>";
+      }).join("") + "</tbody></table>" +
+      (undoable.length ? '<p class="muted">These changes can be put back one by one from History › Undo, without a restore point: ' +
+        undoable.map(function (r) { return esc(title(r.action_id)); }).join(", ") + ".</p>" : "") + "</section>";
   }
   function kpis(items) {
     return '<div class="kpis">' + items.map(function (k) { return '<div class="kpi"><small>' + esc(k[0]) + "</small><b>" + k[1] + "</b></div>"; }).join("") + "</div>";
@@ -246,7 +271,7 @@
           (r.after != null ? r.after : "—") + '</td><td class="num">' + delta(r.before, r.after) + "</td></tr>";
       }).join("") + "</tbody></table></section>" +
       (programs.length ? "<section><h2>Programs</h2>" + runTable(programs) + "</section>" : "") +
-      "<section><h2>What was done</h2>" + done + "</section>" +
+      "<section><h2>What was done</h2>" + done + "</section>" + evidence(ok) +
       (failed.length ? "<section><h2>Operations with errors</h2>" + runTable(failed) + "</section>" : "") +
       "<section><h2>Still recommended</h2>" + recTable(dash.recommendations || []) + "</section>";
   }

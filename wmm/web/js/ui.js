@@ -205,7 +205,7 @@
   var VERDICT = {
     fixed: ["Fixed", "ok"], already_ok: ["Already fine", "ok"], applied: ["Applied", "ok"], already_set: ["Already set", "info"],
     changed: ["Changed", "info"], unchanged: ["Nothing changed", "warning"], not_fixed: ["Not fixed", "warning"], worse: ["Worse than before", "error"],
-    unknown: ["Not verified", "muted"]
+    freed: ["Space freed", "ok"], nothing_freed: ["Nothing to free", "info"], unknown: ["Not verified", "muted"]
   };
   function verdictBadge(v) {
     if (!v || !VERDICT[v.verdict]) return "";
