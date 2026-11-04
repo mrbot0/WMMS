@@ -2,6 +2,28 @@
 
 CHANGELOG = [
     {
+        "version": "2.2.0",
+        "date": "2026-11-04",
+        "title": "Network scanner, alerts by email and Telegram, program updates, the PCs of the network and browser tests",
+        "highlights": [
+            "Network scanner (System): every device on your network with name, maker, MAC, open ports, web page and what it is; new devices are flagged.",
+            "Alerts by email and Telegram when a scheduled run fails, drive C: is almost full or unsafe programs appear, even with the console closed.",
+            "Program updates: the console checks the GitHub releases once a day and installs a new version after checking its SHA-256.",
+            "PCs (Operations): the health of other PCs of the network side by side, read-only, through a summary they share with a key.",
+            "Every page is now checked in a real browser by the tests, which found and fixed a security score that failed without the administrators list.",
+        ],
+        "changes": [
+            "Network scanner: only private networks of adapters with a gateway, at most 1022 addresses; ping through the Windows ICMP API, the ARP table, "
+            "names, 26 common ports and the title of web pages. Telnet, FTP, VNC and Remote Desktop open on a device are pointed out.",
+            "Alerts: secrets encrypted with Windows DPAPI, STARTTLS or SSL for email, the same alert at most once a day, a test button.",
+            "Updates: .github/workflows/release.yml builds the zip and SHA256SUMS.txt when a v* tag is pushed (tools/build_release.py); "
+            "the package is refused if its checksum, its paths or its version do not match.",
+            "PCs: sharing is off until you create a key; the key is kept only as a hash, summaries are filtered by type and size, "
+            "only local network addresses are contacted, and the firewall rule is limited to the local subnet.",
+            "Code: Applications, System Restore and the new features live in wmm/server/features.py; the styles of the newer pages in pages.css.",
+        ],
+    },
+    {
         "version": "2.1.0",
         "date": "2026-11-03",
         "title": "Restore point and undo, complete uninstall, updatable rules, before/after report, Italian interface",

@@ -3,6 +3,41 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.2.0 — 2026-11-04
+
+**Network scanner, alerts by email and Telegram, program updates, the PCs of the network and browser tests.**
+
+- **Network scanner** (`wmm/agent/netscan.py`, System › Network scanner):
+  - every device on the private networks of adapters with a gateway (a network larger than /22 is reduced to the /24 of
+    this PC);
+  - ping through the Windows ICMP API, the ARP table (devices that ignore ping), DNS/NetBIOS names, 26 common TCP ports,
+    the title of web pages and the maker from the MAC prefix (random MACs are recognised);
+  - a guess of the kind of device (router, PC, printer, NAS, camera, TV, phone, smart home), new devices since the
+    previous scan and devices no longer seen;
+  - Telnet, FTP, VNC and Remote Desktop open on a device are pointed out. It only reads.
+- **Alerts by email and Telegram** (`wmm/agent/notify.py`, Settings › Notifications):
+  - a scheduled run that failed, drive C: under 10% or 10 GB, new unsafe programs;
+  - bot token and password encrypted with DPAPI (machine scope, so scheduled runs as SYSTEM can read them);
+  - STARTTLS or SSL, the same alert at most once a day, a test button.
+- **Program updates** (`wmm/agent/updater.py`, Settings › This agent):
+  - the latest GitHub release is checked once a day;
+  - the zip is installed only if it matches SHA256SUMS.txt, has no path outside its folder and is the announced
+    version; data is never touched and the protected copy keeps its permissions;
+  - `.github/workflows/release.yml` and `tools/build_release.py` build the release when a `v*` tag is pushed.
+- **PCs of the network** (`wmm/agent/fleet.py`, Operations › PCs):
+  - a PC can share a read-only summary (scores, improvements, unsafe programs, free space on C:) on a second port,
+    with a key kept only as a hash;
+  - the console gathers the summaries of the PCs in its list, contacts only local network addresses and filters every
+    field by type and size;
+  - the firewall rule is limited to the local subnet.
+- **Browser tests** (`tests/test_e2e.py`, `tests/e2e/console_check.js`):
+  - Playwright opens all 27 pages and checks script errors, error boxes, page tabs, the keyboard shortcuts and the
+    Italian interface;
+  - skipped where Node.js and Playwright are missing.
+  - They found a security score that failed when the administrators list could not be read: fixed in `advisor.py`.
+- **Code**: Applications, System Restore and the new features moved from `wmm/server/api.py` to
+  `wmm/server/features.py` (`ApiError` in `errors.py`); the styles of the newer pages moved to `css/pages.css`.
+
 ## 2.1.0 — 2026-11-03
 
 **Restore point and undo, complete uninstall, updatable rules, before/after report, Italian interface.**

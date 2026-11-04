@@ -139,6 +139,18 @@
     if (!apps) API.get("/apps").then(setApps, function () { /* shown on the page itself */ });
   }, 15000);
 
+  /* ---------- a new version of the program (checked once a day, never at the start) ---------- */
+  setTimeout(function () {
+    var last = store("updateChecked") || 0;
+    if (Date.now() - last < 24 * 3600 * 1000) return;
+    store("updateChecked", Date.now());
+    API.get("/update/check").then(function (r) {
+      if (!r.available) return;
+      UI.toast("Windows Maintenance Manager " + r.latest + " is available: Settings › This agent › Program updates.", "info");
+      Components.notifications.add("Update available", "Version " + r.latest, "info");
+    }, function () { /* offline or GitHub unreachable: try again tomorrow */ });
+  }, 30000);
+
   /* ---------- scroll progress, offline, coming back ---------- */
   var scroller = document.getElementById("scroller"), progress = document.createElement("div");
   progress.className = "scroll-progress";

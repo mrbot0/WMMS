@@ -414,8 +414,10 @@ def assess_security(data: dict) -> Assessment:
            "Disable it if it is not used, or restrict it to the VPN.", "low", "moderate", "security.rdp_off")
     regola(data.get("smb1") is True, 15, "security.smb1", "Disable SMBv1",
            "The obsolete SMBv1 protocol is enabled (WannaCry attack vector).", "high", "high", "security.disable_smb1")
-    regola(len(data.get("admins") or []) > 2, 5, "security.admins", "Too many administrators",
-           f"{len(data['admins'])} accounts are local administrators: {', '.join(data['admins'][:5])}.", "medium")
+    # The message is built before the check: a scan that could not read the administrators must not break the score.
+    amministratori = [str(a) for a in data.get("admins") or []]
+    regola(len(amministratori) > 2, 5, "security.admins", "Too many administrators",
+           f"{len(amministratori)} accounts are local administrators: {', '.join(amministratori[:5])}.", "medium")
     regola(data.get("guest_enabled") is True, 10, "security.guest", "Disable the Guest account",
            "The built-in Guest account is enabled.", "medium", "moderate", "security.disable_guest")
     regola(data.get("autorun_disabled") is False, 5, "security.autorun", "Disable AutoRun",

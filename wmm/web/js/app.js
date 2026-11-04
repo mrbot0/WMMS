@@ -22,7 +22,10 @@
     "apps.store_remove": { id: "apps.store_remove", title: "Store app removed", area: "startup", risk: "moderate" },
     "apps.browser_cache": { id: "apps.browser_cache", title: "Browser cache cleared", area: "cleanup", risk: "safe" },
     "apps.update": { id: "apps.update", title: "App updated (winget)", area: "updates", risk: "moderate" },
-    "integrity.system_restore": { id: "integrity.system_restore", title: "System Restore opened", area: "integrity", risk: "safe" }
+    "integrity.system_restore": { id: "integrity.system_restore", title: "System Restore opened", area: "integrity", risk: "safe" },
+    "agent.update": { id: "agent.update", title: "Program updated", area: "integrity", risk: "moderate" },
+    "integrity.fleet_firewall": { id: "integrity.fleet_firewall", title: "Firewall rule for the PC summary", area: "security", risk: "moderate" },
+    "apps.leftovers": { id: "apps.leftovers", title: "Program leftovers removed", area: "startup", risk: "moderate" }
   };
   var state = { info: null, actions: {}, page: null, job: null, poll: null, rendering: 0, scores: {}, scanned: {}, leave: [], scanning: false, connected: true,
     scrollPos: {}, playbooks: [] };

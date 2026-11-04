@@ -163,7 +163,33 @@
     "Start the tour": "Inizia il giro", "Skip tour": "Salta il giro", "How this page works": "Come funziona questa pagina", "Guide for this page": "Guida di questa pagina",
     "Back to top": "Torna su", "Search pages, actions and commands…": "Cerca pagine, azioni e comandi…", "navigate": "sposta", "open": "apri", "close": "chiudi",
     "Search programs, publishers, versions…": "Cerca programmi, editori, versioni…", "Search Store apps…": "Cerca app dello Store…", "Search updates…": "Cerca aggiornamenti…",
-    "Search startup programs…": "Cerca programmi all'avvio…", "Search applications or publishers…": "Cerca applicazioni o editori…", "Search tasks…": "Cerca attività…"
+    "Search startup programs…": "Cerca programmi all'avvio…",
+    // ---------- network scanner ----------
+    "Network scanner": "Scanner di rete", "Scan the network": "Scansiona la rete", "Devices": "Dispositivi", "New devices": "Nuovi dispositivi",
+    "Devices on the network": "Dispositivi in rete", "Open web page": "Apri pagina web", "Not seen in the last scan": "Non visti nell'ultima scansione",
+    "Router / gateway": "Router / gateway", "This PC": "Questo PC", "Printer": "Stampante", "Camera": "Telecamera", "TV / media": "TV / multimedia",
+    "Smart home device": "Dispositivo domotico", "Windows PC": "PC Windows", "Phone or tablet": "Telefono o tablet", "Device with a web page": "Dispositivo con pagina web",
+    "Every device on your network: name, maker, open ports, web page and new arrivals.": "Ogni dispositivo della tua rete: nome, produttore, porte aperte, pagina web e nuovi arrivi.",
+    "New": "Nuovo", "Open ports": "Porte aperte", "First seen": "Visto la prima volta", "Response": "Risposta",
+    "With a web page": "Con pagina web", "Services to check": "Servizi da controllare", "none": "nessuna", "IP address": "Indirizzo IP",
+    "TV, phone or appliance": "TV, telefono o elettrodomestico", "Amazon device (Echo, Fire TV, Kindle)": "Dispositivo Amazon (Echo, Fire TV, Kindle)",
+    "Mac / Apple device": "Mac / dispositivo Apple", "since the previous scan": "dalla scansione precedente",
+    "router, printer, NAS settings": "impostazioni di router, stampanti, NAS", "Telnet, FTP, VNC, Remote Desktop": "Telnet, FTP, VNC, Desktop remoto",
+    "Search IP, name, maker, type…": "Cerca IP, nome, produttore, tipo…", "New since the previous scan": "Nuovo dalla scansione precedente",
+    "Switched off, out of range or gone": "Spenti, fuori portata o rimossi",
+    // ---------- PCs, alerts, updates ----------
+    "PCs": "PC", "PCs of the network": "PC della rete", "Health of the PCs of the network, read-only": "Salute dei PC della rete, in sola lettura",
+    "Add a PC": "Aggiungi un PC", "Need attention": "Da controllare", "Unsafe programs": "Programmi insicuri", "This PC shares": "Questo PC condivide",
+    "Share this PC": "Condividi questo PC", "Stop sharing": "Interrompi condivisione", "Create the key": "Crea la chiave", "Create a new key": "Crea una nuova chiave",
+    "Allow it in the firewall": "Consentilo nel firewall", "Reachable": "Raggiungibile", "Not reachable": "Non raggiungibile",
+    "Sharing key": "Chiave di condivisione", "Copy and close": "Copia e chiudi", "Port": "Porta", "Add": "Aggiungi",
+    "PC name or IP address": "Nome del PC o indirizzo IP", "Search PCs…": "Cerca PC…", "No PC yet.": "Ancora nessun PC.", "Remove this PC": "Rimuovi questo PC",
+    "Email and Telegram alerts": "Avvisi via email e Telegram", "Bot token": "Token del bot", "Chat ID": "ID della chat", "SMTP server": "Server SMTP",
+    "User": "Utente", "Password": "Password", "Sender (optional)": "Mittente (facoltativo)", "Send to": "Invia a", "Send a test": "Invia una prova",
+    "Forget the saved secrets": "Dimentica i segreti salvati", "A scheduled run failed": "Un'esecuzione pianificata non è riuscita",
+    "The system drive is almost full": "Il disco di sistema è quasi pieno", "New unsafe programs were found": "Sono stati trovati nuovi programmi insicuri",
+    "Program updates": "Aggiornamenti del programma", "Check now": "Controlla ora", "Install the update": "Installa l'aggiornamento", "Install": "Installa",
+    "Alert settings saved.": "Impostazioni degli avvisi salvate.", "Search applications or publishers…": "Cerca applicazioni o editori…", "Search tasks…": "Cerca attività…"
   };
 
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
