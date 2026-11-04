@@ -26,6 +26,19 @@ class Parsing(unittest.TestCase):
         self.assertEqual([r["network"] for r in reti], ["192.168.1.0/24", "10.20.30.0/24"])
         self.assertEqual(netscan.parse_networks("not json"), [])
 
+    def test_active_adapter_first_and_choice(self):
+        testo = json.dumps([{"alias": "VirtualBox", "ip": "192.168.56.1", "prefix": 24, "gateway": "", "metric": 25},
+                            {"alias": "Ethernet", "ip": "10.0.0.5", "prefix": 24, "gateway": "10.0.0.1", "metric": 50},
+                            {"alias": "Wi-Fi", "ip": "192.168.1.5", "prefix": 24, "gateway": "192.168.1.1", "metric": 35, "description": "Intel AX200"}])
+        reti = netscan.parse_networks(testo)
+        # A gateway first, then the lowest metric: the route Windows uses. Adapters without a gateway can still be chosen.
+        self.assertEqual([(r["alias"], r["default"]) for r in reti], [("Wi-Fi", True), ("Ethernet", False), ("VirtualBox", False)])
+        self.assertEqual(reti[0]["description"], "Intel AX200")
+        self.assertEqual(netscan.choose(reti, None), [reti[0]])
+        self.assertEqual(netscan.choose(reti, "VirtualBox")[0]["network"], "192.168.56.0/24")
+        with self.assertRaises(ValueError):
+            netscan.choose(reti, "Gone")
+
     def test_arp_in_any_language(self):
         self.assertEqual(netscan.parse_arp(ARP_IT), {"192.168.1.1": "60:1B:52:0E:2D:F0", "192.168.1.8": "00:17:88:B0:C7:B8"})
 
@@ -54,6 +67,19 @@ class Parsing(unittest.TestCase):
         self.assertEqual([d["new"] for d in secondo["devices"]], [False, True])
         self.assertEqual(secondo["devices"][0]["first_seen"], "2026-11-04T10:00:00")
         self.assertEqual([m["ip"] for m in secondo["missing"]], ["192.168.1.9"])
+
+    def test_history_is_per_network(self):
+        casa = {"networks": [{"network": "192.168.1.0/24"}]}
+        vbox = {"networks": [{"network": "192.168.56.0/24"}]}
+        primo = netscan.merge_history(dict(casa, scanned="2026-11-04T10:00:00", devices=[{"ip": "192.168.1.1", "mac": "AA:00:00:00:00:01", "name": "router"}]), None)
+        # Another adapter: its first scan is a baseline, and the home devices are neither missing nor forgotten.
+        altro = netscan.merge_history(dict(vbox, scanned="2026-11-04T11:00:00", devices=[{"ip": "192.168.56.1", "mac": "", "name": "pc"}]), primo)
+        self.assertEqual((altro["devices"][0]["new"], altro["missing"]), (False, []))
+        di_nuovo = netscan.merge_history(dict(casa, scanned="2026-11-04T12:00:00", devices=[{"ip": "192.168.1.1", "mac": "AA:00:00:00:00:01", "name": "router"},
+                                                                                             {"ip": "192.168.1.7", "mac": "BB:00:00:00:00:07", "name": ""}]), altro)
+        self.assertEqual([d["new"] for d in di_nuovo["devices"]], [False, True])
+        self.assertEqual((di_nuovo["devices"][0]["first_seen"], di_nuovo["missing"]), ("2026-11-04T10:00:00", []))
+        self.assertIn("192.168.56.1", [v["key"] for v in di_nuovo["known"]])
 
     def test_scan_marks_this_pc_and_the_gateway(self):
         reti = [{"alias": "LAN", "ip": "192.168.50.5", "gateway": "192.168.50.1", "network": "192.168.50.0/29"}]
@@ -85,11 +111,26 @@ class ScannerApi(unittest.TestCase):
             stato, dati, _ = self.request("POST", "/api/v1/network/scan")
         self.assertEqual((stato, len(dati["devices"])), (200, 1))
         self.assertEqual(self.request("GET", "/api/v1/network/devices")[1]["scanned"], "2026-11-04T10:00:00")
+        with mock.patch.object(netscan, "scan", return_value=finto) as fatto:
+            self.assertEqual(self.request("POST", "/api/v1/network/scan", {"interface": "Ethernet 2"})[0], 200)
+        self.assertEqual(fatto.call_args.kwargs["alias"], "Ethernet 2")
+        with mock.patch.object(netscan, "local_networks", return_value=[]):
+            stato, dati, _ = self.request("POST", "/api/v1/network/scan", {"interface": "Gone"})
+        self.assertEqual(stato, 400)
+        self.assertIn("Gone", dati["error"] if isinstance(dati.get("error"), str) else json.dumps(dati))
+        self.assertEqual(self.request("POST", "/api/v1/network/scan", {"interface": 5})[0], 400)
         self.agent._netscan_lock.acquire()
         try:
             self.assertEqual(self.request("POST", "/api/v1/network/scan")[0], 409)
         finally:
             self.agent._netscan_lock.release()
+
+
+    def test_interfaces_of_the_three_scanners(self):
+        from wmm.agent import radio
+        with mock.patch.object(netscan, "local_networks", return_value=[{"alias": "Wi-Fi", "network": "192.168.1.0/24", "default": True}]),                 mock.patch.object(radio, "wifi_interfaces", return_value=[{"name": "Wi-Fi", "default": True}]),                 mock.patch.object(radio, "bluetooth_radios", return_value=[]):
+            stato, dati, _ = self.request("GET", "/api/v1/network/interfaces")
+        self.assertEqual((stato, dati["devices"][0]["alias"], dati["wifi"][0]["name"], dati["bluetooth"]), (200, "Wi-Fi", "Wi-Fi", []))
 
 
 if __name__ == "__main__":

@@ -32,8 +32,9 @@ class _InterfaceList(ctypes.Structure):
     _fields_ = [("dwNumberOfItems", wintypes.DWORD), ("dwIndex", wintypes.DWORD), ("InterfaceInfo", _InterfaceInfo * 1)]
 
 
-def trigger_wifi_scan(attesa: float = 4.0) -> int:
-    """Asks every Wi-Fi adapter for a fresh scan (netsh alone shows the last one Windows made). Returns the adapters."""
+def trigger_wifi_scan(attesa: float = 4.0, descrizione: Optional[str] = None) -> int:
+    """Asks the Wi-Fi adapters (or only the one with this description) for a fresh scan: netsh alone shows the last one
+    Windows made. Returns the adapters asked."""
     try:
         wlan = ctypes.windll.wlanapi
     except OSError:
@@ -47,11 +48,12 @@ def trigger_wifi_scan(attesa: float = 4.0) -> int:
             return 0
         quante = lista.contents.dwNumberOfItems
         voci = ctypes.cast(ctypes.addressof(lista.contents.InterfaceInfo), ctypes.POINTER(_InterfaceInfo * quante)).contents if quante else []
-        for voce in voci:
+        scelte = [v for v in voci if not descrizione or v.strInterfaceDescription == descrizione]
+        for voce in scelte:
             wlan.WlanScan(handle, ctypes.byref(voce.InterfaceGuid), None, None, None)
-        if quante:
+        if scelte:
             time.sleep(attesa)  # the adapter answers in about 4 seconds
-        return quante
+        return len(scelte)
     finally:
         if lista:
             wlan.WlanFreeMemory(lista)
@@ -111,6 +113,46 @@ def parse_wifi(testo: str) -> List[dict]:
         if not ap["band"] and ap["channel"]:
             ap["band"] = "2.4 GHz" if ap["channel"] <= 14 else "5 GHz"
     return righe
+
+
+def parse_interfaces(testo: str) -> List[dict]:
+    """Every Wi-Fi adapter in `netsh wlan show interfaces`, with the network it is connected to."""
+    adattatori: List[dict] = []
+    for riga in (testo or "").splitlines():
+        campo = re.match(r"^\s*([^:]+?)\s*:\s*(.*?)\s*$", riga)
+        if not campo:
+            continue
+        etichetta, valore = campo.group(1).strip().lower(), campo.group(2)
+        if etichetta in ("name", "nome"):
+            adattatori.append({"name": valore})
+            continue
+        if not adattatori:
+            continue
+        voce = adattatori[-1]
+        if etichetta in ("state", "stato"):
+            voce["state"] = valore
+            voce["connected"] = bool(re.fullmatch(r"connected|connessa|connesso", valore, re.I))
+        elif etichetta == "ssid":
+            voce["ssid"] = valore
+        elif etichetta in ("ap bssid", "bssid ap"):
+            voce["bssid"] = valore.upper()
+        elif etichetta == "rssi":
+            voce["rssi"] = int(valore) if re.fullmatch(r"-?\d+", valore) else None
+        elif re.fullmatch(r"description|descrizione", etichetta):
+            voce["adapter"] = valore
+    attiva = next((i for i, a in enumerate(adattatori) if a.get("connected")), 0)
+    for i, a in enumerate(adattatori):
+        a["default"] = i == attiva
+    return adattatori
+
+
+def wifi_interfaces() -> List[dict]:
+    try:
+        testo = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace").stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [{"name": a["name"], "description": a.get("adapter", ""), "connected": a.get("connected", False), "ssid": a.get("ssid", ""),
+             "default": a["default"]} for a in parse_interfaces(testo)]
 
 
 def parse_interface(testo: str) -> dict:
@@ -198,13 +240,21 @@ def wifi_advice(reti: List[dict], connessa: dict) -> List[dict]:
     return consigli
 
 
-def wifi_scan(fresco: bool = True) -> dict:
-    adattatori = trigger_wifi_scan() if fresco else 0
+def wifi_scan(fresco: bool = True, nome: Optional[str] = None) -> dict:
+    """The Wi-Fi networks heard by one adapter: the chosen one, or the connected one by default."""
     try:
-        reti_testo = subprocess.run(["netsh", "wlan", "show", "networks", "mode=bssid"], capture_output=True, text=True, timeout=30,
-                                    encoding="utf-8", errors="replace").stdout
         interfaccia = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=30,
                                      encoding="utf-8", errors="replace").stdout
+    except (OSError, subprocess.SubprocessError) as errore:
+        return {"error": f"netsh could not be run: {errore}", "networks": []}
+    adattatori = parse_interfaces(interfaccia)
+    scelto = next((a for a in adattatori if a["name"] == nome), None) if nome else next((a for a in adattatori if a["default"]), None)
+    if nome and scelto is None:
+        raise ValueError(f"There is no Wi-Fi adapter called {nome}.")
+    comando = ["netsh", "wlan", "show", "networks", "mode=bssid"] + ([f"interface={scelto['name']}"] if scelto else [])
+    quanti = trigger_wifi_scan(descrizione=scelto.get("adapter") if scelto else None) if fresco else 0
+    try:
+        reti_testo = subprocess.run(comando, capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace").stdout
     except (OSError, subprocess.SubprocessError) as errore:
         return {"error": f"netsh could not be run: {errore}", "networks": []}
     if re.search(r"location permission|autorizzazione.*posizione|posizione.*autorizzazione", reti_testo, re.I):
@@ -213,7 +263,7 @@ def wifi_scan(fresco: bool = True) -> dict:
     if not re.search(r"SSID \d+", reti_testo) and re.search(r"wlansvc|not running|non è in esecuzione|no wireless|nessuna interfaccia",
                                                            reti_testo + interfaccia, re.I):
         return {"error": "This PC has no Wi-Fi adapter, or the WLAN AutoConfig service is not running.", "networks": []}
-    connessa = parse_interface(interfaccia)
+    connessa = {k: scelto.get(k) for k in ("ssid", "bssid", "rssi", "adapter") if scelto.get(k) is not None} if scelto else {}
     reti = parse_wifi(reti_testo)
     for r in reti:
         r.update(security=security(r["auth"], r["cipher"]), dbm=dbm(r["signal"]), vendor=VENDORS.get(r["bssid"][:8], ""),
@@ -222,12 +272,40 @@ def wifi_scan(fresco: bool = True) -> dict:
     canali = Counter((r["band"], r["channel"]) for r in reti if r["channel"])
     for r in reti:
         r["same_channel"] = canali.get((r["band"], r["channel"]), 1) - 1
-    return {"networks": reti, "connected": connessa, "adapters": adattatori, "scanned": datetime.now().isoformat(timespec="seconds"),
+    return {"networks": reti, "connected": connessa, "adapters": quanti, "interface": scelto["name"] if scelto else "",
+            "scanned": datetime.now().isoformat(timespec="seconds"),
             "channels": [{"band": b, "channel": c, "count": n} for (b, c), n in sorted(canali.items(), key=lambda x: (x[0][0], x[0][1]))],
             "best": {"2.4 GHz": best_channel(reti, "2.4 GHz"), "5 GHz": best_channel(reti, "5 GHz")}, "advice": wifi_advice(reti, connessa)}
 
 
 # ---------- Bluetooth ----------
+
+# The Bluetooth adapters (radios): not the paired devices and services, which the same device class also lists.
+SCRIPT_RADIOS = r"""
+@(Get-PnpDevice -Class Bluetooth -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -notmatch '^(BTHENUM|BTHLEDEVICE|BTHLE|BTH|SWD)\\' } |
+  ForEach-Object { [ordered]@{ name = "$($_.FriendlyName)"; status = "$($_.Status)" } }) | ConvertTo-Json -Compress
+"""
+
+
+def parse_radios(testo: str) -> List[dict]:
+    try:
+        dati = json.loads(testo or "[]")
+    except ValueError:
+        return []
+    voci = [v for v in (dati if isinstance(dati, list) else [dati]) if isinstance(v, dict) and v.get("name")]
+    radio = [{"name": str(v["name"])[:100], "status": str(v.get("status") or ""), "active": str(v.get("status")) == "OK"} for v in voci]
+    radio.sort(key=lambda v: not v["active"])
+    for i, v in enumerate(radio):
+        v["default"] = i == 0
+    return radio
+
+
+def bluetooth_radios() -> List[dict]:
+    try:
+        return parse_radios(subprocess.run(powershell_command(SCRIPT_RADIOS), capture_output=True, text=True, timeout=60).stdout)
+    except (OSError, subprocess.SubprocessError):
+        return []
+
 
 SCRIPT_BLUETOOTH = r'''
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -368,8 +446,8 @@ class RadioScanner:
     def last_bluetooth(self) -> Optional[dict]:
         return self._read(self.bt_path)
 
-    def run_wifi(self) -> dict:
-        return self._save(self.wifi_path, wifi_scan())
+    def run_wifi(self, nome: Optional[str] = None) -> dict:
+        return self._save(self.wifi_path, wifi_scan(nome=nome))
 
     def run_bluetooth(self) -> dict:
         return self._save(self.bt_path, mark_new(bluetooth_scan(), self.last_bluetooth()))

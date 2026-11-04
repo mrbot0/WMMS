@@ -49,3 +49,6 @@ mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3p
 .signal-bar > span { display: block; height: 100%; border-radius: 3px; }
 .signal-ok > span { background: var(--ok); } .signal-warning > span { background: var(--warning); } .signal-error > span { background: var(--error); }
 #ns-wifi .cell-mono, #ns-bluetooth .cell-mono, #ns-devices .cell-mono { white-space: nowrap; }
+/* Network scanner: the interface picker next to each scan button */
+.ns-iface { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); max-width: 100%; }
+.ns-iface select { min-height: 32px; max-width: min(520px, 100%); padding: 4px 8px; }

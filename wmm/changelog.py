@@ -2,6 +2,23 @@
 
 CHANGELOG = [
     {
+        "version": "2.4.0",
+        "date": "2026-11-04",
+        "title": "Choose the interface each scanner uses",
+        "highlights": [
+            "Network devices, Wi-Fi and Bluetooth each have an Interface menu next to the scan button; the active adapter is chosen by default.",
+            "Network devices can scan any connected adapter, also ones without a gateway (VirtualBox, Hyper-V, a second network card).",
+            "Wi-Fi scans with the chosen adapter only, and tells you whether that adapter is connected and to which network.",
+        ],
+        "changes": [
+            "The active network adapter is the one with a gateway and the lowest metric, the route Windows itself uses.",
+            "Bluetooth lists the adapters, but Windows always searches with its active one, and the tab says so.",
+            "An adapter that disappeared since the page loaded gives a clear message instead of a failed scan.",
+            "New and missing devices are compared per network: scanning another adapter no longer marks the devices of your home network as gone.",
+            "New route GET /network/interfaces; the scan routes accept {\"interface\": name}.",
+        ],
+    },
+    {
         "version": "2.3.0",
         "date": "2026-11-04",
         "title": "Wi-Fi and Bluetooth scanners in the Network scanner",

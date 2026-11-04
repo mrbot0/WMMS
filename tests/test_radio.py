@@ -113,6 +113,37 @@ class Wifi(unittest.TestCase):
         self.assertEqual(r["settings"], "ms-settings:privacy-location")
 
 
+    def test_several_adapters_and_the_chosen_one(self):
+        due = INTERFACE + """
+    Name                   : Wi-Fi 2
+    Description            : TP-Link USB
+    State                  : disconnected
+"""
+        adattatori = radio.parse_interfaces(due)
+        self.assertEqual([(a["name"], a["connected"], a["default"]) for a in adattatori], [("Wi-Fi", True, True), ("Wi-Fi 2", False, False)])
+        self.assertEqual(adattatori[1]["adapter"], "TP-Link USB")
+        comandi = []
+
+        def finto(argomenti, **k):
+            comandi.append(argomenti)
+            return mock.Mock(stdout=NETSH_EN if argomenti[3] == "networks" else due)
+        with mock.patch.object(radio, "trigger_wifi_scan", return_value=1) as scansione, mock.patch.object(radio.subprocess, "run", side_effect=finto):
+            r = radio.wifi_scan(nome="Wi-Fi 2")
+            self.assertEqual(scansione.call_args.kwargs["descrizione"], "TP-Link USB")
+            self.assertEqual((r["interface"], r["connected"]), ("Wi-Fi 2", {"adapter": "TP-Link USB"}))
+            self.assertIn("interface=Wi-Fi 2", comandi[-1])
+            self.assertFalse(any(n["connected"] for n in r["networks"]))  # that adapter is not on a network
+            self.assertEqual(radio.wifi_scan()["interface"], "Wi-Fi")  # the connected one by default
+            with self.assertRaises(ValueError):
+                radio.wifi_scan(nome="Gone")
+
+    def test_bluetooth_radios_active_first(self):
+        radio_ = radio.parse_radios(json.dumps([{"name": "Old dongle", "status": "Error"}, {"name": "Intel(R) Wireless Bluetooth(R)", "status": "OK"}]))
+        self.assertEqual([(v["name"], v["active"], v["default"]) for v in radio_], [("Intel(R) Wireless Bluetooth(R)", True, True), ("Old dongle", False, False)])
+        self.assertEqual(radio.parse_radios(json.dumps({"name": "Solo", "status": "OK"}))[0]["name"], "Solo")
+        self.assertEqual(radio.parse_radios("not json"), [])
+
+
 class Bluetooth(unittest.TestCase):
     def test_parse_kinds_distance_and_duplicates(self):
         dati = {"devices": [
@@ -159,6 +190,11 @@ class RadioApi(unittest.TestCase):
         with mock.patch.object(radio, "bluetooth_scan", return_value={"devices": [], "scanned": "2026-11-04T10:00:00", "error": "off"}):
             stato, dati, _ = self.request("POST", "/api/v1/network/bluetooth/scan")
         self.assertEqual((stato, dati["error"]), (200, "off"))
+        with mock.patch.object(radio, "wifi_scan", return_value={"networks": [], "scanned": "2026-11-04T10:00:00"}) as fatto:
+            self.assertEqual(self.request("POST", "/api/v1/network/wifi/scan", {"interface": "Wi-Fi 2"})[0], 200)
+        self.assertEqual(fatto.call_args.kwargs["nome"], "Wi-Fi 2")
+        with mock.patch.object(radio, "wifi_scan", side_effect=ValueError("There is no Wi-Fi adapter called Gone.")):
+            self.assertEqual(self.request("POST", "/api/v1/network/wifi/scan", {"interface": "Gone"})[0], 400)
         self.assertEqual(self.request("POST", "/api/v1/network/zigbee/scan")[0], 404)
 
 

@@ -50,10 +50,12 @@ VENDORS = {
 
 # ---------- networks ----------
 
+# Every connected adapter with an IPv4 address; the one with a gateway and the lowest metric is the one Windows uses.
 SCRIPT_NETWORKS = r"""
-@(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.IPv4Address } | ForEach-Object {
-  [ordered]@{ alias = "$($_.InterfaceAlias)"; ip = "$($_.IPv4Address[0].IPAddress)"; prefix = [int]$_.IPv4Address[0].PrefixLength;
-              gateway = "$($_.IPv4DefaultGateway[0].NextHop)" } }) | ConvertTo-Json -Compress
+@(Get-NetIPConfiguration | Where-Object { $_.IPv4Address -and $_.NetAdapter.Status -eq 'Up' } | ForEach-Object {
+  [ordered]@{ alias = "$($_.InterfaceAlias)"; description = "$($_.InterfaceDescription)"; ip = "$($_.IPv4Address[0].IPAddress)";
+              prefix = [int]$_.IPv4Address[0].PrefixLength; gateway = "$(@($_.IPv4DefaultGateway)[0].NextHop)";
+              metric = [int]$_.NetIPv4Interface.InterfaceMetric } }) | ConvertTo-Json -Compress
 """
 
 
@@ -75,7 +77,16 @@ def parse_networks(testo: str) -> List[dict]:
             continue
         if rete.num_addresses - 2 > MAX_HOSTS:
             rete = ipaddress.ip_network(f"{v['ip']}/24", strict=False)
-        reti.append({"alias": str(v.get("alias") or ""), "ip": str(ip), "gateway": str(v.get("gateway") or ""), "network": str(rete)})
+        try:
+            metrica = int(v.get("metric") or 9999)
+        except (TypeError, ValueError):
+            metrica = 9999
+        reti.append({"alias": str(v.get("alias") or ""), "description": str(v.get("description") or ""), "ip": str(ip),
+                     "gateway": str(v.get("gateway") or ""), "network": str(rete), "metric": metrica})
+    # The active one first: a gateway, then the lowest metric (the route Windows prefers).
+    reti.sort(key=lambda r: (not r["gateway"], r["metric"]))
+    for i, r in enumerate(reti):
+        r["default"] = i == 0
     return reti
 
 
@@ -226,9 +237,19 @@ def risks(device: dict) -> List[str]:
 
 # ---------- the scan ----------
 
-def scan(this_ip: Optional[str] = None, networks: Optional[List[dict]] = None, progress=None) -> dict:
+def choose(reti: List[dict], alias: Optional[str]) -> List[dict]:
+    """The network of the chosen adapter, or the active one when none is chosen."""
+    if alias:
+        scelte = [r for r in reti if r["alias"] == alias]
+        if not scelte:
+            raise ValueError(f"The adapter {alias} has no local network to scan (disconnected or without an IPv4 address).")
+        return scelte
+    return [r for r in reti if r.get("default")][:1] or reti[:1]
+
+
+def scan(this_ip: Optional[str] = None, networks: Optional[List[dict]] = None, progress=None, alias: Optional[str] = None) -> dict:
     inizio = time.time()
-    reti = networks if networks is not None else local_networks()
+    reti = choose(networks if networks is not None else local_networks(), alias)
     indirizzi: List[str] = []
     for r in reti:
         indirizzi += [str(h) for h in ipaddress.ip_network(r["network"]).hosts()]
@@ -263,8 +284,26 @@ def scan(this_ip: Optional[str] = None, networks: Optional[List[dict]] = None, p
 
 
 def merge_history(risultato: dict, precedente: Optional[dict]) -> dict:
-    """First and last time each device was seen (by MAC, else IP), and which ones are new since the previous scan."""
-    visti = {d["key"]: d for d in (precedente or {}).get("known", [])}
+    """First and last time each device was seen (by MAC, else IP), and which ones are new since the previous scan.
+    Only the devices of the networks just scanned are compared: scanning another adapter does not make the others missing."""
+    reti = []
+    for r in risultato.get("networks") or []:
+        try:
+            reti.append(ipaddress.ip_network(r["network"], strict=False))
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    def qui(v: dict) -> bool:
+        if not reti:
+            return True
+        try:
+            return any(ipaddress.ip_address(v.get("ip") or "") in rete for rete in reti)
+        except ValueError:
+            return False
+
+    noti = (precedente or {}).get("known", [])
+    altrove = [v for v in noti if not qui(v)]  # other networks: kept as they are
+    visti = {v["key"]: v for v in noti if qui(v)}
     primo_scan = not visti
     for d in risultato["devices"]:
         chiave = d["mac"] or d["ip"]
@@ -274,7 +313,7 @@ def merge_history(risultato: dict, precedente: Optional[dict]) -> dict:
         visti[chiave] = {"key": chiave, "first_seen": d["first_seen"], "last_seen": risultato["scanned"], "ip": d["ip"], "name": d["name"]}
     presenti = {d["mac"] or d["ip"] for d in risultato["devices"]}
     risultato["missing"] = [v for k, v in visti.items() if k not in presenti][:100]
-    risultato["known"] = sorted(visti.values(), key=lambda v: v["last_seen"], reverse=True)[:500]
+    risultato["known"] = sorted(list(visti.values()) + [v for v in altrove if v["key"] not in visti], key=lambda v: v["last_seen"], reverse=True)[:500]
     return risultato
 
 
@@ -288,8 +327,8 @@ class NetworkScanner:
         except (OSError, ValueError):
             return None
 
-    def run(self, this_ip: Optional[str] = None, progress=None) -> dict:
-        risultato = merge_history(scan(this_ip, progress=progress), self.last())
+    def run(self, this_ip: Optional[str] = None, progress=None, alias: Optional[str] = None) -> dict:
+        risultato = merge_history(scan(this_ip, progress=progress, alias=alias), self.last())
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(risultato), encoding="utf-8")
         return risultato
