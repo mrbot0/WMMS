@@ -14,7 +14,7 @@ import sys
 
 import wmm
 
-from ..agent import actions, advisor, apps, fleet, netscan, notify, registry, restore, updater
+from ..agent import actions, advisor, apps, fleet, netscan, notify, radio, registry, restore, updater
 from .errors import ApiError
 
 
@@ -66,6 +66,30 @@ class AgentFeatures:
             return esito
         except (OSError, ValueError, subprocess.SubprocessError) as errore:
             raise ApiError(500, f"The network scan failed: {errore}") from None
+        finally:
+            self.tasks.finish(task_id, stato)
+            self._netscan_lock.release()
+
+    # ---------- Wi-Fi and Bluetooth scanners (read-only) ----------
+
+    def radio_last(self, tipo: str) -> dict:
+        scanner = radio.for_data_dir(self.data_dir)
+        dati = scanner.last_wifi() if tipo == "wifi" else scanner.last_bluetooth()
+        return dati or {"networks": [], "devices": [], "scanned": None}
+
+    def radio_scan(self, tipo: str) -> dict:
+        """Listens for Wi-Fi networks or Bluetooth devices nearby; nothing is joined or paired, so it runs in preview too."""
+        if not self._netscan_lock.acquire(blocking=False):
+            raise ApiError(409, "Another scan is already running.")
+        task_id = self.tasks.start("scan", "Wi-Fi scan" if tipo == "wifi" else "Bluetooth scan", 1)
+        stato = "error"
+        try:
+            scanner = radio.for_data_dir(self.data_dir)
+            esito = scanner.run_wifi() if tipo == "wifi" else scanner.run_bluetooth()
+            stato = "warning" if esito.get("error") else "ok"
+            return esito
+        except (OSError, ValueError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"The scan failed: {errore}") from None
         finally:
             self.tasks.finish(task_id, stato)
             self._netscan_lock.release()
@@ -334,6 +358,12 @@ class AgentFeatures:
 
 
 class HandlerFeatures:
+    def radio_get(self, query, tipo):
+        self._json(200, self.agent.radio_last(tipo))
+
+    def radio_scan_post(self, query, tipo):
+        self._json(200, self.agent.radio_scan(tipo))
+
     def network_devices(self, query):
         self._json(200, self.agent.network_devices())
 
@@ -416,6 +446,8 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("GET", r"/network/(wifi|bluetooth)", HandlerFeatures.radio_get),
+    ("POST", r"/network/(wifi|bluetooth)/scan", HandlerFeatures.radio_scan_post),
     ("GET", "/network/devices", HandlerFeatures.network_devices),
     ("POST", "/network/scan", HandlerFeatures.network_scan),
     ("GET", "/fleet", HandlerFeatures.fleet_get),

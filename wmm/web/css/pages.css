@@ -44,3 +44,8 @@ mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3p
 .leftover-list .cell-mono { word-break: break-all; }
 /* Network scanner and PCs: addresses and MACs stay on one line */
 #netscan-table .cell-mono, #fleet-table .cell-mono { white-space: nowrap; }
+/* Wi-Fi signal bars */
+.signal-bar { display: inline-block; width: 54px; height: 6px; border-radius: 3px; background: var(--surface-3); vertical-align: middle; overflow: hidden; }
+.signal-bar > span { display: block; height: 100%; border-radius: 3px; }
+.signal-ok > span { background: var(--ok); } .signal-warning > span { background: var(--warning); } .signal-error > span { background: var(--error); }
+#ns-wifi .cell-mono, #ns-bluetooth .cell-mono, #ns-devices .cell-mono { white-space: nowrap; }
