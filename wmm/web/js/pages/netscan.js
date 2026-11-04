@@ -15,8 +15,37 @@
       (d.settings ? ' <a href="' + esc(d.settings) + '">Open the setting</a>' : "") + "</div></div>" : "";
   }
   function intro(text) { return '<div class="callout callout-info">' + UI.icon("info") + "<div>" + text + "</div></div>"; }
+  // The interfaces each scanner can use (loaded once per visit, it takes a few seconds) and the one the user picked.
+  var IFACES = null, CHOSEN = {};
+  function ifaceLabel(kind, i) {
+    if (kind === "devices") return i.alias + " · " + i.network + (i.gateway ? " · gateway " + i.gateway : " · no gateway") + (i.default ? " (active)" : "");
+    if (kind === "wifi") return i.name + " · " + (i.connected ? "connected to " + (i.ssid || "a network") : "not connected") + (i.description ? " · " + i.description : "") + (i.default ? " (active)" : "");
+    return i.name + (i.active ? " (active)" : " · " + (i.status || "off"));
+  }
+  function ifaceValue(kind, i) { return kind === "devices" ? i.alias : i.name; }
+  function ifaceOptions(kind) {
+    if (!IFACES) return '<option value="">Looking for interfaces…</option>';
+    var list = IFACES[kind] || [];
+    if (!list.length) return '<option value="">No adapter found: the default one is used</option>';
+    var chosen = CHOSEN[kind];
+    if (chosen && !list.some(function (i) { return ifaceValue(kind, i) === chosen; })) chosen = null;
+    return list.map(function (i) {
+      var v = ifaceValue(kind, i);
+      return '<option value="' + esc(v) + '"' + ((chosen ? v === chosen : i.default) ? " selected" : "") + ">" + esc(ifaceLabel(kind, i)) + "</option>";
+    }).join("");
+  }
   function scanButton(kind, label) {
-    return '<div class="page-actions" style="justify-content:flex-start;margin-bottom:12px">' + UI.button(label, 'data-scan="' + kind + '"', "btn-primary", "refresh") + "</div>";
+    var note = kind === "bluetooth" ? '<span class="cell-sub">Windows always searches with its active Bluetooth adapter.</span>' : "";
+    return '<div class="page-actions ns-scanbar" style="justify-content:flex-start;margin-bottom:12px">' + UI.button(label, 'data-scan="' + kind + '"', "btn-primary", "refresh") +
+      '<label class="ns-iface"><span>Interface</span><select data-iface="' + kind + '"' + (IFACES && kind !== "bluetooth" ? "" : " disabled") + ">" + ifaceOptions(kind) +
+      "</select></label>" + note + "</div>";
+  }
+  function fillInterfaces(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("select[data-iface]"), function (s) {
+      var kind = s.getAttribute("data-iface");
+      s.innerHTML = ifaceOptions(kind);
+      s.disabled = kind === "bluetooth" || !(IFACES && (IFACES[kind] || []).length);
+    });
   }
 
   window.Pages.netscan = {
@@ -42,6 +71,14 @@
           { id: "bluetooth", label: "Bluetooth", icon: "explorer" }
         ], { sharedHead: true });
 
+        IFACES = null;
+        API.get("/network/interfaces").then(function (i) { IFACES = i || {}; fillInterfaces(root); },
+          function () { IFACES = {}; fillInterfaces(root); });
+        root.addEventListener("change", function (e) {
+          var kind = e.target.getAttribute && e.target.getAttribute("data-iface");
+          if (kind) CHOSEN[kind] = e.target.value;
+        });
+
         root.addEventListener("click", function (e) {
           var b = e.target.closest("button");
           if (!b) return;
@@ -52,7 +89,9 @@
             b.classList.add("busy");
             UI.toast({ devices: "Scanning the network: about half a minute.", wifi: "Listening for Wi-Fi networks: a few seconds.",
               bluetooth: "Listening for Bluetooth devices: about half a minute." }[kind], "info");
-            API.post(path).then(function (d) {
+            var scelta = root.querySelector('select[data-iface="' + kind + '"]');
+            var body = scelta && !scelta.disabled && scelta.value ? { interface: scelta.value } : {};
+            API.post(path, body).then(function (d) {
               sections[kind](root.querySelector("#ns-" + kind), d);
               if (!d.error) UI.toast("Scan completed.", "ok");
             }, function (err) { UI.toast(err.message, "error"); b.disabled = false; b.classList.remove("busy"); });

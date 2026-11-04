@@ -3,6 +3,23 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.4.0 — 2026-11-04
+
+**Choose the interface each scanner uses.**
+
+- Each tab of the Network scanner has an **Interface** menu next to its scan button, with the active adapter chosen by
+  default (`GET /network/interfaces`, read in parallel for the three scanners).
+- **Network devices**: every connected adapter with an IPv4 address can be scanned, also those without a gateway
+  (VirtualBox, Hyper-V, a second network card). The active one is the adapter with a gateway and the lowest metric.
+- **Wi-Fi**: the fresh scan (`WlanScan`) and `netsh wlan show networks interface=<name>` use only the chosen adapter;
+  the connected network is the one of that adapter.
+- **Bluetooth**: the adapters are listed (active first), but Windows always searches with its active adapter, so the
+  menu is informative and the tab says so.
+- `POST /network/scan` and `POST /network/(wifi|bluetooth)/scan` accept `{"interface": name}`; an unknown adapter gives
+  400 with a clear message.
+- New and missing devices are compared per network: a scan on another adapter keeps the history of the others and does
+  not list their devices as gone.
+
 ## 2.3.0 — 2026-11-04
 
 **Wi-Fi and Bluetooth scanners in the Network scanner.**

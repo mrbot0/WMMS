@@ -186,6 +186,9 @@
     "Address": "Indirizzo", "Unnamed device": "Dispositivo senza nome", "Game controller": "Controller di gioco", "Phone": "Telefono",
     "Headphones": "Cuffie", "Speaker": "Altoparlante", "Smart light": "Luce smart", "Watch or wearable": "Orologio o indossabile",
     "Keyboard": "Tastiera", "Mouse": "Mouse", "Tracker": "Localizzatore", "Bluetooth device": "Dispositivo Bluetooth",
+    "Interface": "Interfaccia", "Looking for interfaces…": "Ricerca delle interfacce…",
+    "No adapter found: the default one is used": "Nessun adattatore trovato: si usa quello predefinito",
+    "Windows always searches with its active Bluetooth adapter.": "Windows cerca sempre con l'adattatore Bluetooth attivo.",
     "very close (< 1 m)": "vicinissimo (< 1 m)", "near (1–3 m)": "vicino (1–3 m)", "in the room or next door": "nella stanza o accanto", "far": "lontano",
     // ---------- PCs, alerts, updates ----------
     "PCs": "PC", "PCs of the network": "PC della rete", "Health of the PCs of the network, read-only": "Salute dei PC della rete, in sola lettura",
@@ -205,6 +208,11 @@
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
   var MONTHS = { Jan: "gen", Feb: "feb", Mar: "mar", Apr: "apr", May: "mag", Jun: "giu", Jul: "lug", Aug: "ago", Sep: "set", Oct: "ott", Nov: "nov", Dec: "dic" };
   var RULES = [
+    // The interface choices of the network scanner: "Wi-Fi · 192.168.1.0/24 · gateway 192.168.1.1 (active)".
+    [/^(?=.*(?:\(active\)$| · no gateway| · connected to | · not connected| · off$))(.*)$/, function (m, all) {
+      return all.replace(/ \(active\)$/, " (attiva)").replace(" · no gateway", " · senza gateway").replace(" · connected to a network", " · connessa a una rete")
+        .replace(" · connected to ", " · connessa a ").replace(" · not connected", " · non connessa").replace(/ · off$/, " · spento");
+    }],
     [/^(\d+) days ago$/, "$1 giorni fa"], [/^(\d+) months ago$/, "$1 mesi fa"], [/^(\d+) min ago$/, "$1 min fa"], [/^(\d+) h ago$/, "$1 h fa"],
     [/^(\d+) programs and (\d+) Store apps · scanned (.+)$/, "$1 programmi e $2 app dello Store · scansione $3"],
     [/^(\d+) Store apps · (.+) reported$/, "$1 app dello Store · $2 dichiarati"], [/^(\d+) browsers$/, "$1 browser"],

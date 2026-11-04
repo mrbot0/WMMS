@@ -10,6 +10,7 @@ import time
 from typing import Dict
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import sys
 
 import wmm
@@ -54,17 +55,27 @@ class AgentFeatures:
     def network_devices(self) -> dict:
         return netscan.for_data_dir(self.data_dir).last() or {"devices": [], "networks": [], "scanned": None, "missing": []}
 
-    def network_scan(self) -> dict:
-        """Scans the local networks of this PC; read-only, so it also runs in preview mode."""
+    def scan_interfaces(self) -> dict:
+        """The interfaces each scanner can use, the active one marked as the default."""
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            rete, wifi, bt = pool.submit(netscan.local_networks), pool.submit(radio.wifi_interfaces), pool.submit(radio.bluetooth_radios)
+            return {"devices": rete.result(), "wifi": wifi.result(), "bluetooth": bt.result()}
+
+    def network_scan(self, alias=None) -> dict:
+        """Scans the local network of one adapter (the active one by default); read-only, so it also runs in preview mode."""
+        if alias is not None and (not isinstance(alias, str) or len(alias) > 256):
+            raise ApiError(400, "Invalid adapter name.")
         if not self._netscan_lock.acquire(blocking=False):
             raise ApiError(409, "A network scan is already running.")
         task_id = self.tasks.start("scan", "Network scan", 2)
         stato = "error"
         try:
-            esito = netscan.for_data_dir(self.data_dir).run(progress=lambda testo: self.tasks.step(task_id, testo))
+            esito = netscan.for_data_dir(self.data_dir).run(progress=lambda testo: self.tasks.step(task_id, testo), alias=alias or None)
             stato = "ok"
             return esito
-        except (OSError, ValueError, subprocess.SubprocessError) as errore:
+        except ValueError as errore:  # an adapter that is not there (unplugged since the page loaded)
+            raise ApiError(400, str(errore)) from None
+        except (OSError, subprocess.SubprocessError) as errore:
             raise ApiError(500, f"The network scan failed: {errore}") from None
         finally:
             self.tasks.finish(task_id, stato)
@@ -77,18 +88,23 @@ class AgentFeatures:
         dati = scanner.last_wifi() if tipo == "wifi" else scanner.last_bluetooth()
         return dati or {"networks": [], "devices": [], "scanned": None}
 
-    def radio_scan(self, tipo: str) -> dict:
-        """Listens for Wi-Fi networks or Bluetooth devices nearby; nothing is joined or paired, so it runs in preview too."""
+    def radio_scan(self, tipo: str, nome=None) -> dict:
+        """Listens for Wi-Fi networks or Bluetooth devices nearby; nothing is joined or paired, so it runs in preview too.
+        Wi-Fi uses the chosen adapter (the connected one by default); Windows always searches Bluetooth with its active adapter."""
+        if nome is not None and (not isinstance(nome, str) or len(nome) > 256):
+            raise ApiError(400, "Invalid adapter name.")
         if not self._netscan_lock.acquire(blocking=False):
             raise ApiError(409, "Another scan is already running.")
         task_id = self.tasks.start("scan", "Wi-Fi scan" if tipo == "wifi" else "Bluetooth scan", 1)
         stato = "error"
         try:
             scanner = radio.for_data_dir(self.data_dir)
-            esito = scanner.run_wifi() if tipo == "wifi" else scanner.run_bluetooth()
+            esito = scanner.run_wifi(nome or None) if tipo == "wifi" else scanner.run_bluetooth()
             stato = "warning" if esito.get("error") else "ok"
             return esito
-        except (OSError, ValueError, subprocess.SubprocessError) as errore:
+        except ValueError as errore:  # an adapter that is not there (unplugged since the page loaded)
+            raise ApiError(400, str(errore)) from None
+        except (OSError, subprocess.SubprocessError) as errore:
             raise ApiError(500, f"The scan failed: {errore}") from None
         finally:
             self.tasks.finish(task_id, stato)
@@ -362,13 +378,16 @@ class HandlerFeatures:
         self._json(200, self.agent.radio_last(tipo))
 
     def radio_scan_post(self, query, tipo):
-        self._json(200, self.agent.radio_scan(tipo))
+        self._json(200, self.agent.radio_scan(tipo, self._body().get("interface")))
+
+    def scan_interfaces_get(self, query):
+        self._json(200, self.agent.scan_interfaces())
 
     def network_devices(self, query):
         self._json(200, self.agent.network_devices())
 
     def network_scan(self, query):
-        self._json(200, self.agent.network_scan())
+        self._json(200, self.agent.network_scan(self._body().get("interface")))
 
     def fleet_get(self, query):
         self._json(200, self.agent.fleet_view())
@@ -446,6 +465,7 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("GET", "/network/interfaces", HandlerFeatures.scan_interfaces_get),
     ("GET", r"/network/(wifi|bluetooth)", HandlerFeatures.radio_get),
     ("POST", r"/network/(wifi|bluetooth)/scan", HandlerFeatures.radio_scan_post),
     ("GET", "/network/devices", HandlerFeatures.network_devices),
