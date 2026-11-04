@@ -2,6 +2,25 @@
 
 CHANGELOG = [
     {
+        "version": "2.5.0",
+        "date": "2026-11-04",
+        "title": "30 new fixes in the Toolbox",
+        "highlights": [
+            "30 new fixes (351 tools in total) for everyday things that stop working: the \"No internet\" warning while the internet works, "
+            "Start menu and search, typing in Start, camera, Windows Hello, notifications, Windows Security, Office, Windows Installer, restore points.",
+            "Network sharing in two clicks: network discovery and file sharing on Private networks, and a home network marked Public by mistake.",
+            "Cleanups that free gigabytes: Windows upgrade leftovers, unpacked NVIDIA and AMD installers, old driver versions.",
+        ],
+        "changes": [
+            "Updates: repair stuck background downloads (BITS), remove update blocks left by tweaking tools, updates for other Microsoft products.",
+            "Explorer and display: reset folder views, open big folders faster, full right-click menu on Windows 11 (and back), "
+            "no web results in Start search, End task from the taskbar, a fix for screen flicker (MPO) and its undo.",
+            "Security: show file extensions, turn off Remote Assistance; reset local Group Policy left by tweaking tools.",
+            "Every new fix asks first; the ones that change policies refuse on company (domain) PCs and keep a backup; "
+            "old drivers are removed only when no device uses them.",
+        ],
+    },
+    {
         "version": "2.4.0",
         "date": "2026-11-04",
         "title": "Choose the interface each scanner uses",
