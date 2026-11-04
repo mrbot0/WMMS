@@ -15,6 +15,9 @@
     return { area: v.area || "", kind: v.kind || "", risk: v.risk || (v.safe ? "safe" : ""), query: v.query || "", sort: v.sort || "name",
       never: !!v.never, favs: !!v.favs, list: !!v.list };
   }
+  // Search ignores case and accents ("piu" finds "più"), and looks at the Italian text too when the console is in Italian.
+  function fold(text) { return String(text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function local(text) { return window.I18N ? I18N.t(text) : text; }
   function minutes(total) { return total < 1 ? "< 1 min" : total < 60 ? "~" + Math.round(total) + " min" : "~" + (total / 60).toFixed(1) + " h"; }
   function choice(name, options, current) {
     return '<div class="segmented tb-seg" role="radiogroup" aria-label="' + name + '">' + options.map(function (o) {
@@ -70,9 +73,9 @@
           '<div class="tb-layout">' +
           '<aside class="card tb-side"><div class="card-body">' + areas + filters + "</div></aside>" +
           '<section class="tb-main"><div class="tb-search-row"><label class="dt-search">' + UI.icon("search") + '<span class="sr-only">Search tools</span>' +
-          '<input type="search" id="tb-q" placeholder="Search by name, description or ID… (press / )" value="' + esc(view.query) + '"></label>' +
+          '<input type="search" id="tb-q" placeholder="Search a tool or describe the problem, e.g. Internet is slow… (press / )" value="' + esc(view.query) + '"></label>' +
           '<span class="muted small" id="tb-count"></span>' + UI.button("Select visible", 'id="tb-pick-visible"', "btn-sm", "check") + "</div>" +
-          '<div id="tb-list" aria-live="polite"></div>' +
+          '<div id="tb-symptoms" class="tb-symptoms" aria-live="polite"></div><div id="tb-list" aria-live="polite"></div>' +
           '<div class="tb-selbar" id="tb-selbar" hidden><span id="tb-info"></span><span class="grow"></span>' +
           UI.button("Clear", 'id="tb-clear"', "btn-sm btn-ghost", "x") + UI.button("Copy", 'id="tb-copy" title="Names and IDs of the selected tools, for a ticket or a script"', "btn-sm", "copy") +
           UI.button("Save as playbook", 'id="tb-save" title="Keep the selection as one of My playbooks, to run it again with one click"', "btn-sm", "playbooks") +
@@ -80,18 +83,19 @@
         var list = el.querySelector("#tb-list");
 
         function shown() {
-          var words = view.query.toLowerCase().split(/\s+/).filter(Boolean), favs = App.favorites();
+          var words = fold(view.query).split(/\s+/).filter(Boolean), favs = App.favorites();
+          var byName = function (x, y) { return local(x.title).localeCompare(local(y.title)); };
           var sorts = {
-            name: function (x, y) { return x.title.localeCompare(y.title); },
-            duration: function (x, y) { return x.minutes - y.minutes || x.title.localeCompare(y.title); },
-            risk: function (x, y) { return RISK_RANK[x.risk] - RISK_RANK[y.risk] || x.title.localeCompare(y.title); },
+            name: byName,
+            duration: function (x, y) { return x.minutes - y.minutes || byName(x, y); },
+            risk: function (x, y) { return RISK_RANK[x.risk] - RISK_RANK[y.risk] || byName(x, y); },
             recent: function (x, y) {
               var a = last[x.id] ? last[x.id].started : "", b = last[y.id] ? last[y.id].started : "";
-              return a < b ? 1 : a > b ? -1 : x.title.localeCompare(y.title);
+              return a < b ? 1 : a > b ? -1 : byName(x, y);
             }
           };
           return all.filter(function (a) {
-            var text = (a.title + " " + a.description + " " + a.id).toLowerCase();
+            var text = a._search || (a._search = fold(a.title + " " + a.description + " " + a.id + " " + local(a.title) + " " + local(a.description)));
             return (!view.area || a.area === view.area) && (!view.kind || a.kind === view.kind) && (!view.risk || a.risk === view.risk) &&
               (!view.never || !last[a.id]) && (!view.favs || favs.indexOf(a.id) >= 0) && words.every(function (w) { return text.indexOf(w) >= 0; });
           }).sort(function (x, y) {
@@ -112,7 +116,10 @@
                 return UI.toolCard(a, last[a.id], { pick: true, picked: !!picked[a.id], star: favs.indexOf(a.id) >= 0 });
               }).join("") + "</div>";
           }).join("");
-          list.innerHTML = html || '<div class="empty-state">' + UI.icon("search") + "<h2>No tool matches</h2><p>Change the area, the filters or the search text.</p></div>";
+          var sym = el.querySelector("#tb-symptoms");
+          list.innerHTML = html || (sym && sym.children.length
+            ? '<p class="muted">No tool name contains these words: the suggestions above fit the problem you described.</p>'
+            : '<div class="empty-state">' + UI.icon("search") + "<h2>No tool matches</h2><p>Change the area, the filters or the search text.</p></div>");
           list.classList.toggle("tb-list", view.list);
           el.querySelector("#tb-count").textContent = items.length + " of " + all.length + " tools";
           var reportIds = items.filter(function (a) { return a.kind === "report"; });
@@ -161,7 +168,54 @@
           if (k) setChoice("kind", k.getAttribute("data-kind"));
           if (r) setChoice("risk", r.getAttribute("data-risk"));
         });
-        el.querySelector("#tb-q").addEventListener("input", function (e) { view.query = e.target.value; draw(); });
+        el.querySelector("#tb-q").addEventListener("input", function (e) { view.query = e.target.value; draw(); askSymptoms(); });
+
+        /* Search by symptom: the text is also matched against problems ("non vedo gli altri PC", "Internet lento"); the panel
+           proposes the reports to read first and the fixes to try after, in order. */
+        var symptomTimer = null, symptomAsked = "";
+        function askSymptoms() {
+          clearTimeout(symptomTimer);
+          symptomTimer = setTimeout(function () {
+            var q = view.query.trim();
+            if (q === symptomAsked) return;
+            symptomAsked = q;
+            if (q.length < 3) { drawSymptoms([]); return; }
+            API.get("/symptoms?q=" + encodeURIComponent(q)).then(function (r) { if (q === view.query.trim()) drawSymptoms(r.matches || []); }, function () { drawSymptoms([]); });
+          }, 250);
+        }
+        function chips(ids, start) {
+          return '<span class="tb-chips">' + ids.map(function (id, i) {
+            var a = App.state.actions[id];
+            return a ? '<button type="button" class="tb-chip" data-step="' + esc(id) + '" title="' + esc(a.description) + '"><span class="step-n">' + (start + i + 1) + "</span>" +
+              UI.icon(a.kind === "report" ? "reports" : a.area) + esc(a.title) + "</button>" : "";
+          }).join("") + "</span>";
+        }
+        function drawSymptoms(matches) {
+          var box = el.querySelector("#tb-symptoms");
+          if (!box) return;
+          var it = window.I18N && I18N.lang() === "it";
+          box.innerHTML = matches.map(function (m, i) {
+            return '<div class="tb-symptom" data-symptom="' + i + '"><div class="tb-symptom-head">' + UI.icon("search") + "<strong data-no-i18n>" + esc(it ? m.title_it : m.title) +
+              '</strong><span class="badge badge-report">Suggested for this problem</span></div><div class="tb-steps">' +
+              (m.reports.length ? '<span class="tb-label">Read first</span>' + chips(m.reports, 0) : "") +
+              (m.fixes.length ? '<span class="tb-label">Then try</span>' + chips(m.fixes, m.reports.length) : "") + "</div>" +
+              '<div class="tb-symptom-actions">' + (m.reports.length ? UI.button("Run the reports", 'data-sym-reports="' + i + '"', "btn-sm btn-primary", "reports") : "") +
+              (m.fixes.length ? UI.button("Select the fixes", 'data-sym-fixes="' + i + '" title="Pick them in the selection bar, then run the ones the reports point to"', "btn-sm", "check") : "") +
+              "</div></div>";
+          }).join("");
+          box.onclick = function (e) {
+            var step = e.target.closest("[data-step]"), rep = e.target.closest("[data-sym-reports]"), fix = e.target.closest("[data-sym-fixes]");
+            if (step) App.actionDetail(step.getAttribute("data-step"));
+            if (rep) App.runActions(matches[+rep.getAttribute("data-sym-reports")].reports);
+            if (fix) {
+              matches[+fix.getAttribute("data-sym-fixes")].fixes.forEach(function (id) { picked[id] = 1; });
+              draw();
+              UI.toast("Fixes selected: read the reports, then run the ones you need from the selection bar.", "ok");
+            }
+          };
+          if (!visible.length) draw();  // the empty list points to the suggestions once they are there
+        }
+        askSymptoms();
         el.querySelector("#tb-sort").addEventListener("change", function (e) { view.sort = e.target.value; draw(); });
         el.querySelector("#tb-favs").addEventListener("change", function (e) {
           view.favs = e.target.checked;

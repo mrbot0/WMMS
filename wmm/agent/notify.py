@@ -23,6 +23,8 @@ EVENTS = {
     "run_failed": "A scheduled run failed",
     "disk_low": "The system drive is almost full",
     "unsafe_apps": "New unsafe programs were found",
+    "new_device": "A new device joined the network",
+    "bt_follower": "An unknown Bluetooth tracker keeps showing up",
 }
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {

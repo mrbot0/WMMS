@@ -3,6 +3,7 @@ caches, updates, rules), System Restore, alerts by email and Telegram, program u
 wmm/server/api.py mixes these classes into Agent and Handler and appends FEATURE_ROUTES to its routes."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -15,7 +16,8 @@ import sys
 
 import wmm
 
-from ..agent import actions, advisor, apps, fleet, netscan, notify, radio, registry, restore, updater
+from ..agent import actions, advisor, apps, fleet, netscan, notify, radio, registry, restore, symptoms, updater, upnp
+from ..agent.jobs import RunInProgress
 from .errors import ApiError
 
 
@@ -100,6 +102,8 @@ class AgentFeatures:
         try:
             scanner = radio.for_data_dir(self.data_dir)
             esito = scanner.run_wifi(nome or None) if tipo == "wifi" else scanner.run_bluetooth()
+            if tipo == "bluetooth":
+                self.radio_followers_alert(esito)
             stato = "warning" if esito.get("error") else "ok"
             return esito
         except ValueError as errore:  # an adapter that is not there (unplugged since the page loaded)
@@ -109,6 +113,76 @@ class AgentFeatures:
         finally:
             self.tasks.finish(task_id, stato)
             self._netscan_lock.release()
+
+    def radio_followers_alert(self, dati: dict) -> None:
+        """An alert when a Bluetooth scan from the console finds unknown devices that keep showing up."""
+        seguaci = [d for d in dati.get("devices", []) if d.get("follower")]
+        if seguaci and not self.preview:
+            testo = "Unknown Bluetooth devices keep showing up near this PC:\n" + "\n".join(
+                f"- {d['address']} {d.get('name') or d.get('kind')}, {d.get('sightings')} scans in {d.get('span_minutes')} min" for d in seguaci[:10])
+            notify.safe_event(self.data_dir, "bt_follower", testo, gruppo=",".join(sorted(d["address"] for d in seguaci))[:200])
+
+    def bluetooth_ignore(self, corpo: dict) -> dict:
+        indirizzo = str(corpo.get("address") or "").upper()
+        if not re.fullmatch(r"[0-9A-F]{2}(:[0-9A-F]{2}){5}", indirizzo):
+            raise ApiError(400, "Invalid Bluetooth address.")
+        return radio.for_data_dir(self.data_dir).ignore_bluetooth(indirizzo, corpo.get("ignore", True) is not False)
+
+    def wifi_history(self) -> dict:
+        return radio.for_data_dir(self.data_dir).wifi_history()
+
+    # ---------- router exposure (UPnP, read-only) ----------
+
+    @property
+    def _upnp_path(self):
+        return self.data_dir / "upnp.json"
+
+    def upnp_last(self) -> dict:
+        try:
+            return json.loads(self._upnp_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"scanned": None, "router": None, "mappings": []}
+
+    def upnp_scan(self) -> dict:
+        if not self._netscan_lock.acquire(blocking=False):
+            raise ApiError(409, "Another scan is already running.")
+        task_id = self.tasks.start("scan", "Router ports (UPnP)", 1)
+        stato = "error"
+        try:
+            dati = upnp.read((netscan.for_data_dir(self.data_dir).last() or {}).get("devices"))
+            self._upnp_path.parent.mkdir(parents=True, exist_ok=True)
+            self._upnp_path.write_text(json.dumps(dati), encoding="utf-8")
+            stato = "warning" if dati.get("risky") else "ok"
+            return dati
+        except OSError as errore:
+            raise ApiError(500, f"The router could not be read: {errore}") from None
+        finally:
+            self.tasks.finish(task_id, stato)
+            self._netscan_lock.release()
+
+    # ---------- search by symptom, precise undo ----------
+
+    @staticmethod
+    def symptom_search(testo: str) -> dict:
+        if len(testo) > 200:
+            raise ApiError(400, "The text is too long.")
+        if not testo.strip():
+            return {"query": "", "matches": [], "symptoms": symptoms.all_symptoms(actions.CATALOG)}
+        return {"query": testo, "matches": symptoms.search(testo, actions.CATALOG)}
+
+    def undo_run(self, run_id: int) -> dict:
+        self._guard_changes()
+        try:
+            esito = self.jobs.undo_run(run_id)
+        except KeyError:
+            raise ApiError(404, "Run not found.") from None
+        except ValueError as errore:
+            raise ApiError(409, str(errore)) from None
+        except RunInProgress as errore:
+            raise ApiError(409, str(errore)) from None
+        if esito["errors"] and not esito["restored"]:
+            raise ApiError(500, "Nothing could be put back: " + "; ".join(esito["errors"][:3]))
+        return esito
 
     # ---------- the PCs of the network (read-only summaries) ----------
 
@@ -374,6 +448,24 @@ class AgentFeatures:
 
 
 class HandlerFeatures:
+    def symptoms_get(self, query):
+        self._json(200, self.agent.symptom_search(query.get("q", "")))
+
+    def run_undo_post(self, query, run_id):
+        self._json(200, self.agent.undo_run(int(run_id)))
+
+    def wifi_history_get(self, query):
+        self._json(200, self.agent.wifi_history())
+
+    def bluetooth_ignore_post(self, query):
+        self._json(200, self.agent.bluetooth_ignore(self._body()))
+
+    def upnp_get(self, query):
+        self._json(200, self.agent.upnp_last())
+
+    def upnp_scan_post(self, query):
+        self._json(200, self.agent.upnp_scan())
+
     def radio_get(self, query, tipo):
         self._json(200, self.agent.radio_last(tipo))
 
@@ -465,6 +557,12 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("GET", "/symptoms", HandlerFeatures.symptoms_get),
+    ("POST", r"/history/runs/(\d{1,10})/undo", HandlerFeatures.run_undo_post),
+    ("GET", "/network/wifi/history", HandlerFeatures.wifi_history_get),
+    ("POST", "/network/bluetooth/ignore", HandlerFeatures.bluetooth_ignore_post),
+    ("GET", "/network/upnp", HandlerFeatures.upnp_get),
+    ("POST", "/network/upnp/scan", HandlerFeatures.upnp_scan_post),
     ("GET", "/network/interfaces", HandlerFeatures.scan_interfaces_get),
     ("GET", r"/network/(wifi|bluetooth)", HandlerFeatures.radio_get),
     ("POST", r"/network/(wifi|bluetooth)/scan", HandlerFeatures.radio_scan_post),

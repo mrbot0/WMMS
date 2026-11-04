@@ -410,16 +410,88 @@ def bluetooth_scan() -> dict:
     return dati
 
 
+FOLLOW_SCANS = 3          # an unknown device seen in at least this many scans...
+FOLLOW_SPAN_MINUTES = 60  # ...spread over at least an hour is reported as one that may be following
+FOLLOW_KINDS = ("Tracker", "Unnamed device", "Bluetooth device")
+KEEP_SIGHTINGS = 20
+
+
+def _minutes(a: str, b: str) -> float:
+    try:
+        return abs((datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds()) / 60
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def mark_new(risultato: dict, precedente: Optional[dict]) -> dict:
-    """First time each Bluetooth device was seen; unpaired ones new since the previous scan (the first scan is the baseline)."""
-    noti: Dict[str, str] = dict((precedente or {}).get("known", {}))
+    """First time each Bluetooth device was seen; unpaired ones new since the previous scan (the first scan is the baseline).
+    Every scan in which an unpaired device answers is kept (sightings): a tracker, an AirTag or an unnamed device that keeps
+    showing up in scans taken at different times is flagged as `follower`, unless it was marked as known (ignored)."""
+    precedente = precedente or {}
+    noti: Dict[str, str] = dict(precedente.get("known", {}))
+    avvistamenti: Dict[str, List[str]] = {k: list(v) for k, v in (precedente.get("sightings") or {}).items()}
+    ignorati = list(precedente.get("ignored") or [])
     primo = not noti
     for d in risultato.get("devices", []):
         d["first_seen"] = noti.get(d["address"], risultato["scanned"])
         d["new"] = d["address"] not in noti and not primo and not d["paired"]
         noti.setdefault(d["address"], risultato["scanned"])
+        if d.get("paired") or d.get("connected"):
+            continue
+        visti = [t for t in avvistamenti.get(d["address"], []) if t != risultato["scanned"]] + [risultato["scanned"]]
+        avvistamenti[d["address"]] = visti[-KEEP_SIGHTINGS:]
+        d["sightings"] = len(visti)
+        d["span_minutes"] = round(_minutes(visti[0], visti[-1]))
+        d["follower"] = (d["address"] not in ignorati and d.get("kind", "Unnamed device") in FOLLOW_KINDS
+                         and len(visti) >= FOLLOW_SCANS and d["span_minutes"] >= FOLLOW_SPAN_MINUTES)
     risultato["known"] = dict(list(noti.items())[-1000:])
+    risultato["sightings"] = dict(list(avvistamenti.items())[-1000:])
+    risultato["ignored"] = ignorati
+    risultato["followers"] = [d["address"] for d in risultato.get("devices", []) if d.get("follower")]
     return risultato
+
+
+# ---------- Wi-Fi history ----------
+
+KEEP_WIFI_SAMPLES = 3000
+
+
+def wifi_sample(dati: dict) -> Optional[dict]:
+    """One point of the Wi-Fi history: the connected network, its signal and channel, and how crowded the channel is."""
+    rete = next((r for r in dati.get("networks") or [] if r.get("connected")), None)
+    if not rete and not (dati.get("connected") or {}).get("ssid"):
+        return None
+    rete = rete or {}
+    connessa = dati.get("connected") or {}
+    return {"t": dati.get("scanned") or datetime.now().isoformat(timespec="seconds"),
+            "ssid": rete.get("ssid") or connessa.get("ssid") or "", "bssid": rete.get("bssid") or connessa.get("bssid") or "",
+            "channel": rete.get("channel"), "band": rete.get("band") or "", "signal": rete.get("signal"), "dbm": rete.get("dbm"),
+            "same_channel": rete.get("same_channel", 0), "networks": len(dati.get("networks") or [])}
+
+
+def wifi_trends(campioni: List[dict]) -> dict:
+    """Average signal and crowding by hour of the day, and when the channel or the access point changed."""
+    ore: Dict[int, List[dict]] = {}
+    cambi = []
+    precedente = None
+    for c in campioni:
+        try:
+            ora = datetime.fromisoformat(c["t"]).hour
+        except (KeyError, TypeError, ValueError):
+            continue
+        ore.setdefault(ora, []).append(c)
+        if precedente and (c.get("channel"), c.get("bssid")) != (precedente.get("channel"), precedente.get("bssid")):
+            cambi.append({"t": c["t"], "from": f"{precedente.get('channel')} ({precedente.get('bssid')})", "to": f"{c.get('channel')} ({c.get('bssid')})"})
+        precedente = c
+
+    def media(voci, campo):
+        valori = [v[campo] for v in voci if isinstance(v.get(campo), (int, float))]
+        return round(sum(valori) / len(valori), 1) if valori else None
+
+    per_ora = [{"hour": h, "samples": len(v), "signal": media(v, "signal"), "same_channel": media(v, "same_channel")} for h, v in sorted(ore.items())]
+    con_segnale = [h for h in per_ora if h["signal"] is not None]
+    peggiore = min(con_segnale, key=lambda h: h["signal"]) if con_segnale else None
+    return {"by_hour": per_ora, "changes": cambi[-50:], "worst_hour": peggiore}
 
 
 class RadioScanner:
@@ -447,10 +519,43 @@ class RadioScanner:
         return self._read(self.bt_path)
 
     def run_wifi(self, nome: Optional[str] = None) -> dict:
-        return self._save(self.wifi_path, wifi_scan(nome=nome))
+        dati = self._save(self.wifi_path, wifi_scan(nome=nome))
+        self.add_wifi_sample(dati)
+        return dati
 
     def run_bluetooth(self) -> dict:
         return self._save(self.bt_path, mark_new(bluetooth_scan(), self.last_bluetooth()))
+
+    def ignore_bluetooth(self, indirizzo: str, ignore: bool = True) -> dict:
+        """Marks a device as known (yours, or a neighbour's): it is no longer reported as following."""
+        dati = self.last_bluetooth() or {"devices": [], "scanned": None}
+        ignorati = [a for a in dati.get("ignored") or [] if a != indirizzo] + ([indirizzo] if ignore else [])
+        dati["ignored"] = ignorati[-500:]
+        for d in dati.get("devices", []):
+            if d.get("address") == indirizzo:
+                d["follower"] = False if ignore else d.get("follower", False)
+        dati["followers"] = [d["address"] for d in dati.get("devices", []) if d.get("follower")]
+        return self._save(self.bt_path, dati)
+
+    # ---------- Wi-Fi history ----------
+
+    @property
+    def wifi_history_path(self) -> Path:
+        return self.wifi_path.with_name("wifi_history.json")
+
+    def wifi_history(self) -> dict:
+        campioni = (self._read(self.wifi_history_path) or {}).get("samples", [])
+        return {"samples": campioni, **wifi_trends(campioni)}
+
+    def add_wifi_sample(self, dati: dict) -> Optional[dict]:
+        campione = wifi_sample(dati)
+        if campione is None:
+            return None
+        campioni = (self._read(self.wifi_history_path) or {}).get("samples", [])
+        if campioni and campioni[-1].get("t") == campione["t"]:
+            return campione
+        self._save(self.wifi_history_path, {"samples": (campioni + [campione])[-KEEP_WIFI_SAMPLES:]})
+        return campione
 
 
 def for_data_dir(data_dir: Path) -> RadioScanner:

@@ -31,10 +31,29 @@ jobs:
       - name: Build the package, its checksum and the notes
         run: python tools/build_release.py release
 
+      # The signed setup and the winget manifests (tools/build_installer.ps1). Signing uses two repository secrets:
+      # WMM_SIGN_PFX_BASE64 (the .pfx code-signing certificate, base64) and WMM_SIGN_PASSWORD. Without them the setup is unsigned.
+      - name: Build the setup and the winget manifests
+        shell: pwsh
+        env:
+          WMM_SIGN_PFX_BASE64: ${{ secrets.WMM_SIGN_PFX_BASE64 }}
+          WMM_SIGN_PASSWORD: ${{ secrets.WMM_SIGN_PASSWORD }}
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          if ($env:WMM_SIGN_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP "wmm-sign.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WMM_SIGN_PFX_BASE64))
+            $env:WMM_SIGN_PFX = $pfx
+          }
+          ./tools/build_installer.ps1 -Release release -BaseUrl "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+          Compress-Archive -Path release/winget/* -DestinationPath release/winget-manifests.zip
+          if ($env:WMM_SIGN_PFX) { Remove-Item $env:WMM_SIGN_PFX -Force }
+
       - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $files = Get-ChildItem release -Filter *.zip | ForEach-Object FullName
+          # The in-app updater downloads WindowsMaintenanceManager-<version>.zip by name; the other files are for people and winget.
+          $files = @(Get-ChildItem release -Filter *.zip | ForEach-Object FullName) + @(Get-ChildItem release -Filter *-Setup-*.exe | ForEach-Object FullName)
           gh release create "${{ github.ref_name }}" $files release/SHA256SUMS.txt --title "Windows Maintenance Manager ${{ github.ref_name }}" --notes-file release/notes.md

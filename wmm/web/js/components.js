@@ -479,7 +479,25 @@
     return API.get("/history/runs/" + runId + "/log").then(function (r) { return reportViewer(title || "Output", r.log || ""); },
       function (e) { UI.toast(e.message, "error"); });
   }
+  /* Precise undo: the registry values one fix changed go back as they were, and nothing else (no restore point, no restart). */
+  function preciseUndo(runId, title) {
+    return UI.modal("Undo " + (title || "this fix"),
+      '<p class="modal-text">The registry values this fix changed are put back exactly as they were before it ran. Nothing else on the PC changes: ' +
+      "later fixes, programs and files stay as they are.</p>" +
+      '<p class="muted small">A restore point brings back the whole PC instead; it is still available from History.</p>',
+      [{ label: "Cancel", cls: "btn-ghost" }, { label: "Undo", cls: "btn-primary", value: function () { return true; } }]).then(function (ok) {
+      if (!ok) return null;
+      return API.post("/history/runs/" + runId + "/undo").then(function (r) {
+        if (r.preview) UI.toast("Preview mode: nothing was put back.", "info");
+        else UI.toast(r.restored + " of " + r.entries + " values put back" + (r.errors.length ? "; " + r.errors.length + " could not be changed" : "") + ".", r.errors.length ? "warning" : "ok");
+        if (window.App && App.render) App.render();
+        return r;
+      });
+    }).catch(function (e) { UI.toast(e.message, "error"); });
+  }
   document.addEventListener("click", function (e) {
+    var u = e.target.closest && e.target.closest("[data-precise-undo]");
+    if (u) { e.preventDefault(); preciseUndo(u.getAttribute("data-precise-undo"), u.getAttribute("data-title")); return; }
     var b = e.target.closest && e.target.closest("[data-output]");
     if (!b) return;
     e.preventDefault();
@@ -532,6 +550,6 @@
     density: density,
     dataTable: dataTable, downloadText: downloadText, countUp: countUp, num: num, skeleton: skeleton,
     theme: theme, notifications: notifications, palette: palette, shortcutsHelp: shortcutsHelp, store: store,
-    reportViewer: reportViewer, showRunOutput: showRunOutput, whatsNew: whatsNew, faviconProgress: faviconProgress
+    reportViewer: reportViewer, showRunOutput: showRunOutput, preciseUndo: preciseUndo, whatsNew: whatsNew, faviconProgress: faviconProgress
   };
 })();

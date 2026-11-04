@@ -204,10 +204,119 @@
     "Program updates": "Aggiornamenti del programma", "Check now": "Controlla ora", "Install the update": "Installa l'aggiornamento", "Install": "Installa",
     "Alert settings saved.": "Impostazioni degli avvisi salvate.", "Search applications or publishers…": "Cerca applicazioni o editori…", "Search tasks…": "Cerca attività…"
   };
+  // 2.6: search by symptom, before/after check, precise undo, network watch, router ports, Bluetooth trackers, Wi-Fi history.
+  var IT_26 = {
+    "Search a tool or describe the problem, e.g. Internet is slow… (press / )": "Cerca uno strumento o descrivi il problema, es. Internet lento… (premi / )",
+    "Suggested for this problem": "Consigliato per questo problema", "Read first": "Prima leggi", "Then try": "Poi prova",
+    "Run the reports": "Esegui i report", "Select the fixes": "Seleziona i fix",
+    "Pick them in the selection bar, then run the ones the reports point to": "Li trovi nella barra di selezione: esegui quelli indicati dai report",
+    "Fixes selected: read the reports, then run the ones you need from the selection bar.": "Fix selezionati: leggi i report, poi esegui quelli che servono dalla barra di selezione.",
+    "Fixed": "Risolto", "Already fine": "Già a posto", "Applied": "Applicato", "Already set": "Già impostato", "Changed": "Cambiato",
+    "Nothing changed": "Non è cambiato nulla", "Not fixed": "Non risolto", "Worse than before": "Peggio di prima", "Not verified": "Non verificato",
+    "Undo": "Annulla", "Undone": "Annullato", "Verified": "Verifica", "Restore point…": "Punto di ripristino…",
+    "The registry values this fix changed are put back exactly as they were before it ran. Nothing else on the PC changes: later fixes, programs and files stay as they are.":
+      "I valori di registro modificati da questo fix tornano esattamente com'erano prima. Nient'altro cambia sul PC: fix successivi, programmi e file restano come sono.",
+    "A restore point brings back the whole PC instead; it is still available from History.": "Un punto di ripristino invece riporta indietro tutto il PC; resta disponibile dalla Cronologia.",
+    "Preview mode: nothing was put back.": "Modalità anteprima: non è stato ripristinato nulla.",
+    "Ports the router opened to the internet (UPnP)": "Porte aperte dal router verso Internet (UPnP)", "Read the router": "Leggi il router",
+    "Network watch": "Sorveglianza della rete", "Schedule it": "Pianificala", "Wi-Fi history": "Storico del Wi-Fi", "Schedule samples": "Pianifica le rilevazioni",
+    "Record a sample every 15-30 minutes": "Registra una rilevazione ogni 15-30 minuti",
+    "Unknown devices that keep showing up": "Dispositivi sconosciuti che continuano a comparire",
+    "Unpaired devices seen in 3 or more scans over an hour are flagged as possibly following.": "I dispositivi non associati visti in 3 o più scansioni nell'arco di un'ora vengono segnalati come possibili inseguitori.",
+    "Schedule Bluetooth scans": "Pianifica le scansioni Bluetooth", "to get an alert.": "per ricevere un avviso.",
+    "May be following": "Potrebbe seguirti", "Seen": "Visto", "Mark as known": "Segna come noto",
+    "Marked as known: it is no longer reported as following.": "Segnato come noto: non verrà più indicato come possibile inseguitore.",
+    "Asking the router which ports it opened: a few seconds.": "Chiedo al router quali porte ha aperto: qualche secondo.",
+    "Turn UPnP off on the router, or remove these forwards, unless you really need to reach the device from outside.":
+      "Disattiva UPnP sul router, o rimuovi questi inoltri, a meno che tu non debba davvero raggiungere il dispositivo da fuori.",
+    "No router answered the UPnP search: UPnP is off on the router (good), or this network blocks the search.":
+      "Nessun router ha risposto alla ricerca UPnP: UPnP è spento sul router (bene) oppure questa rete blocca la ricerca.",
+    "A UPnP device answered, but it exposes no port mapping service.": "Un dispositivo UPnP ha risposto, ma non espone il servizio di inoltro delle porte.",
+    "UPnP is on, but no device opened a port right now.": "UPnP è attivo, ma in questo momento nessun dispositivo ha aperto porte.",
+    "FTP sends passwords in clear text": "FTP invia le password in chiaro", "SSH is a constant target of password guessing": "SSH è un bersaglio continuo di tentativi sulle password",
+    "Telnet has no encryption at all": "Telnet non ha alcuna crittografia",
+    "a web admin page (cameras, NAS, printers) reachable from the internet": "una pagina di amministrazione (telecamere, NAS, stampanti) raggiungibile da Internet",
+    "a web admin page reachable from the internet": "una pagina di amministrazione raggiungibile da Internet",
+    "Windows file sharing (SMB): the way ransomware spreads": "condivisione file di Windows (SMB): la via con cui si diffonde il ransomware",
+    "old Windows file sharing (NetBIOS)": "vecchia condivisione file di Windows (NetBIOS)", "a camera video stream (RTSP)": "il flusso video di una telecamera (RTSP)",
+    "MQTT for smart-home devices, often without a password": "MQTT dei dispositivi domotici, spesso senza password",
+    "Remote Desktop, the most attacked service on the internet": "Desktop remoto, il servizio più attaccato su Internet",
+    "a NAS admin page (Synology DSM)": "la pagina di amministrazione di un NAS (Synology DSM)", "VNC remote control": "controllo remoto VNC",
+    "a camera or DVR web page": "la pagina web di una telecamera o di un DVR", "a web admin page of a device": "la pagina di amministrazione di un dispositivo",
+    "a device admin page": "la pagina di amministrazione di un dispositivo", "a Dahua camera or DVR": "una telecamera o un DVR Dahua",
+    "a cheap DVR or camera (often with known flaws)": "un DVR o una telecamera economici (spesso con falle note)",
+    "Samples": "Rilevazioni", "Weakest hour": "Ora più debole", "Channel or access point changes": "Cambi di canale o di access point",
+    "Average signal by hour of the day (orange: below 50%)": "Segnale medio per ora del giorno (arancione: sotto il 50%)", "Latest changes": "Ultimi cambi",
+    "From": "Da", "To": "A", "A new device joined the network": "Un nuovo dispositivo è entrato in rete",
+    "Press": "Premi", "Schedule": "Pianifica",
+    // The Toolbox page around the tools: help box, KPIs, filters, selection bar, cards.
+    "Every tool in one place, by area. Fixes change the PC; reports only read it.": "Tutti gli strumenti in un posto, per area. I fix modificano il PC, i report lo leggono soltanto.",
+    "Pick an area tab and switch between Fixes and Reports.": "Scegli un'area e passa tra Fix e Report.",
+    "Run a tool, or tick several and press Run selected.": "Esegui uno strumento, oppure spuntane diversi e premi Esegui selezionati.",
+    "Run diagnostics runs every report in the current view and opens their output.": "Esegui diagnostica avvia tutti i report della vista corrente e ne apre il risultato.",
+    "Every maintenance tool in one place: find it, run it, schedule it or combine several": "Ogni strumento di manutenzione in un posto: trovalo, eseguilo, pianificalo o combinane diversi",
+    "Run diagnostics": "Esegui diagnostica", "List": "Elenco", "Cards": "Schede", "Fixes": "Fix", "Fix": "Fix", "Tools": "Strumenti",
+    "Read-only diagnostics": "Diagnostica in sola lettura", "Starred tools, shown first and on the dashboard": "Strumenti con la stella, mostrati per primi e nella dashboard",
+    "Used this week": "Usati questa settimana", "Different tools run in 7 days": "Strumenti diversi eseguiti in 7 giorni", "All areas": "Tutte le aree",
+    "Sort": "Ordina", "Shortest first": "Più brevi prima", "Recently run": "Eseguiti di recente", "Favorites only": "Solo preferiti", "Never run": "Mai eseguiti",
+    "Search tools": "Cerca strumenti", "Clear": "Svuota", "Copy": "Copia", "Save as playbook": "Salva come sequenza", "Run selected": "Esegui selezionati",
+    "No tool matches": "Nessuno strumento corrisponde", "Change the area, the filters or the search text.": "Cambia area, filtri o testo della ricerca.",
+    "Details": "Dettagli", "Add to favorites": "Aggiungi ai preferiti", "Remove from favorites": "Togli dai preferiti", "Pin to the dashboard": "Fissa nella dashboard",
+    "Last output": "Ultimo risultato", "Compact list or cards with descriptions": "Elenco compatto o schede con descrizione",
+    "Run every read-only report in the current view": "Esegui tutti i report in sola lettura della vista corrente",
+    "Names and IDs of the selected tools, for a ticket or a script": "Nomi e ID degli strumenti selezionati, per un ticket o uno script",
+    "Keep the selection as one of My playbooks, to run it again with one click": "Conserva la selezione tra Le mie sequenze, per rieseguirla con un clic",
+    "Fixes change a setting or delete files. Reports only read the PC and open their output when they finish.":
+      "I fix cambiano un'impostazione o eliminano file. I report leggono soltanto il PC e mostrano il risultato quando finiscono.",
+    "Safe tools run without asking. Moderate and high ones ask first and create a restore point.":
+      "Gli strumenti sicuri partono senza chiedere. Quelli moderati e alti chiedono prima e creano un punto di ripristino.",
+    "Changes a setting or deletes files": "Cambia un'impostazione o elimina file", "Read-only: changes nothing": "Sola lettura: non cambia nulla",
+    "No favorites yet: press the star on a tool.": "Nessun preferito: premi la stella su uno strumento.",
+    "Added to favorites: shown first here and on the dashboard.": "Aggiunto ai preferiti: compare per primo qui e nella dashboard.",
+    "Removed from favorites.": "Tolto dai preferiti.", "Saved in Playbooks › My playbooks.": "Salvata in Sequenze › Le mie sequenze.",
+    "e.g. Monthly visit at the office": "es. Visita mensile in ufficio",
+    "No tool name contains these words: the suggestions above fit the problem you described.": "Nessun nome di strumento contiene queste parole: i suggerimenti qui sopra corrispondono al problema descritto.",
+    ": it asks the router, through UPnP, which ports it opened to the internet and which device asked for each one. Cameras, NAS and consoles often do it by themselves. Nothing is changed.":
+      ": chiede al router, tramite UPnP, quali porte ha aperto verso Internet e quale dispositivo le ha chieste. Telecamere, NAS e console lo fanno spesso da soli. Non viene modificato nulla.",
+    "(for example every hour): each time it scans the network and sends an e-mail or Telegram alert when a device never seen before joins. Alerts are set in Settings › Alerts.":
+      "(per esempio ogni ora): ogni volta scansiona la rete e invia un avviso via email o Telegram quando entra un dispositivo mai visto. Gli avvisi si impostano in Impostazioni › Avvisi.",
+    "Every Wi-Fi scan records the signal, the channel and how crowded it is. Schedule": "Ogni scansione Wi-Fi registra segnale, canale e affollamento. Pianifica",
+    "every 15-30 minutes: after a day you see whether the drops depend on the hour, on a neighbour changing channel or on the router.":
+      "ogni 15-30 minuti: dopo un giorno vedi se le cadute dipendono dall'ora, da un vicino che cambia canale o dal router.",
+    "A tracker (AirTag, Tile, SmartTag) hidden in a bag or a car behaves like this. If one is yours or a neighbour's, mark it as known.":
+      "Un localizzatore (AirTag, Tile, SmartTag) nascosto in una borsa o in un'auto si comporta così. Se è tuo o di un vicino, segnalo come noto.",
+    "An unknown Bluetooth tracker keeps showing up": "Un localizzatore Bluetooth sconosciuto continua a comparire"
+  };
+  Object.keys(IT_26).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(IT, k)) IT[k] = IT_26[k]; });
+  // The 351 Toolbox tools (names, descriptions, warnings) live in i18n_tools.js; the console's own phrases win on a clash.
+  Object.keys(window.I18N_TOOLS || {}).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(IT, k)) IT[k] = window.I18N_TOOLS[k]; });
 
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
   var MONTHS = { Jan: "gen", Feb: "feb", Mar: "mar", Apr: "apr", May: "mag", Jun: "giu", Jul: "lug", Aug: "ago", Sep: "set", Oct: "ott", Nov: "nov", Dec: "dic" };
   var RULES = [
+    // 2.6: precise undo, router ports, Bluetooth sightings, Wi-Fi history.
+    [/^Put back only the (\d+) registry values this fix changed$/, "Ripristina solo i $1 valori di registro modificati da questo fix"],
+    [/^(\d+) of (\d+) values put back(?:; (\d+) could not be changed)?\.$/, function (m, a, b, c) {
+      return a + " di " + b + " valori ripristinati" + (c ? "; " + c + " non modificabili" : "") + ".";
+    }],
+    [/^Undo (.+)$/, function (m, what) { return "Annulla " + (translate(what) || what); }],
+    [/^(\d+) ports opened through UPnP, (\d+) worth closing\.$/, "$1 porte aperte tramite UPnP, $2 da chiudere."],
+    [/^No router answered with a port mapping service: UPnP looks off on the router \(good\)\. Only other devices answered: (.+)\.$/,
+      "Nessun router ha risposto con il servizio di inoltro delle porte: UPnP sembra spento sul router (bene). Hanno risposto solo altri dispositivi: $1."],
+    [/^scanned ([A-Z][a-z]{2} \d{1,2}, \d{4}.*)$/, function (m, when) { return "scansione del " + (translate(when) || when); }],
+    [/^(\d+) scans$/, "$1 scansioni"], [/^over (\d+) min$/, "in $1 min"], [/^(\d+) samples so far\.$/, "$1 rilevazioni finora."],
+    [/^average signal (.+)$/, "segnale medio $1"],
+    // The Toolbox counters and the per-tool labels ("Select Flush DNS", "Schedule Flush DNS").
+    [/^(\d+) of (\d+) tools$/, "$1 di $2 strumenti"], [/^(\d+) tools$/, "$1 strumenti"], [/^(\d+) areas$/, "$1 aree"],
+    [/^(\d+) safe, the others ask first$/, "$1 sicuri, gli altri chiedono prima"], [/^(\d+) read-only reports in the current view$/, "$1 report in sola lettura nella vista corrente"],
+    [/^(\d+) tools: (\d+) fixes and (\d+) read-only reports$/, "$1 strumenti: $2 fix e $3 report in sola lettura"],
+    [/^(\d+) selected$/, "$1 selezionati"], [/^(\d+) ask first$/, "$1 chiedono prima"],
+    [/^(\d+) tools, in a safe order\. It appears in Playbooks › My playbooks\.$/, "$1 strumenti, in un ordine sicuro. Compare in Sequenze › Le mie sequenze."],
+    [/^(Select|Schedule|Run) (.+)$/, function (m, verb, what) {
+      var t = translate(what);
+      return t == null ? m : { Select: "Seleziona ", Schedule: "Pianifica ", Run: "Esegui " }[verb] + t;
+    }],
+    [/^All of (.+)$/, function (m, what) { var t = translate(what); return t == null ? m : "Tutto in " + t; }],
     // The interface choices of the network scanner: "Wi-Fi · 192.168.1.0/24 · gateway 192.168.1.1 (active)".
     [/^(?=.*(?:\(active\)$| · no gateway| · connected to | · not connected| · off$))(.*)$/, function (m, all) {
       return all.replace(/ \(active\)$/, " (attiva)").replace(" · no gateway", " · senza gateway").replace(" · connected to a network", " · connessa a una rete")

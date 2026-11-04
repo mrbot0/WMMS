@@ -14,6 +14,8 @@ import wmm  # noqa: F401
 import ottimizza_pc as op
 from ottimizza_pc import Esito, SequenzaFermata, Stato
 
+from . import undo
+
 REPARSE_POINT = 0x400
 POWER_GUIDS = {
     "balanced": "381b4222-f694-41f0-9685-ff5bb260df2e",
@@ -138,6 +140,7 @@ def clean_thumbnails(ctx) -> Esito:
 
 def write_dword(root: str, key: str, name: str, value: int) -> None:
     import winreg
+    undo.before_write(root, key, name)
     with winreg.CreateKeyEx(getattr(winreg, root), key, 0, winreg.KEY_SET_VALUE) as handle:
         winreg.SetValueEx(handle, name, 0, winreg.REG_DWORD, int(value))
 
@@ -207,6 +210,7 @@ def read_dword(root: str, key: str, name: str) -> Optional[int]:
 
 def delete_value(root: str, key: str, name: str) -> None:
     import winreg
+    undo.before_write(root, key, name)
     try:
         with winreg.OpenKey(getattr(winreg, root), key, 0, winreg.KEY_SET_VALUE) as handle:
             winreg.DeleteValue(handle, name)
@@ -367,6 +371,7 @@ def reset_windows_update(ctx) -> Esito:
 
 def write_string(root: str, key: str, name: str, value: str) -> None:
     import winreg
+    undo.before_write(root, key, name)
     with winreg.CreateKeyEx(getattr(winreg, root), key, 0, winreg.KEY_SET_VALUE) as handle:
         winreg.SetValueEx(handle, name, 0, winreg.REG_SZ, value)
 

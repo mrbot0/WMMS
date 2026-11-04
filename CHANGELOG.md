@@ -3,6 +3,42 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.6.0 — 2026-11-04
+
+**Toolbox in Italian, search by symptom and fixes that check themselves.**
+
+- **Toolbox in Italian**: names, descriptions and warnings of all 355 tools (`wmm/web/js/i18n_tools.js`, merged by
+  `i18n.js`); the Toolbox search ignores accents and matches the English and the Italian text.
+  `tests/test_v26.py` fails when a tool has no translation.
+- **Search by symptom** (`wmm/agent/symptoms.py`, `GET /api/v1/symptoms?q=`): 43 common problems in Italian and
+  English, each with the reports to read first and the fixes to try after, in order. The Toolbox shows them above the
+  results while you type, with "Run the reports" and "Select the fixes".
+- **Before/after check** (`wmm/agent/verify.py`): 60 fixes read a state before and after they run (internet and DNS,
+  network profile and discovery, camera, Bluetooth, audio, printing, Wi-Fi, Windows Update and BITS, Defender,
+  firewall, services, power plan…). The result says Fixed, Already fine, Not fixed or Worse; registry fixes without a
+  check of their own say Applied or Already set. Shown in the run panel and in History (new Check column).
+- **Precise undo** (`wmm/agent/undo.py`, `POST /api/v1/history/runs/<id>/undo`): the registry write helpers record
+  the previous value (and type, or "absent") of every value a fix touches; PowerShell-based fixes declare theirs.
+  Undo puts back exactly those values. The restore point stays as the safety net and is still in History.
+- **Network watch** (`network.watch`): schedulable scan with an e-mail or Telegram alert (new alert "A new device
+  joined the network") when a device never seen before joins.
+- **Router exposure** (`wmm/agent/upnp.py`, `network.upnp_report`, Network › Devices): SSDP discovery and
+  `GetGenericPortMappingEntry` on the router's WAN service; every forward with the device behind it and a plain
+  explanation of the risky ports (RDP, SMB, Telnet, camera streams, NAS pages…). Read-only, local network only.
+- **Bluetooth trackers** (`network.bt_watch`, Network › Bluetooth): unpaired trackers or unnamed devices seen in 3 or
+  more scans over at least an hour are flagged as possibly following, with an alert; "Mark as known" silences them.
+- **Wi-Fi history** (`network.wifi_watch`, Network › Wi-Fi): every Wi-Fi scan stores signal, channel, band and how
+  many networks share the channel; the page shows the average signal by hour, the weakest hour and every channel or
+  access point change.
+- **Windows Sandbox tests** (`wmm/sandbox.py`, `python wmm.py --sandbox-test [--only IDS] [--quick]`): writes a `.wsb`
+  that maps the program and Python read-only, runs every fix for real through the normal job runner, checks its
+  result and its undo, and writes `dati\sandbox\out\results.json` and `report.txt`. Needs the Windows Sandbox
+  feature; nothing runs on this PC.
+- **Signed setup and winget** (`packaging/WindowsMaintenanceManager.iss`, `tools/build_installer.ps1`,
+  `tools/winget_manifest.py`): the release workflow builds an Inno Setup installer into Program Files, signs it and its
+  uninstaller when the `WMM_SIGN_PFX_BASE64` / `WMM_SIGN_PASSWORD` secrets exist, adds it to `SHA256SUMS.txt` and
+  writes the winget manifests (`mrbot0.WindowsMaintenanceManager`, depends on Python 3.12).
+
 ## 2.5.0 — 2026-11-04
 
 **30 new fixes in the Toolbox** (351 tools in total, `wmm/agent/tools_extra3.py`).
