@@ -398,4 +398,9 @@ def run_schedule(schedule_id: int, store: Store, jobs) -> int:
     if schedule["kind"] == "once":
         campi["enabled"] = False
     store.update_schedule(schedule_id, **campi)
+    if finale == "error":
+        from . import notify
+        falliti = [f"- {r['action_id']}: {r.get('note') or 'error'}" for r in stato["results"] if r["status"] == "error"]
+        notify.safe_event(store.path.parent, "run_failed", f"Schedule #{schedule_id} ({schedule['action_id']}) ended with errors:\n" +
+                          "\n".join(falliti[:10]) + "\n\nSee History in the console for the full log.", gruppo=str(schedule_id))
     return 1 if finale == "error" else 0

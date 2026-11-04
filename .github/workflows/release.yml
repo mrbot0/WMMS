@@ -1,0 +1,40 @@
+# Builds the program package for the in-app updater: push a tag such as v2.2.0 and this workflow tests the code,
+# builds the zip, SHA256SUMS.txt and the notes (tools/build_release.py) and publishes a GitHub release with them.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check that the tag matches the program version
+        shell: pwsh
+        run: |
+          $version = python -c "import wmm; print(wmm.VERSION)"
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match VERSION $version" }
+
+      - name: Run the tests
+        run: python -m unittest discover -s tests -t .
+
+      - name: Build the package, its checksum and the notes
+        run: python tools/build_release.py release
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem release -Filter *.zip | ForEach-Object FullName
+          gh release create "${{ github.ref_name }}" $files release/SHA256SUMS.txt --title "Windows Maintenance Manager ${{ github.ref_name }}" --notes-file release/notes.md

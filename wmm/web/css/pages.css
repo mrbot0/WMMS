@@ -1,0 +1,46 @@
+/* Styles of single pages and features added in 2.x: Applications, console functions, leftovers.
+   app.css keeps the shell and the shared components. */
+/* Applications page */
+.apps-views { padding: 12px 16px 0; overflow-x: auto; }
+.apps-views .segmented { flex-wrap: nowrap; }
+.apps-views .segmented button { white-space: nowrap; }
+.row-actions { display: inline-flex; gap: 6px; white-space: nowrap; }
+.text-warning { color: var(--warning); font-weight: 600; }
+.text-ok { color: var(--ok); font-weight: 600; }
+.card-note { padding: 12px 16px 0; margin: 0; }
+.code-block { margin: 6px 0 0; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-3); font: 12px var(--mono);
+  white-space: pre-wrap; word-break: break-all; }
+.suggest-list, .issue-list, .plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.plain-list li { line-height: 1.5; }
+.suggest { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); }
+.suggest > div { flex: 1; min-width: 0; }
+.suggest p { margin: 2px 0 0; color: var(--text-2); font-size: 12.5px; }
+.suggest-icon { flex: none; display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; }
+.suggest-error .suggest-icon { background: var(--error-soft); color: var(--error); }
+.suggest-warning .suggest-icon { background: var(--warning-soft); color: var(--warning); }
+.suggest-info .suggest-icon { background: var(--info-soft); color: var(--accent); }
+.issue-list { margin: 10px 0 14px; }
+.issue-list li { display: flex; gap: 8px; align-items: flex-start; }
+.issue-list .icon { flex: none; margin-top: 2px; }
+.issue-risk .icon { color: var(--error); } .issue-review .icon { color: var(--warning); } .issue-info .icon { color: var(--accent); }
+.browser-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 12px; }
+.browser-tile { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.browser-name { font-weight: 600; }
+.browser-size { font: 600 22px var(--font-display); }
+.browser-tile .btn { margin-top: 6px; }
+/* Console upgrade 2.0 */
+mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3px; padding: 0 1px; box-shadow: 0 0 0 1px var(--warning); }
+.scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 60; background: var(--accent); transform: scaleX(0); transform-origin: 0 50%;
+  transition: transform .08s linear; pointer-events: none; }
+.notes-area { width: 100%; min-height: 220px; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); font: 13px/1.5 var(--font); }
+.notes-area:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card-flash { animation: card-flash 1.6s ease-out; }
+@keyframes card-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: var(--shadow); } }
+@media (prefers-reduced-motion: reduce) { .card-flash { animation: none; } .scroll-progress { transition: none; } }
+@media print { .scroll-progress { display: none; } }
+.leftover-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: 46vh; overflow: auto; }
+.leftover-list .check { align-items: flex-start; }
+.leftover-list .cell-mono { word-break: break-all; }
+/* Network scanner and PCs: addresses and MACs stay on one line */
+#netscan-table .cell-mono, #fleet-table .cell-mono { white-space: nowrap; }
