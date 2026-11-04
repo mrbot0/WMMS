@@ -177,6 +177,16 @@
     "router, printer, NAS settings": "impostazioni di router, stampanti, NAS", "Telnet, FTP, VNC, Remote Desktop": "Telnet, FTP, VNC, Desktop remoto",
     "Search IP, name, maker, type…": "Cerca IP, nome, produttore, tipo…", "New since the previous scan": "Nuovo dalla scansione precedente",
     "Switched off, out of range or gone": "Spenti, fuori portata o rimossi",
+    // ---------- Wi-Fi and Bluetooth scanners ----------
+    "Network devices": "Dispositivi in rete", "Wi-Fi": "Wi-Fi", "Bluetooth": "Bluetooth", "Scan Wi-Fi": "Scansiona Wi-Fi", "Scan Bluetooth": "Scansiona Bluetooth",
+    "Wi-Fi networks nearby": "Reti Wi-Fi nei dintorni", "Networks": "Reti", "Your network": "La tua rete", "Open or weak": "Aperte o deboli",
+    "Best channel": "Canale migliore", "Channels in use": "Canali in uso", "Signal": "Segnale", "Band": "Banda", "Channel": "Canale",
+    "Stations": "Dispositivi connessi", "Connected": "Connesso", "Hidden network": "Rete nascosta", "Advice": "Consigli",
+    "Bluetooth devices": "Dispositivi Bluetooth", "Paired": "Associato", "Nearby": "Nelle vicinanze", "Distance": "Distanza",
+    "Address": "Indirizzo", "Unnamed device": "Dispositivo senza nome", "Game controller": "Controller di gioco", "Phone": "Telefono",
+    "Headphones": "Cuffie", "Speaker": "Altoparlante", "Smart light": "Luce smart", "Watch or wearable": "Orologio o indossabile",
+    "Keyboard": "Tastiera", "Mouse": "Mouse", "Tracker": "Localizzatore", "Bluetooth device": "Dispositivo Bluetooth",
+    "very close (< 1 m)": "vicinissimo (< 1 m)", "near (1–3 m)": "vicino (1–3 m)", "in the room or next door": "nella stanza o accanto", "far": "lontano",
     // ---------- PCs, alerts, updates ----------
     "PCs": "PC", "PCs of the network": "PC della rete", "Health of the PCs of the network, read-only": "Salute dei PC della rete, in sola lettura",
     "Add a PC": "Aggiungi un PC", "Need attention": "Da controllare", "Unsafe programs": "Programmi insicuri", "This PC shares": "Questo PC condivide",

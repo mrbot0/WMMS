@@ -2,6 +2,23 @@
 
 CHANGELOG = [
     {
+        "version": "2.3.0",
+        "date": "2026-11-04",
+        "title": "Wi-Fi and Bluetooth scanners in the Network scanner",
+        "highlights": [
+            "Network scanner in three tabs: Network devices, Wi-Fi and Bluetooth.",
+            "Wi-Fi: every network and access point around, with security (open, WEP, TKIP, WPA2, WPA3), signal in % and dBm, band, channel, "
+            "connected stations, the channels in use and the least crowded channel for your router.",
+            "Bluetooth: paired and nearby devices (Classic and Low Energy), with kind, signal, a rough distance and the ones that are new.",
+        ],
+        "changes": [
+            "Wi-Fi asks Windows for a fresh scan first (WlanScan), so the list is not the cached one; netsh is read in English and Italian.",
+            "Advice for your network on each band: weak signal, outdated security, a crowded or overlapping channel; open networks nearby are listed.",
+            "When Windows blocks the Wi-Fi list until Location is on, the tab says so and links to the setting.",
+            "Bluetooth uses the Windows device enumeration (both kinds at the same time, about 30 seconds); readings are filtered by type.",
+        ],
+    },
+    {
         "version": "2.2.0",
         "date": "2026-11-04",
         "title": "Network scanner, alerts by email and Telegram, program updates, the PCs of the network and browser tests",

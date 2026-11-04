@@ -3,6 +3,28 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.3.0 — 2026-11-04
+
+**Wi-Fi and Bluetooth scanners in the Network scanner.**
+
+- The Network scanner now has three tabs: **Network devices**, **Wi-Fi** and **Bluetooth** (`wmm/agent/radio.py`).
+- **Wi-Fi**:
+  - a fresh scan through the Windows Wi-Fi API (`WlanScan`), then `netsh wlan show networks mode=bssid`, read in
+    English and Italian;
+  - every access point with security (open, WEP, TKIP, WPA2, WPA3), signal in % and dBm, band, channel, connected
+    stations and maker;
+  - the channels in use and the least crowded channel (on 2.4 GHz only 1, 6 and 11);
+  - advice for your network on each band (weak signal, outdated security, crowded or overlapping channel) and the open
+    networks nearby;
+  - when Windows needs Location to list networks, the tab says so and links to the setting.
+- **Bluetooth**:
+  - paired and nearby devices through the Windows device enumeration, Classic and Low Energy at the same time (about
+    30 seconds);
+  - kind (controller, phone, headphones, light, tracker…), signal in dBm, a rough distance, devices new since the
+    previous scan.
+- Both only listen: nothing is joined or paired. Routes: `GET`/`POST /network/wifi(/scan)` and
+  `GET`/`POST /network/bluetooth(/scan)`.
+
 ## 2.2.0 — 2026-11-04
 
 **Network scanner, alerts by email and Telegram, program updates, the PCs of the network and browser tests.**
