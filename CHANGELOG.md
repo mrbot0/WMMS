@@ -3,6 +3,28 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.5.0 — 2026-11-04
+
+**30 new fixes in the Toolbox** (351 tools in total, `wmm/agent/tools_extra3.py`).
+
+- **Network**: turn on network discovery and file sharing (Private networks only), mark the current network as
+  private, fix the "No internet" warning (connectivity test back to the Microsoft defaults; on Windows 11 24H2 and later
+  it restarts the Network List Service, which runs the test there).
+- **Updates**: repair background downloads (BITS queue), remove update blocks left by tweaking tools (refuses on a
+  domain, `.reg` backup in `%ProgramData%\WMM`), updates for other Microsoft products.
+- **Startup & Apps**: repair the built-in apps (Start, Settings, Store), restart the Start menu and search, repair
+  notifications (the database is kept renamed), quick repair of Office.
+- **Services**: restart the camera, Windows Hello, typing in Start and search (ctfmon).
+- **Integrity**: reset local Group Policy (refuses on a domain, copy kept), repair Windows Installer, repair restore
+  points and backups (VSS, writer states read by number so it works in any language).
+- **Security**: repair the Windows Security app, show file extensions, turn off Remote Assistance.
+- **Performance**: reset folder views, open big folders faster, full right-click menu on Windows 11 and back, no web
+  results in Start search, fix screen flicker (MPO) and back, End task from the taskbar.
+- **Cleanup**: Windows upgrade leftovers, unpacked NVIDIA and AMD installers, old driver versions (`pnputil` without
+  `/force`, so a driver in use is never removed).
+- None of them is "safe": "Apply safe actions" never runs them, each asks first and states what it changes. Preview
+  mode simulates them.
+
 ## 2.4.0 — 2026-11-04
 
 **Choose the interface each scanner uses.**

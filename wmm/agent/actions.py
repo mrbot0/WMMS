@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import tools, tools_extra, tools_extra2
+from . import tools, tools_extra, tools_extra2, tools_extra3
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -953,6 +953,115 @@ REPORTS_13 = {
     "integrity.event_log_sizes", "integrity.verifier_status", "integrity.boot_debug", "storage.onedrive_report", "storage.duplicate_files",
     "storage.user_folders", "performance.cpu_throttling", "performance.gpu_processes",
 }
+_Z = tools_extra3
+
+
+def _F14(script):
+    return lambda ctx: _Z.ps(ctx, script)
+
+
+_ACTIONS += (
+    # Thirty more fixes (iteration 14): everyday things that stop working, the settings people ask for most,
+    # and cleanups that free gigabytes. None is "safe": each changes the PC, so each asks first.
+    # network
+    Action("network.discovery_on", "network", "Turn on network discovery and sharing",
+           "When this PC cannot see the others, or they cannot see it or its shared printer: services and firewall, Private networks only.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_DISCOVERY_ON), "Other PCs on Private networks can see this PC and its shared folders."),
+    Action("network.profile_private", "network", "Mark the current network as private",
+           "Home or office network marked Public by mistake: sharing, casting and printers on it stay blocked.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_PROFILE_PRIVATE), "Only for networks you trust: never on public Wi-Fi."),
+    Action("network.ncsi_reset", "network", "Fix the \"No internet\" warning",
+           "The globe or \"No internet\" icon while the internet works: resets the connectivity test that tweaking tools break.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_NCSI_RESET), "The network status is checked again; the connection may blink."),
+    # updates
+    Action("updates.bits_reset", "updates", "Repair background downloads (BITS)",
+           "Updates, Store apps or Defender signatures stuck at 0% downloading: clears the transfer queue.",
+           "moderate", 0.3, _F14(_Z.SCRIPT_BITS_RESET), "Downloads in progress start again from the beginning."),
+    Action("updates.remove_wu_policies", "updates", "Remove update blocks left by tools",
+           "Windows Update policies (WSUS, blocks, deferrals) set by tweaking tools on a home PC; a .reg backup is kept.",
+           "high", 0.2, _F14(_Z.SCRIPT_REMOVE_WU_POLICIES), "Not on company PCs: it refuses on a domain. Updates can install again."),
+    Action("updates.microsoft_update_on", "updates", "Updates for other Microsoft products",
+           "Windows Update also installs the fixes for Office (MSI), .NET, Visual C++ and other Microsoft products.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_MICROSOFT_UPDATE_ON), "More updates are offered from now on."),
+    # startup and apps
+    Action("startup.reregister_apps", "startup", "Repair built-in apps (Start, Settings, Store)",
+           "When clicking Start, Settings, search or Windows Security does nothing: registers the Windows apps again.",
+           "moderate", 5, _F14(_Z.SCRIPT_REREGISTER_APPS), "Takes a few minutes; open apps may close."),
+    Action("startup.reset_start_menu", "startup", "Restart the Start menu and search",
+           "Start menu or search frozen, blank or not opening: restarts them without restarting Explorer or the PC.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_RESET_START_MENU), "Start and search close for a moment."),
+    Action("startup.reset_notifications", "startup", "Repair notifications",
+           "No banners, an empty or frozen notification center, wrong badges: rebuilds the notification database.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_RESET_NOTIFICATIONS), "Old notifications are cleared; the database is kept renamed."),
+    Action("startup.office_quick_repair", "startup", "Quick repair of Office",
+           "Word, Excel or Outlook crash, will not open or show errors: Microsoft 365 quick repair, no download.",
+           "moderate", 8, _F14(_Z.SCRIPT_OFFICE_QUICK_REPAIR), "Open Office apps are closed: save your work first."),
+    # services
+    Action("services.restart_camera", "services", "Restart the camera",
+           "Camera black, \"in use by another app\" or missing in Teams and Zoom: restarts its service and the device.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_RESTART_CAMERA), "Apps using the camera lose it until reopened."),
+    Action("services.restart_biometrics", "services", "Restart Windows Hello",
+           "Face or fingerprint sign-in that stopped working: restarts the biometric service and reader.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_RESTART_BIOMETRICS), "Face and fingerprint sign-in pause for a few seconds."),
+    Action("services.restart_text_input", "services", "Fix typing in Start and search",
+           "You cannot type in the Start search box, Settings or Store apps: restarts the text input service (ctfmon).",
+           "moderate", 0.1, _F14(_Z.SCRIPT_RESTART_TEXT_INPUT), "The emoji and clipboard panels close for a moment."),
+    # integrity
+    Action("integrity.reset_group_policy", "integrity", "Reset local Group Policy",
+           "\"Some settings are managed by your organization\" on a home PC: removes the local policies set by tweaking tools.",
+           "high", 0.5, _F14(_Z.SCRIPT_RESET_GROUP_POLICY), "Every local policy is removed (a copy is kept). Refuses on company PCs."),
+    Action("integrity.reregister_msi", "integrity", "Repair Windows Installer",
+           "Programs that will not install or uninstall: \"The Windows Installer service could not be accessed\".",
+           "moderate", 0.3, _F14(_Z.SCRIPT_REREGISTER_MSI), "Do not run it while something is installing."),
+    Action("integrity.restart_vss", "integrity", "Repair restore points and backups (VSS)",
+           "Restore points or backups that fail: restarts the shadow copy services and checks their writers.",
+           "moderate", 0.3, _F14(_Z.SCRIPT_RESTART_VSS), "A backup running right now fails: run it again afterwards."),
+    # security
+    Action("security.security_app_reset", "security", "Repair the Windows Security app",
+           "Windows Security does not open, is blank or asks for an app to open windowsdefender links.",
+           "moderate", 0.3, _F14(_Z.SCRIPT_SECURITY_APP_RESET), "The app settings are reset; protection stays on."),
+    Action("security.show_extensions", "security", "Show file extensions",
+           "Shows .exe, .pdf, .docx in every folder, so a malicious \"invoice.pdf.exe\" is easy to spot.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_SHOW_EXTENSIONS), "Renaming a file shows its extension too: keep it as it is."),
+    Action("security.remote_assistance_off", "security", "Turn off Remote Assistance",
+           "Nobody can be invited to take control of this PC through Remote Assistance, a favourite of phone scammers.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_REMOTE_ASSISTANCE_OFF), "Help through Remote Assistance invitations stops working."),
+    # performance and Explorer
+    Action("performance.folder_views_reset", "performance", "Reset folder views",
+           "Folders that open slowly, with the wrong view or columns: clears the saved views of every folder.",
+           "moderate", 0.2, _F14(_Z.SCRIPT_FOLDER_VIEWS_RESET), "Custom folder views are lost; Explorer restarts."),
+    Action("performance.folder_type_off", "performance", "Open big folders faster",
+           "Downloads and big folders stuck on \"Working on it...\": folders stop guessing whether they hold pictures or music.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_FOLDER_TYPE_OFF), "Explorer restarts; Reset folder views brings it back."),
+    Action("performance.classic_context_menu", "performance", "Full right-click menu (Windows 11)",
+           "The right-click menu shows every option at once, without \"Show more options\".",
+           "moderate", 0.1, _F14(_Z.SCRIPT_CLASSIC_CONTEXT_MENU), "Explorer restarts."),
+    Action("performance.context_menu_default", "performance", "Windows 11 right-click menu back",
+           "Undoes the full right-click menu.", "moderate", 0.1, _F14(_Z.SCRIPT_CONTEXT_MENU_DEFAULT), "Explorer restarts."),
+    Action("performance.web_search_off", "performance", "No web results in Start search",
+           "Start search shows only apps, files and settings: faster, and what you type does not go to Bing.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_WEB_SEARCH_OFF), "Web searches from Start stop; use the browser instead."),
+    Action("performance.mpo_off", "performance", "Fix screen flicker (MPO off)",
+           "Flicker, black flashes or stutter in browsers and games with NVIDIA or AMD cards: turns off multiplane overlay.",
+           "moderate", 0.1, _F14(_Z.SCRIPT_MPO_OFF), "Applies after a restart; undo it with Screen overlays back to default."),
+    Action("performance.mpo_default", "performance", "Screen overlays back to default",
+           "Undoes Fix screen flicker: multiplane overlay as Windows sets it.", "moderate", 0.1, _F14(_Z.SCRIPT_MPO_DEFAULT),
+           "Applies after a restart."),
+    Action("performance.end_task_on", "performance", "End task from the taskbar",
+           "Right-click a frozen app in the taskbar to close it, without opening Task Manager (Windows 11 23H2 or later).",
+           "moderate", 0.1, _F14(_Z.SCRIPT_END_TASK_ON), "End task closes the app at once: unsaved work in it is lost."),
+    # cleanup
+    Action("cleanup.upgrade_leftovers", "cleanup", "Windows upgrade leftovers",
+           "Removes $WINDOWS.~BT, $Windows.~WS, $GetCurrent, ESD and the Update Assistant: often several gigabytes.",
+           "high", 2, _F14(_Z.SCRIPT_UPGRADE_LEFTOVERS), "A failed upgrade has to download again; Windows.old is not touched."),
+    Action("cleanup.gpu_installer_leftovers", "cleanup", "Graphics driver installers",
+           "The unpacked NVIDIA and AMD installers (C:\\NVIDIA, C:\\AMD, old downloads) left after every driver update.",
+           "moderate", 1, _F14(_Z.SCRIPT_GPU_INSTALLER_LEFTOVERS), "Reinstalling an old driver needs a new download."),
+    Action("cleanup.old_driver_packages", "cleanup", "Old driver versions",
+           "Older copies of the same driver kept in the driver store; the newest and any in use are kept.",
+           "high", 3, _F14(_Z.SCRIPT_OLD_DRIVER_PACKAGES), "Rolling a device back to a removed version is no longer possible."),
+)
+FIXES_14 = tuple(action.id for action in _ACTIONS[-30:])
 EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
     "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
