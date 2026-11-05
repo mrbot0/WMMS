@@ -151,6 +151,11 @@ def check(data_dir: Path, runner: Optional[Callable[[], str]] = None) -> dict:
         dati["history"] = (dati.get("history", []) + [esito])[-50:]
     percorso.parent.mkdir(parents=True, exist_ok=True)
     percorso.write_text(json.dumps(dati, ensure_ascii=False), encoding="utf-8")
+    try:  # the dated copy that "Back to the last good configuration" goes back to (2.8)
+        from .goodconfig import save_snapshot
+        save_snapshot(percorso.parent, nuovo)
+    except OSError:
+        pass
     return esito
 
 

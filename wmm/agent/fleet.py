@@ -392,15 +392,70 @@ def summary_server(fleet: Fleet, porta: int, riassunto: Callable[[], dict], runs
     return server
 
 
-def firewall_rule(porta: int) -> dict:
-    """Lets PCs of the local subnet (only) reach the summary port."""
-    subprocess.run(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={FIREWALL_RULE}"], capture_output=True)
-    risultato = subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={FIREWALL_RULE}", "dir=in", "action=allow",
+def firewall_rule(porta: int, nome: str = FIREWALL_RULE) -> dict:
+    """Lets PCs (or phones) of the local subnet (only) reach a port of this PC."""
+    subprocess.run(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={nome}"], capture_output=True)
+    risultato = subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={nome}", "dir=in", "action=allow",
                                 "protocol=TCP", f"localport={int(porta)}", "remoteip=localsubnet", "profile=private,domain"],
                                capture_output=True, text=True)
     if risultato.returncode != 0:
         raise OSError((risultato.stdout or risultato.stderr).strip()[-300:] or "netsh refused the rule")
-    return {"rule": FIREWALL_RULE, "port": int(porta)}
+    return {"rule": nome, "port": int(porta)}
+
+
+# ---------- the same tools on several PCs at once (2.8) ----------
+
+THIS_PC = "this"
+MAX_BATCH_PCS = 50
+
+
+def start_batch(fleet: Fleet, pc_ids: List[str], ids: List[str], local_start: Optional[Callable[[List[str]], str]] = None, request=None) -> dict:
+    """Asks every chosen PC (and this one, as "this") to run the same tools, in parallel. Each PC decides what it accepts:
+    a refusal is recorded on its row and does not stop the others."""
+    if not isinstance(pc_ids, list) or not pc_ids or len(pc_ids) > MAX_BATCH_PCS or not all(isinstance(p, str) for p in pc_ids):
+        raise FleetError(f"Choose from 1 to {MAX_BATCH_PCS} PCs.")
+    if not isinstance(ids, list) or not ids or len(ids) > 20 or not all(isinstance(a, str) and len(a) <= 80 for a in ids):
+        raise FleetError("Choose from 1 to 20 tools.")
+    nomi = {p["id"]: p.get("name") or p.get("address") for p in fleet.pcs()}
+
+    def uno(pc_id: str) -> dict:
+        riga = {"pc_id": pc_id, "name": "This PC" if pc_id == THIS_PC else nomi.get(pc_id, pc_id), "job_id": None, "error": ""}
+        try:
+            if pc_id == THIS_PC:
+                if local_start is None:
+                    raise FleetError("this PC is not available")
+                riga["job_id"] = local_start(ids)
+            else:
+                if pc_id not in nomi:
+                    raise FleetError("PC not found")
+                riga["job_id"] = fleet.run_remote(pc_id, ids, request).get("id")
+        except Exception as errore:  # noqa: BLE001 - one PC that refuses or is off does not stop the others
+            riga["error"] = str(errore)[:200]
+        return riga
+    with ThreadPoolExecutor(max_workers=min(16, len(pc_ids))) as pool:
+        righe = list(pool.map(uno, list(dict.fromkeys(pc_ids))))
+    return {"id": secrets.token_hex(8), "actions": list(ids), "rows": righe}
+
+
+def batch_status(fleet: Fleet, lotto: dict, local_status: Optional[Callable[[str], dict]] = None, request=None) -> dict:
+    """The progress and results of every PC of a batch, read again from each PC."""
+    def uno(riga: dict) -> dict:
+        esito = dict(riga, active=False, done=0, total=len(lotto["actions"]), results=[])
+        if not riga.get("job_id"):
+            return esito
+        try:
+            if riga["pc_id"] == THIS_PC:
+                stato = clean_run(local_status(riga["job_id"])) if local_status else {}
+            else:
+                stato = fleet.run_status(riga["pc_id"], riga["job_id"], request)
+            esito.update(active=stato.get("active", False), done=stato.get("done", 0), total=stato.get("total") or esito["total"],
+                         results=stato.get("results", []))
+        except Exception as errore:  # noqa: BLE001
+            esito["error"] = str(errore)[:200]
+        return esito
+    with ThreadPoolExecutor(max_workers=min(16, max(1, len(lotto["rows"])))) as pool:
+        righe = list(pool.map(uno, lotto["rows"]))
+    return {"id": lotto["id"], "actions": lotto["actions"], "rows": righe, "active": any(r["active"] for r in righe)}
 
 
 def for_data_dir(data_dir: Path) -> Fleet:

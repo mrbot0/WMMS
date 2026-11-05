@@ -69,6 +69,7 @@
 
         el.innerHTML = UI.pageHeader("Toolbox", "Every maintenance tool in one place: find it, run it, schedule it or combine several",
           UI.button("Your tools", 'id="tb-custom" title="Your own PowerShell tools, with check and undo"', "", "scripts") +
+          UI.button("Assistant", 'id="tb-assistant" title="Describe the problem in your words: Claude reads this PC and proposes the fixes"', "", "bolt") +
           UI.button("Run diagnostics", 'id="tb-reports" title="Run every read-only report in the current view"', "", "reports") +
           UI.button(view.list ? "Cards" : "List", 'id="tb-layout" title="Compact list or cards with descriptions"', "", view.list ? "dashboard" : "playbooks")) + kpis +
           '<div class="tb-layout">' +
@@ -279,6 +280,7 @@
         });
         el.querySelector("#tb-run").addEventListener("click", function () { App.runActions(App.order(Object.keys(picked))); picked = {}; draw(); });
         el.querySelector("#tb-custom").addEventListener("click", function () { Insights.manageTools(App); });
+        el.querySelector("#tb-assistant").addEventListener("click", function () { Insights28.assistant(App); });
         el.querySelector("#tb-reports").addEventListener("click", function () {
           App.runActions(visible.filter(function (id) { return App.state.actions[id].kind === "report"; }));
         });

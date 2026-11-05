@@ -2,6 +2,32 @@
 
 CHANGELOG = [
     {
+        "version": "2.8.0",
+        "date": "2026-11-05",
+        "title": "Blue screens explained, a way back to a good day and the console on your phone",
+        "highlights": [
+            "Blue screens explained: the stop code of every crash read from its dump, what it means in plain words, what to do, and the drivers "
+            "installed in the week before the first crash.",
+            "Back to the last good configuration: choose a day when the PC worked well, see every startup value, service, task, hosts line, proxy "
+            "setting and antivirus exclusion that changed since, and put back the ones you tick. One click undoes the return.",
+            "The console on your phone: pair it once with a code shown on the PC, then read the state of the PC and run reports and safe fixes "
+            "from the same network. The code never travels: every request is signed.",
+            "An optional assistant: describe the problem in your words and Claude reads this PC with read-only reports, then proposes the fixes in "
+            "order as buttons. It never runs a fix by itself.",
+        ],
+        "changes": [
+            "Who slows the startup: boot times over 90 days and the programs, drivers and services Windows measured as slowing them; startup "
+            "programs can be removed from startup right there and put back.",
+            "Signs of a coming failure: hardware errors, disk retries and resets, file system damage, sudden power losses and blue screens counted "
+            "week by week, with the disk and battery forecasts, and an alert when a sign grows.",
+            "Suspicious programs: signature and location of every program running or starting with Windows, with optional VirusTotal lookups of "
+            "their fingerprints (never the files).",
+            "The same reports or safe fixes on several PCs at once, with one table of results and checks.",
+            "A periodic report by e-mail or Telegram, in Italian or English: scores, fixes and their checks, failures, alerts, outages and forecasts.",
+            "The requests between PCs are now tested against a second PC running in its own process.",
+        ],
+    },
+    {
         "version": "2.7.0",
         "date": "2026-11-05",
         "title": "Guided diagnosis, your own tools and a console fully in Italian",

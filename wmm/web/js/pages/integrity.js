@@ -72,7 +72,9 @@
           '<div class="grid">' + parts.recommendations + "</div>" + '<div class="grid">' + parts.actions + "</div>" +
           '<div class="grid">' + UI.card("Event log · errors in the last 7 days", events, '<span class="muted small">' + ((d.events || {}).total || 0) + " errors</span>", "card-flush") + "</div>" +
           '<div class="grid grid-3">' + parts.trend + UI.card("Score", parts.score) + UI.card("Latest updates", updates) + "</div>" +
-          '<div class="grid">' + parts.runs + "</div>";
+          '<div class="grid">' + parts.runs + "</div>" + '<div class="grid" data-tab-group="overview"><div id="ins-warn"></div></div><div class="grid"><div id="ins-bsod"></div></div>';
+        Insights28.bsod(el.querySelector("#ins-bsod"), App);
+        Insights28.warning(el.querySelector("#ins-warn"));
         UI.bindArea(el, "integrity", function () { self.render(el, App); });
       });
     }

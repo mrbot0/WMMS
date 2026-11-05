@@ -133,6 +133,7 @@
             '<button type="button" class="btn btn-sm btn-ghost" id="speak-test" style="align-self:flex-start">' + UI.icon("play") + "Test the voice</button>" +
             check("schedule-notice", store("scheduleNotice") !== false, "On the dashboard, report the scheduled runs since the last visit", "How many ran and how many failed while the console was closed.") + "</div>") +
             UI.card("Email and Telegram alerts", '<div id="remote-alerts"></div>') +
+            UI.card("Periodic report", '<div id="remote-digest"></div>') +
             UI.card("Quiet hours", '<div class="form">' + check("quiet-on", quiet.on, "No sounds or desktop notifications during these hours") +
               '<div class="form-row"><label>From<input type="time" id="quiet-from" value="' + esc(quiet.from) + '"></label><label>To<input type="time" id="quiet-to" value="' + esc(quiet.to) + '"></label></div>' +
               '<span class="hint">The hours may span midnight, for example 22:00 to 07:00. Runs still finish and appear in Activity and History.</span></div>'),
@@ -282,6 +283,7 @@
         /* ---------- switches ---------- */
         var on = function (id, fn) { el.querySelector("#" + id).addEventListener("change", function (e) { fn(e.target.checked, e.target); }); };
         if (window.AlertsPanel) AlertsPanel.mount(el.querySelector("#remote-alerts"));
+        if (window.Insights28) Insights28.digest(el.querySelector("#remote-digest"));
         if (window.UpdatesPanel) UpdatesPanel.mount(el.querySelector("#program-updates"));
         on("contrast", function (v) { store("contrast", v); App.applyLook(); });
         [["cb-safe", "cbSafe"], ["no-blur", "noBlur"], ["wide-text", "wideText"], ["underline-links", "underlineLinks"], ["privacy", "privacy"]].forEach(function (p) {

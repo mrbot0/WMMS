@@ -71,8 +71,11 @@
           '<div class="grid grid-2">' + UI.card("Microsoft Defender", defender) + UI.card("Restore points", points, "", "card-flush") + "</div>" +
           '<div class="grid grid-2">' + UI.card("BitLocker", bitlocker, "", "card-flush") + UI.card("Local administrators", admins) + "</div>" +
           '<div class="grid">' + parts.recommendations + "</div>" + '<div class="grid">' + parts.actions + "</div>" +
-          '<div class="grid grid-2">' + parts.trend + parts.runs + "</div>" + '<div class="grid" id="ins-drift"></div>';
+          '<div class="grid grid-2">' + parts.trend + parts.runs + "</div>" + '<div class="grid" id="ins-drift"></div>' +
+          '<div class="grid grid-2" data-tab-group="overview"><div id="ins-good"></div><div id="ins-susp"></div></div>';
         Insights.drift(el.querySelector("#ins-drift"));
+        Insights28.goodConfig(el.querySelector("#ins-good"), App);
+        Insights28.suspicious(el.querySelector("#ins-susp"));
         UI.bindArea(el, "security", function () { self.render(el, App); });
       });
     }

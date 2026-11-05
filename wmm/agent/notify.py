@@ -27,6 +27,7 @@ EVENTS = {
     "bt_follower": "An unknown Bluetooth tracker keeps showing up",
     "config_changed": "Suspicious changes in startup, tasks or extensions",
     "connection_down": "The internet connection dropped",
+    "early_warning": "Signs that a part of the PC may fail soon",
 }
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {

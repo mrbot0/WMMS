@@ -31,7 +31,7 @@
         App.setSubtitle(d.pcs.length + " PCs of the network · " + online + " reachable");
         var root = document.createElement("div");
         root.innerHTML = UI.pageHeader("PCs", "Health of the PCs of the network, read-only", UI.button("Refresh", "data-fleet-refresh", "", "refresh") +
-          UI.button("Add a PC", "data-fleet-add", "btn-primary", "network")) +
+          UI.button("Run on several PCs", "data-fleet-batch", "", "play") + UI.button("Add a PC", "data-fleet-add", "btn-primary", "network")) +
           '<div class="grid grid-4">' +
           UI.kpi("PCs", Components.num(righe.length), online + " of " + d.pcs.length + " others reachable", "info") +
           UI.kpi("Need attention", Components.num(weak), "health under 60", weak ? "warning" : "ok") +
@@ -39,9 +39,10 @@
           UI.kpi("This PC shares", d.share.enabled ? "On" : "Off", d.share.enabled ? "port " + d.share.port + (d.share.running ? "" : " · not running") : "other consoles cannot read it",
             d.share.enabled ? "ok" : "info") + "</div>" +
           '<div class="grid">' + UI.card("PCs of the network", '<div id="fleet-table"></div>', "", "card-flush") + "</div>" +
-          '<div class="grid">' + UI.card("Share this PC", share(d.share)) + "</div>";
+          '<div class="grid">' + UI.card("Share this PC", share(d.share)) + "</div>" + '<div class="grid" id="ins-phone"></div>';
         el.innerHTML = "";
         el.appendChild(root);
+        Insights28.phone(root.querySelector("#ins-phone"));
 
         Components.dataTable(root.querySelector("#fleet-table"), {
           rows: righe, exportName: "wmm-pcs", placeholder: "Search PCs…", sort: "overall", pageSize: 25, empty: "No PC yet.",
@@ -76,6 +77,7 @@
           var id;
           if (b.hasAttribute("data-fleet-refresh")) { App.render(); return; }
           if (b.hasAttribute("data-fleet-add")) { add(App); return; }
+          if (b.hasAttribute("data-fleet-batch")) { Insights28.batch(App, d.pcs); return; }
           if ((id = b.getAttribute("data-fleet-run"))) {
             Insights.remoteRun(App, righe.filter(function (r) { return r.id === id; })[0]);
             return;
