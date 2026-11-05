@@ -82,7 +82,7 @@ class AccountsHandler:
         self._json(200, self._call(self._acc.update_profile, self._me_required(), self._body()))
 
     def auth_2fa_begin(self, query):
-        self._json(200, self._acc.totp_begin(self._me_required()))
+        self._json(200, self._call(self._acc.totp_begin, self._me_required(), str(self._body().get("password", ""))))
 
     def auth_2fa_confirm(self, query):
         self._json(200, self._call(self._acc.totp_confirm, self._me_required(), str(self._body().get("code", ""))))
@@ -122,17 +122,17 @@ class AccountsHandler:
         corpo = self._body()
         if not corpo.get("lang"):
             corpo["lang"] = appsettings.load(self.agent.data_dir)["default_user_lang"]
-        self._json(201, self._call(self._acc.create_user, corpo, self._by()))
+        self._json(201, self._call(self._acc.create_user, corpo, self._by(), self.user))
 
     def user_update(self, query, user_id):
-        self._json(200, self._call(self._acc.update_user, user_id, self._body(), self._by()))
+        self._json(200, self._call(self._acc.update_user, user_id, self._body(), self._by(), self.user))
 
     def user_delete(self, query, user_id):
         self._json(200, self._call(self._acc.delete_user, user_id, self._by(), (self.user or {}).get("id", "")))
 
     def user_copy(self, query, user_id):
         corpo = self._body()
-        self._json(201, self._call(self._acc.copy_user, user_id, str(corpo.get("username", "")), str(corpo.get("display", "")), self._by()))
+        self._json(201, self._call(self._acc.copy_user, user_id, str(corpo.get("username", "")), str(corpo.get("display", "")), self._by(), self.user))
 
     def user_reset_password(self, query, user_id):
         self._json(200, self._call(self._acc.reset_password, user_id, self._by()))
@@ -149,13 +149,13 @@ class AccountsHandler:
     def users_bulk(self, query):
         corpo = self._body()
         self._json(200, self._call(self._acc.bulk, corpo.get("ids"), str(corpo.get("action", "")), corpo.get("value"), self._by(),
-                                   (self.user or {}).get("id", "")))
+                                   (self.user or {}).get("id", ""), self.user))
 
     def users_export(self, query):
         self._csv(self._acc.export_users(), "wmm-users.csv")
 
     def users_import(self, query):
-        self._json(200, self._call(self._acc.import_users, self._body().get("csv", ""), self._by()))
+        self._json(200, self._call(self._acc.import_users, self._body().get("csv", ""), self._by(), self.user))
 
     def sessions_get(self, query):
         self._json(200, {"sessions": self._acc.sessions()})
@@ -181,19 +181,19 @@ class AccountsHandler:
                                          for u in self._acc.users(role=role_id)]))
 
     def role_create(self, query):
-        self._json(201, self._call(self._acc.create_role, self._body(), self._by()))
+        self._json(201, self._call(self._acc.create_role, self._body(), self._by(), self.user))
 
     def role_update(self, query, role_id):
-        self._json(200, self._call(self._acc.update_role, role_id, self._body(), self._by()))
+        self._json(200, self._call(self._acc.update_role, role_id, self._body(), self._by(), self.user))
 
     def role_delete(self, query, role_id):
         self._json(200, self._call(self._acc.delete_role, role_id, query.get("reassign") or None, self._by()))
 
     def role_copy(self, query, role_id):
-        self._json(201, self._call(self._acc.copy_role, role_id, str(self._body().get("name", "")), self._by()))
+        self._json(201, self._call(self._acc.copy_role, role_id, str(self._body().get("name", "")), self._by(), self.user))
 
     def role_reset(self, query, role_id):
-        self._json(200, self._call(self._acc.reset_role, role_id, self._by()))
+        self._json(200, self._call(self._acc.reset_role, role_id, self._by(), self.user))
 
     def roles_compare(self, query):
         self._json(200, self._call(self._acc.compare_roles, query.get("a", ""), query.get("b", "")))
@@ -202,7 +202,7 @@ class AccountsHandler:
         self._json(200, self._call(self._acc.export_role, role_id))
 
     def role_import(self, query):
-        self._json(201, self._call(self._acc.import_role, self._body().get("role"), self._by()))
+        self._json(201, self._call(self._acc.import_role, self._body().get("role"), self._by(), self.user))
 
     # ---------- policy and audit ----------
 
@@ -300,7 +300,7 @@ class AccountsHandler:
                    {"Content-Disposition": 'attachment; filename="wmm-config.json"'})
 
     def config_import(self, query):
-        self._json(200, self._call(appsettings.import_config, self.agent.data_dir, self._body().get("data"), self.agent.store, self._acc, self._by()))
+        self._json(200, self._call(appsettings.import_config, self.agent.data_dir, self._body().get("data"), self.agent.store, self._acc, self._by(), self.user))
 
     def agent_log(self, query):
         self._json(200, appsettings.diagnostics(self.agent.data_dir, getattr(self.agent, "_health", None), self.agent.info()))

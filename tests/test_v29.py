@@ -286,6 +286,67 @@ class Management(Temp):
         self.assertEqual(self.acc.set_policy({"min_length": 14})["min_length"], 14)
 
 
+class SecurityReview(Temp):
+    """The findings of the security review of 2.9, kept fixed."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = self.acc.setup("admin", PW)
+
+    def test_wrong_codes_lock_the_account(self):
+        s = self.acc.session(self.acc.login("admin", PW)["token"])
+        segreto = self.acc.totp_begin(s)["secret"]
+        self.acc.totp_confirm(s, A.totp_code(segreto, int(self.clock.t // 30)))
+        for _ in range(self.acc.policy()["lockout_attempts"]):
+            with self.assertRaises(A.AccountError):
+                self.acc.login("admin", PW, "000000")
+        self.clock.t += 31
+        with self.assertRaises(A.AccountError) as e:
+            self.acc.login("admin", PW, A.totp_code(segreto, int(self.clock.t // 30)))
+        self.assertEqual(e.exception.status, 423)
+
+    def test_replacing_two_step_needs_the_password_and_keeps_it_on_until_confirmed(self):
+        s = self.acc.session(self.acc.login("admin", PW)["token"])
+        segreto = self.acc.totp_begin(s)["secret"]
+        self.acc.totp_confirm(s, A.totp_code(segreto, int(self.clock.t // 30)))
+        with self.assertRaises(A.AccountError):
+            self.acc.totp_begin(s)
+        self.acc.totp_begin(s, PW)
+        self.assertTrue(self.acc.get_user(self.admin["id"])["totp_on"])  # the old secret still protects the account
+        self.clock.t += 31
+        self.assertTrue(self.acc.login("admin", PW, A.totp_code(segreto, int(self.clock.t // 30)))["token"])
+
+    def test_nobody_grants_more_than_they_have(self):
+        self.acc.create_user({"username": "hr", "role_id": "technician", "password": "Human!Res2026"})
+        ruolo = self.acc.create_role({"name": "People", "permissions": ["view.users", "users.view", "users.manage"]})
+        self.acc.update_user(self.acc.users(q="hr")[0]["id"], {"role_id": ruolo["id"]})
+        hr = self.acc.session(self.acc.login("hr", "Human!Res2026")["token"])
+        with self.assertRaises(A.AccountError):
+            self.acc.create_user({"username": "boss2", "role_id": "admin"}, actor=hr)
+        with self.assertRaises(A.AccountError):
+            self.acc.update_user(hr["id"], {"role_id": "viewer"}, actor=hr)  # not even your own role
+        with self.assertRaises(A.AccountError):
+            self.acc.update_user(self.admin["id"], {"role_id": "viewer"}, actor=hr)  # nor demote someone above you
+        with self.assertRaises(A.AccountError):
+            self.acc.create_role({"name": "Sneaky", "permissions": ["registry.edit"]}, actor=hr)
+        self.assertEqual(self.acc.create_user({"username": "intern", "role_id": ruolo["id"]}, actor=hr)["role_id"], ruolo["id"])
+
+    def test_backup_restore_respects_permissions(self):
+        lettore = {"permissions": ["settings.edit"]}
+        esito = appsettings.import_config(self.dir, {"format": "wmm-config/1", "app_settings": {"org_name": "ACME"},
+                                                     "account_policy": {"min_length": 30},
+                                                     "custom_tools": [{"title": "x", "script": "rm"}]}, None, self.acc, "x", lettore)
+        self.assertEqual(esito["restored"], ["app_settings"])
+        self.assertEqual(sorted(esito["skipped"]), ["account_policy", "custom_tools"])
+        self.assertNotEqual(self.acc.policy()["min_length"], 30)
+
+    def test_webhooks_never_reach_local_addresses(self):
+        self.assertEqual(appsettings.public_https("https://127.0.0.1/x"), "the address is not public")
+        self.assertEqual(appsettings.public_https("https://192.168.1.1/x"), "the address is not public")
+        self.assertEqual(appsettings.public_https("http://example.com/x"), "not an https:// address")
+        self.assertEqual(appsettings.webhook_send("https://localhost/hook", "generic", "t", "x"), "the address is not public")
+
+
 class RoutesHavePermissions(unittest.TestCase):
     def test_every_write_is_mapped_and_every_permission_exists(self):
         for metodo, schema, funzione in api.ROUTES:

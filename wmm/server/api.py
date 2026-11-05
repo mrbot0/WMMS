@@ -958,17 +958,32 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         if self.user is not None and self.command not in ("GET", "HEAD") and not funzione.__name__.startswith("auth_"):
             self.agent.accounts.audit(self.user["username"], "api." + funzione.__name__, self.path[:200], "", ok=ok)
 
-    def _check_tools(self, ids, corpo: Optional[dict] = None) -> None:
-        """The role may run each tool (area and risk), and the run rules of Settings › Runs (2.9)."""
-        if not isinstance(ids, list):
-            return
-        regole = appsettings.load(self.agent.data_dir)
+    def _check_role_tools(self, ids) -> list:
+        """The signed-in user's role may run every one of these tools (area and risk)."""
         noti = [actions.CATALOG[a] for a in ids if isinstance(a, str) and a in actions.CATALOG]
         if self.user is not None:
             vietati = [a.title for a in noti if not accounts.can_run(self.user, a)]
             if vietati:
                 self.agent.accounts.audit(self.user["username"], "denied", "run", ", ".join(vietati)[:500], ok=False)
                 raise ApiError(403, "Your role does not allow running: " + ", ".join(vietati[:5]) + ("…" if len(vietati) > 5 else "") + ".")
+        return noti
+
+    def _check_schedule_tools(self, riferimento) -> None:
+        """A schedule runs its tools later as SYSTEM: whoever creates, changes or starts it must be allowed to run them now."""
+        if self.user is None or not isinstance(riferimento, str):
+            return
+        try:
+            ids = routines.expand(riferimento)
+        except KeyError:
+            return  # unknown action: create_schedule answers 400
+        self._check_role_tools(ids)
+
+    def _check_tools(self, ids, corpo: Optional[dict] = None) -> None:
+        """The role may run each tool (area and risk), and the run rules of Settings › Runs (2.9)."""
+        if not isinstance(ids, list):
+            return
+        regole = appsettings.load(self.agent.data_dir)
+        noti = self._check_role_tools(ids)
         if regole["block_high_risk"] and any(a.risk == "high" and a.kind != "report" for a in noti):
             raise ApiError(409, "High-risk tools are blocked on this PC (Settings › Runs).")
         corpo = corpo or {}
@@ -1306,12 +1321,15 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         self._json(200, {"schedules": self.agent.schedules(), "installation": self.agent.installation()})
 
     def create_schedule(self, query):
-        self._json(201, {"id": self.agent.create_schedule(self._body())})
+        corpo = self._body()
+        self._check_schedule_tools(corpo.get("action_id"))
+        self._json(201, {"id": self.agent.create_schedule(corpo)})
 
     def list_routines(self, query):
         self._json(200, self.agent.routines_catalog())
 
     def update_schedule(self, query, schedule_id):
+        self._check_schedule_tools((self.agent.store.schedule(int(schedule_id)) or {}).get("action_id"))
         self.agent.update_schedule(int(schedule_id), self._body())
         self._json(200, {"ok": True})
 
@@ -1324,6 +1342,7 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         self._json(200, {"ok": True})
 
     def test_schedule(self, query, schedule_id):
+        self._check_schedule_tools((self.agent.store.schedule(int(schedule_id)) or {}).get("action_id"))
         self._json(200, self.agent.test_schedule(int(schedule_id)))
 
 

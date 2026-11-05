@@ -352,13 +352,42 @@ def webhook_payload(tipo: str, titolo: str, testo: str) -> dict:
     return {"title": titolo, "text": testo, "app": wmm.APP_NAME, "version": wmm.VERSION}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *argomenti, **opzioni):
+        return None  # a webhook that redirects is not followed: the new address was never checked
+
+
+def public_https(url: str) -> Optional[str]:
+    """Why a webhook address cannot be used, or None: https only, and a name that resolves only to public addresses
+    (never this PC, the local network or link-local services)."""
+    import socket
+    import urllib.parse
+    parti = urllib.parse.urlparse(url or "")
+    if parti.scheme != "https" or not parti.hostname:
+        return "not an https:// address"
+    try:
+        indirizzi = {info[4][0] for info in socket.getaddrinfo(parti.hostname, parti.port or 443, proto=socket.IPPROTO_TCP)}
+    except OSError:
+        return "the name cannot be resolved"
+    for a in indirizzi:
+        ip = ipaddress.ip_address(a.split("%")[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return "the address is not public"
+    return None
+
+
 def webhook_send(url: str, tipo: str, titolo: str, testo: str, opener=None) -> str:
     if not re.fullmatch(r"https://[^\s]{8,500}", url or ""):
         return "no webhook address"
+    if opener is None:
+        motivo = public_https(url)
+        if motivo:
+            return motivo
+        opener = urllib.request.build_opener(_NoRedirect).open
     richiesta = urllib.request.Request(url, data=json.dumps(webhook_payload(tipo, titolo, testo)).encode("utf-8"),
                                        headers={"Content-Type": "application/json", "User-Agent": f"WMM/{wmm.VERSION}"}, method="POST")
     try:
-        with (opener or urllib.request.urlopen)(richiesta, timeout=15) as r:
+        with opener(richiesta, timeout=15) as r:
             return "ok" if 200 <= r.status < 300 else f"HTTP {r.status}"
     except urllib.error.HTTPError as e:
         return f"HTTP {e.code}"
@@ -471,12 +500,30 @@ def export_config(data_dir: Path, store=None, accounts=None) -> dict:
     return copia
 
 
-def import_config(data_dir: Path, dati: dict, store=None, accounts=None, by: str = "") -> dict:
+def import_config(data_dir: Path, dati: dict, store=None, accounts=None, by: str = "", user: Optional[dict] = None) -> dict:
     """Puts back the chosen parts of a backup. Secrets are not in a backup and stay as they are."""
     from . import notify
     if not isinstance(dati, dict) or dati.get("format") != "wmm-config/1":
         raise SettingsError("Not a backup of Windows Maintenance Manager.")
-    fatto = []
+    fatto, saltato = [], []
+
+    def puo(permesso: str) -> bool:
+        return user is None or permesso in user.get("permissions", ())
+    if isinstance(dati.get("app_settings"), dict) and not puo("settings.edit"):
+        dati = dict(dati, app_settings=None)
+        saltato.append("app_settings")
+    if isinstance(dati.get("notifications"), dict) and not puo("notifications.manage"):
+        dati = dict(dati, notifications=None)
+        saltato.append("notifications")
+    if isinstance(dati.get("roles"), list) and not puo("roles.manage"):
+        dati = dict(dati, roles=None)
+        saltato.append("roles")
+    if isinstance(dati.get("account_policy"), dict) and not puo("settings.security"):
+        dati = dict(dati, account_policy=None)
+        saltato.append("account_policy")
+    if dati.get("custom_tools") and not puo("custom_tools.manage"):
+        dati = dict(dati, custom_tools=None)
+        saltato.append("custom_tools")
     if isinstance(dati.get("app_settings"), dict):
         save(data_dir, {k: v for k, v in dati["app_settings"].items() if k in DEFAULTS}, accounts)
         fatto.append("app_settings")
@@ -490,15 +537,22 @@ def import_config(data_dir: Path, dati: dict, store=None, accounts=None, by: str
         nomi = {r["name"].lower() for r in accounts.roles()}
         for r in dati["roles"]:
             if not r.get("builtin") and isinstance(r.get("name"), str) and r["name"].lower() not in nomi:
-                accounts.import_role({k: r[k] for k in ("format", "name", "description", "color", "permissions", "require_2fa") if k in r}, by)
+                accounts.import_role({k: r[k] for k in ("format", "name", "description", "color", "permissions", "require_2fa") if k in r}, by, user)
         fatto.append("roles")
     if accounts is not None and isinstance(dati.get("account_policy"), dict):
         accounts.set_policy({k: v for k, v in dati["account_policy"].items() if k != "enabled"}, by)
         fatto.append("account_policy")
-    if isinstance(dati.get("custom_tools"), (dict, list)):
-        (Path(data_dir) / "custom_tools.json").write_text(json.dumps(dati["custom_tools"], ensure_ascii=False), encoding="utf-8")
+    if isinstance(dati.get("custom_tools"), list):
+        from . import custom_tools
+        esistenti = {t.get("title") for t in custom_tools.load(data_dir)}
+        for voce in dati["custom_tools"]:
+            if isinstance(voce, dict) and voce.get("title") not in esistenti:
+                try:
+                    custom_tools.save(data_dir, {k: v for k, v in voce.items() if k != "id"})  # the same checks as the Toolbox form
+                except (custom_tools.CustomToolError, KeyError):
+                    saltato.append(f"custom tool {voce.get('title')}")
         fatto.append("custom_tools")
-    return {"restored": fatto}
+    return {"restored": fatto, "skipped": saltato}
 
 
 def diagnostics(data_dir: Path, health: Optional[dict] = None, info: Optional[dict] = None) -> dict:

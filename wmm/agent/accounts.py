@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UN
   email TEXT NOT NULL DEFAULT '', telegram TEXT NOT NULL DEFAULT '', role_id TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, password TEXT NOT NULL,
   must_change INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL, updated TEXT NOT NULL, last_login TEXT, failed INTEGER NOT NULL DEFAULT 0,
   locked_until REAL NOT NULL DEFAULT 0, password_changed TEXT NOT NULL, totp_secret TEXT NOT NULL DEFAULT '', totp_on INTEGER NOT NULL DEFAULT 0,
-  totp_last INTEGER NOT NULL DEFAULT -1, expires TEXT NOT NULL DEFAULT '', hours TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+  totp_last INTEGER NOT NULL DEFAULT -1, totp_pending TEXT NOT NULL DEFAULT '', expires TEXT NOT NULL DEFAULT '', hours TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
   lang TEXT NOT NULL DEFAULT '', history TEXT NOT NULL DEFAULT '[]');
 CREATE TABLE IF NOT EXISTS roles (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, description TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT 'gray', permissions TEXT NOT NULL DEFAULT '[]', builtin INTEGER NOT NULL DEFAULT 0, require_2fa INTEGER NOT NULL DEFAULT 0,
@@ -220,6 +220,9 @@ class Accounts:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
+            colonne = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
+            if "totp_pending" not in colonne:  # databases created by the first 2.9 build
+                db.execute("ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''")
             for ident, r in BUILTIN.items():
                 db.execute("INSERT OR IGNORE INTO roles (id, name, description, color, permissions, builtin, created, updated) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
                            (ident, r["name"], r["description"], r["color"], json.dumps(r["permissions"]), now_iso(), now_iso()))
@@ -338,12 +341,13 @@ class Accounts:
             pulito["require_2fa"] = 1 if dati["require_2fa"] else 0
         return pulito
 
-    def create_role(self, dati: dict, by: str = "") -> dict:
+    def create_role(self, dati: dict, by: str = "", actor: Optional[dict] = None) -> dict:
         base = dati.get("base")
         if base:  # start from a role or a template
             modello = BUILTIN.get(base) or self.get_role(base)
             dati = dict({"permissions": modello["permissions"], "color": modello.get("color", "gray")}, **{k: v for k, v in dati.items() if k != "base"})
         pulito = self._clean_role(dati)
+        check_grant(actor, pulito["permissions"])
         ident = "r" + secrets.token_hex(5)
         try:
             with self._db() as db:
@@ -355,11 +359,13 @@ class Accounts:
         self.audit(by, "role.create", pulito["name"], f"{len(pulito['permissions'])} permissions")
         return self.get_role(ident)
 
-    def update_role(self, role_id: str, dati: dict, by: str = "") -> dict:
+    def update_role(self, role_id: str, dati: dict, by: str = "", actor: Optional[dict] = None) -> dict:
         ruolo = self.get_role(role_id)
         if ruolo["locked"]:
             raise AccountError("The Administrator role cannot be changed.", 409)
         pulito = self._clean_role(dati, parziale=True)
+        if "permissions" in pulito:
+            check_grant(actor, set(pulito["permissions"]) - set(ruolo["permissions"]))
         if not pulito:
             return ruolo
         if "permissions" in pulito and not self._admin_left(role_changes={role_id: pulito["permissions"]}):
@@ -375,10 +381,10 @@ class Accounts:
                                                                  **{k: v for k, v in pulito.items() if k != "permissions"}})[:1000])
         return self.get_role(role_id)
 
-    def copy_role(self, role_id: str, nome: str, by: str = "") -> dict:
+    def copy_role(self, role_id: str, nome: str, by: str = "", actor: Optional[dict] = None) -> dict:
         ruolo = self.get_role(role_id)
         return self.create_role({"name": nome or f"{ruolo['name']} (copy)", "description": ruolo["description"], "color": ruolo["color"],
-                                 "permissions": ruolo["permissions"], "require_2fa": ruolo["require_2fa"]}, by)
+                                 "permissions": ruolo["permissions"], "require_2fa": ruolo["require_2fa"]}, by, actor)
 
     def delete_role(self, role_id: str, reassign: Optional[str] = None, by: str = "") -> dict:
         ruolo = self.get_role(role_id)
@@ -395,12 +401,12 @@ class Accounts:
         self.audit(by, "role.delete", ruolo["name"], f"users moved to {reassign}" if ruolo["users"] else "")
         return {"deleted": role_id, "moved": ruolo["users"]}
 
-    def reset_role(self, role_id: str, by: str = "") -> dict:
+    def reset_role(self, role_id: str, by: str = "", actor: Optional[dict] = None) -> dict:
         if role_id not in BUILTIN or role_id == ADMIN_ROLE:
             raise AccountError("Only the built-in roles can be reset.", 409)
         b = BUILTIN[role_id]
         return self.update_role(role_id, {"name": b["name"], "description": b["description"], "color": b["color"], "permissions": b["permissions"],
-                                          "require_2fa": False}, by)
+                                          "require_2fa": False}, by, actor)
 
     def compare_roles(self, a: str, b: str) -> dict:
         ra, rb = self.get_role(a), self.get_role(b)
@@ -412,13 +418,13 @@ class Accounts:
         return {"format": "wmm-role/1", "name": r["name"], "description": r["description"], "color": r["color"], "permissions": r["permissions"],
                 "require_2fa": r["require_2fa"]}
 
-    def import_role(self, dati: dict, by: str = "") -> dict:
+    def import_role(self, dati: dict, by: str = "", actor: Optional[dict] = None) -> dict:
         if not isinstance(dati, dict) or dati.get("format") != "wmm-role/1":
             raise AccountError("Not a role exported by Windows Maintenance Manager.")
         ignoti = [p for p in dati.get("permissions", []) if p not in ALL]
         dati = dict(dati, permissions=[p for p in dati.get("permissions", []) if p in ALL])
         dati.pop("format", None)
-        ruolo = self.create_role(dati, by)
+        ruolo = self.create_role(dati, by, actor)
         return dict(ruolo, skipped=ignoti)
 
     def templates(self) -> List[dict]:
@@ -520,8 +526,16 @@ class Accounts:
             raise AccountError("Access hours: a start and an end time (HH:MM), different.")
         return {"days": sorted(set(giorni)), "from": da, "to": a}
 
-    def create_user(self, dati: dict, by: str = "") -> dict:
+    def _check_role_grant(self, actor: Optional[dict], role_id: str, user_id: str = "") -> None:
+        if actor is None:
+            return
+        if user_id and user_id == actor.get("id"):
+            raise AccountError("You cannot change your own role.", 403)
+        check_grant(actor, self.get_role(role_id)["permissions"])
+
+    def create_user(self, dati: dict, by: str = "", actor: Optional[dict] = None) -> dict:
         pulito = self._clean_user(dati, parziale=False)
+        self._check_role_grant(actor, pulito["role_id"])
         password = dati.get("password") or ""
         temporanea = not password
         if temporanea:
@@ -545,9 +559,12 @@ class Accounts:
             utente["temporary_password"] = password
         return utente
 
-    def update_user(self, user_id: str, dati: dict, by: str = "") -> dict:
+    def update_user(self, user_id: str, dati: dict, by: str = "", actor: Optional[dict] = None) -> dict:
         utente = self.get_user(user_id)
         pulito = self._clean_user(dati, parziale=True)
+        if "role_id" in pulito and pulito["role_id"] != utente["role_id"]:
+            self._check_role_grant(actor, pulito["role_id"], user_id)
+            check_grant(actor, self.get_role(utente["role_id"])["permissions"])  # nor demote someone above you
         if not pulito:
             return utente
         disattiva = pulito.get("active") == 0 or ("role_id" in pulito and pulito["role_id"] != utente["role_id"])
@@ -575,11 +592,11 @@ class Accounts:
         self.audit(by, "user.delete", utente["username"], "")
         return {"deleted": user_id}
 
-    def copy_user(self, user_id: str, username: str, display: str = "", by: str = "") -> dict:
+    def copy_user(self, user_id: str, username: str, display: str = "", by: str = "", actor: Optional[dict] = None) -> dict:
         """A new user with the same role, access hours, expiry, language and alert contacts; a new temporary password."""
         u = self.get_user(user_id)
         return self.create_user({"username": username, "display": display or "", "role_id": u["role_id"], "hours": u["hours"], "expires": u["expires"],
-                                 "lang": u["lang"], "notes": f"Copied from {u['username']}"}, by)
+                                 "lang": u["lang"], "notes": f"Copied from {u['username']}"}, by, actor)
 
     def reset_password(self, user_id: str, by: str = "") -> dict:
         u = self.get_user(user_id)
@@ -601,11 +618,11 @@ class Accounts:
     def reset_2fa(self, user_id: str, by: str = "") -> dict:
         u = self.get_user(user_id)
         with self._db() as db:
-            db.execute("UPDATE users SET totp_secret = '', totp_on = 0, totp_last = -1 WHERE id = ?", (user_id,))
+            db.execute("UPDATE users SET totp_secret = '', totp_pending = '', totp_on = 0, totp_last = -1 WHERE id = ?", (user_id,))
         self.audit(by, "user.2fa_reset", u["username"], "")
         return self.get_user(user_id)
 
-    def bulk(self, ids: Sequence[str], azione: str, valore=None, by: str = "", self_id: str = "") -> dict:
+    def bulk(self, ids: Sequence[str], azione: str, valore=None, by: str = "", self_id: str = "", actor: Optional[dict] = None) -> dict:
         if not isinstance(ids, list) or not ids or len(ids) > 500:
             raise AccountError("Choose the users first.")
         fatti, errori = 0, []
@@ -618,7 +635,7 @@ class Accounts:
                         raise AccountError("You cannot disable yourself.")
                     self.update_user(ident, {"active": False}, by)
                 elif azione == "role":
-                    self.update_user(ident, {"role_id": valore}, by)
+                    self.update_user(ident, {"role_id": valore}, by, actor)
                 elif azione == "delete":
                     self.delete_user(ident, by, self_id)
                 elif azione == "unlock":
@@ -645,7 +662,7 @@ class Accounts:
                         u["last_login"] or "", "1" if u["totp_on"] else "0", u["status"]])
         return uscita.getvalue()
 
-    def import_users(self, testo: str, by: str = "") -> dict:
+    def import_users(self, testo: str, by: str = "", actor: Optional[dict] = None) -> dict:
         """CSV with a header: username, display, email, telegram, role (name or id), active. Every new user gets a temporary password."""
         if not isinstance(testo, str) or len(testo) > 500_000:
             raise AccountError("The file is too large.")
@@ -658,7 +675,7 @@ class Accounts:
                 if not ruolo:
                     raise AccountError(f"unknown role {riga.get('role')}")
                 u = self.create_user({"username": nome, "display": riga.get("display", ""), "email": riga.get("email", ""), "telegram": riga.get("telegram", ""),
-                                      "role_id": ruolo, "active": (riga.get("active") or "1").strip() not in ("0", "no", "false")}, by)
+                                      "role_id": ruolo, "active": (riga.get("active") or "1").strip() not in ("0", "no", "false")}, by, actor)
                 creati.append({"username": u["username"], "temporary_password": u["temporary_password"]})
             except AccountError as errore:
                 saltati.append({"username": nome, "error": str(errore)})
@@ -731,11 +748,12 @@ class Accounts:
             if not code:
                 raise AccountError("Type the 6-digit code of your authenticator app.", 428)
             passo = totp_match(notify.unprotect(r["totp_secret"]), code, adesso, r["totp_last"])
-            if passo is None:
+            if passo is None:  # wrong codes count like wrong passwords and lock the account the same way
                 falliti = r["failed"] + 1
+                blocco = adesso + pol["lockout_minutes"] * 60 if falliti >= pol["lockout_attempts"] else 0
                 with self._db() as db:
-                    db.execute("UPDATE users SET failed = ? WHERE id = ?", (falliti, r["id"]))
-                self.audit(r["username"], "login.fail", "", "wrong code", ok=False)
+                    db.execute("UPDATE users SET failed = ?, locked_until = ? WHERE id = ?", (0 if blocco else falliti, blocco, r["id"]))
+                self.audit(r["username"], "login.fail", "", "wrong code" + (", locked" if blocco else ""), ok=False)
                 raise AccountError("Wrong or already used code.", 401)
             with self._db() as db:
                 db.execute("UPDATE users SET totp_last = ? WHERE id = ?", (passo, r["id"]))
@@ -843,22 +861,28 @@ class Accounts:
         permessi = {k: dati[k] for k in ("display", "email", "telegram", "lang") if k in dati}
         return self.update_user(user["id"], permessi, by=user["username"])
 
-    def totp_begin(self, user: dict) -> dict:
+    def totp_begin(self, user: dict, password: str = "") -> dict:
+        """A new secret, kept apart until a code confirms it: the verification already on stays on meanwhile, and replacing
+        it needs the password."""
+        with self._db() as db:
+            attiva = db.execute("SELECT totp_on FROM users WHERE id = ?", (user["id"],)).fetchone()["totp_on"]
+        if attiva and not self._verify_own_password(user["id"], password):
+            raise AccountError("Type your password to replace the two-step verification.", 403)
         segreto = base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
         with self._db() as db:
-            db.execute("UPDATE users SET totp_secret = ?, totp_on = 0, totp_last = -1 WHERE id = ?", (notify.protect(segreto), user["id"]))
+            db.execute("UPDATE users SET totp_pending = ? WHERE id = ?", (notify.protect(segreto), user["id"]))
         etichetta = f"WMM:{user['username']}"
         return {"secret": segreto, "uri": f"otpauth://totp/{etichetta}?secret={segreto}&issuer=Windows%20Maintenance%20Manager&digits=6&period=30"}
 
     def totp_confirm(self, user: dict, code: str) -> dict:
         with self._db() as db:
-            r = db.execute("SELECT totp_secret FROM users WHERE id = ?", (user["id"],)).fetchone()
-        segreto = notify.unprotect(r["totp_secret"]) if r and r["totp_secret"] else ""
+            r = db.execute("SELECT totp_pending FROM users WHERE id = ?", (user["id"],)).fetchone()
+        segreto = notify.unprotect(r["totp_pending"]) if r and r["totp_pending"] else ""
         passo = totp_match(segreto, code, self.clock()) if segreto else None
         if passo is None:
             raise AccountError("The code does not match: check the time of the phone and try the next code.")
         with self._db() as db:
-            db.execute("UPDATE users SET totp_on = 1, totp_last = ? WHERE id = ?", (passo, user["id"]))
+            db.execute("UPDATE users SET totp_secret = totp_pending, totp_pending = '', totp_on = 1, totp_last = ? WHERE id = ?", (passo, user["id"]))
             db.execute("UPDATE sessions SET limited = 0 WHERE user_id = ? AND id = ? AND ? = 0", (user["id"], user.get("session", ""), 1 if user.get("must_change") else 0))
         self.audit(user["username"], "2fa.on", "", "")
         return self.get_user(user["id"])
@@ -948,6 +972,15 @@ def _dummy_hash() -> str:
     if _DUMMY is None:
         _DUMMY = hash_password(secrets.token_hex(8))
     return _DUMMY
+
+
+def check_grant(actor: Optional[dict], permessi, nome: str = "") -> None:
+    """A user may give (through a role or a role assignment) only permissions they have themselves."""
+    if actor is None:
+        return  # accounts off, or the first administrator
+    oltre = sorted(set(permessi) - set(actor.get("permissions", ())))
+    if oltre:
+        raise AccountError(f"You cannot grant rights you do not have ({', '.join(oltre[:5])}{'…' if len(oltre) > 5 else ''}).", 403)
 
 
 def has(user: Optional[dict], permesso: str) -> bool:
