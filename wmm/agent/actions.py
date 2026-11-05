@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import boot, crashes, digest, drift, early_warning, kev, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, watch
+from . import baselines, boot, canary, crashes, digest, drift, early_warning, kev, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -1116,6 +1116,18 @@ _ACTIONS += (
            "Sends a summary of the period since the last report: scores, fixes and their checks, failures, alerts, outages, suspicious "
            "changes, blue screens and forecasts. Schedule it every week or month.", "safe", 0.3, digest.periodic_report),
 )
+_ACTIONS += (
+    Action("security.canary_watch", "security", "Ransomware: check the decoy files",
+           "Checks the decoy files placed in Documents, Desktop and Pictures and sends an alert at once if one was changed or deleted. "
+           "Schedule it every 15 minutes.", "safe", 0.1, canary.canary_watch),
+    Action("security.compliance_report", "security", "Compliance with the business workstation baseline",
+           "Reads every check of the business workstation baseline and gives the percentage that complies, with the checks to fix.",
+           "safe", 0.5, baselines.compliance_report),
+    Action("updates.update_compliance", "updates", "Windows Update compliance",
+           "Pending updates with their severity, the age of the last installed update and the update policy in force.", "safe", 1,
+           updatepolicy.compliance_report),
+)
+WATCH_210 = ("security.canary_watch", "security.compliance_report", "updates.update_compliance")
 WATCH_28 = ("integrity.bsod_explained", "startup.slow_boot", "integrity.early_warning", "security.suspicious_programs", "integrity.periodic_report")
 EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
@@ -1125,7 +1137,7 @@ EXTRA_REPORTS = REPORTS_13 | {
     "security.rdp_report", "security.defender_exclusions_report", "security.antivirus_report", "security.vbs_report", "security.users_report",
     "security.certificates_report", "integrity.unexpected_shutdowns", "integrity.disk_events", "integrity.whea_report", "integrity.chkdsk_result",
     "integrity.app_hangs", "services.failed_report", "storage.large_files", "storage.storage_sense_report", "storage.empty_folders", "storage.old_installers",
-    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26, *WATCH_27, *WATCH_28,
+    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26, *WATCH_27, *WATCH_28, *WATCH_210,
 }
 
 # Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.

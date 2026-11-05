@@ -3,6 +3,42 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.10.0 — 2026-11-05
+
+**Company centre: central server, company sign-in, approvals and compliance.** Twenty features:
+
+1. **Central server** (`wmm/agent/central.py`): agents contact the server over HTTPS (pinned self-signed certificate), enroll with a one-time
+   code whose secret never travels, sign every request (HMAC-SHA256, time, nonce), send summary, inventory and compliance, and run queued jobs
+   (tools, winget, update ring, baseline, inventory) within the level chosen on that PC (reports, safe fixes, everything).
+2. **Groups** of PCs: tags, update ring per group, jobs to a group.
+3. **Inventory and assets**: hardware (model, serial, BIOS, CPU, RAM, disks, network) and programs of every PC, software search across PCs,
+   asset tag, owner, location, purchase, warranty, licenses, CSV export.
+4. **Software deployment** (`deploy.py`): a company catalog of winget IDs, install, update or remove on this PC or on groups.
+5. **Windows Update rings** (`updatepolicy.py`): deferral of quality and feature updates, target version, pause, active hours through the
+   Windows Update for Business policies; update compliance report.
+6. **Company sign-in** (`sso.py`): Entra ID or any OpenID Connect provider (authorization code with PKCE; ID token checked for issuer,
+   audience, expiry and nonce), Windows and Active Directory accounts (LogonUserW), roles from groups; identities linked by subject, never by name.
+7. **HTTPS on the local network** (`tlsutil.py`): RSA 2048 self-signed certificate made in pure Python, used by the phone console, the PC
+   sharing and the central server; clients pin its fingerprint.
+8. **Approval by a second person** (`governance.py`): moderate and/or high-risk runs become requests; another user with approvals.decide
+   approves (the run starts) or rejects; 24-hour expiry.
+9. **Tamper-evident audit log**: every entry chained by SHA-256, verification in Settings, forwarding to syslog (RFC 5424, UDP/TCP) and the
+   Windows Application log.
+10. **Compliance baselines** (`baselines.py`): built-in Security baseline and Business workstation from the 82 read-only checks, custom
+    baselines, percentage, fix what fails (also from the central server).
+11. **Ransomware protection** (`canary.py`): Controlled Folder Access (on, audit, off) with blocked programs, hidden decoy files and a
+    scheduled check that alerts at once.
+12. **Encrypted data files** (`securestore.py`): DPAPI machine scope for the JSON data files, transparent reads, conversion both ways.
+13. **Background agent** (`service.py`): a Task Scheduler task as SYSTEM from boot with restart on failure (`wmm.py --background`).
+14. **Automatic undo**: a fix whose check says "worse" is put back at once, with an alert.
+15. **MSI package** (`packaging/wmm.wxs`, `tools/build_msi.ps1`): per-machine, silent install with `CONFIG=` (configuration backup and
+    central enrollment code) and `BACKGROUND=1`; `wmm.py --apply-config` and `--install-background`.
+16. **Tests on GitHub** (`.github/workflows/tests.yml`): unit and API tests, JavaScript syntax and dictionaries on Windows at every change.
+17. **Tickets** (`tickets.py`): Jira, ServiceNow, GLPI or generic JSON, per alert.
+18. **Incidents and escalation** (`incidents.py`): every alert becomes an incident to take and close; escalation to channels and roles.
+19. **API tokens and PowerShell** (`tools/WMM.psm1`): scoped tokens (never more than the user), Bearer authentication from this PC only.
+20. **Executive report** (`pdfreport.py`): a PDF built without extra packages, for this PC or every PC of the central server.
+
 ## 2.9.0 — 2026-11-05
 
 **Accounts, roles and permissions, and much richer settings.**

@@ -46,7 +46,7 @@
         API.get("/health").catch(function () { return { checks: [], summary: { ok: 0, warning: 0, error: 0 } }; }), API.get("/agent/autostart").catch(function () { return {}; })]).then(function (r) {
         var s = r[0], inst = r[1].installation || {}, info = App.state.info, hc = r[2], auto = r[3];
         var active = (/[?&]s=(\w+)/.exec(location.hash) || [])[1] || store("settingsSection") || "general";
-        var sezioni = SECTIONS.concat(window.Settings29 ? Settings29.sections() : []);  // 2.9: account, security, channels, app, runs, data
+        var sezioni = SECTIONS.concat(window.Settings29 ? Settings29.sections() : [], window.Settings210 ? Settings210.sections() : []);  // 2.9: account, security, channels, app, runs, data
         if (!sezioni.some(function (x) { return x[0] === active; })) active = "general";
         App.setSubtitle("Preferences of this console and of this PC");
         var theme = Components.theme.get(), dashHidden = store("dashHidden") || [];
@@ -212,6 +212,7 @@
         };
 
         if (window.Settings29) Settings29.sections().forEach(function (x) { body[x[0]] = Settings29.body(x[0]); });
+        if (window.Settings210) Settings210.sections().forEach(function (x) { body[x[0]] = Settings210.body(x[0]); });
         el.innerHTML = UI.pageHeader("Settings", "Pick a section on the left; every change is saved at once", "") +
           '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">' +
           '<label class="dt-search settings-search">' + UI.icon("search") + '<span class="sr-only">Search settings</span><input type="search" id="settings-q" placeholder="Search settings…"></label>' +
@@ -287,6 +288,7 @@
         var on = function (id, fn) { el.querySelector("#" + id).addEventListener("change", function (e) { fn(e.target.checked, e.target); }); };
         if (window.AlertsPanel) AlertsPanel.mount(el.querySelector("#remote-alerts"));
         if (window.Settings29) Settings29.mount(el);
+        if (window.Settings210) Settings210.mount(el);
         if (window.Insights28) Insights28.digest(el.querySelector("#remote-digest"));
         if (window.UpdatesPanel) UpdatesPanel.mount(el.querySelector("#program-updates"));
         on("contrast", function (v) { store("contrast", v); App.applyLook(); });

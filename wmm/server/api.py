@@ -43,6 +43,7 @@ from ..agent.store import Store
 from .errors import ApiError  # noqa: F401 - part of this module's interface
 from .features import AgentFeatures, HandlerFeatures, FEATURE_ROUTES
 from .accounts_api import ACCOUNT_ROUTES, AccountsHandler
+from .enterprise_api import ENTERPRISE_ROUTES, AgentEnterprise, HandlerEnterprise
 
 WEB = Path(wmm.__file__).resolve().parent / "web"
 STATIC_FILES: Dict[str, Path] = {p.relative_to(WEB).as_posix(): p for p in WEB.rglob("*") if p.is_file() and p.name != "index.html"}
@@ -76,7 +77,7 @@ def _delay(corpo: dict) -> int:
         raise ApiError(400, "The delay must be a number of minutes.") from None
 
 
-class Agent(AgentFeatures):
+class Agent(AgentEnterprise, AgentFeatures):
     def __init__(self, data_dir: Path, preview: bool, admin: bool):
         self.data_dir = Path(data_dir)
         self.preview = preview
@@ -840,7 +841,7 @@ class Agent(AgentFeatures):
 Route = Tuple[str, "re.Pattern[str]", Callable]
 
 
-class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
+class Handler(HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
     agent: Agent
     server_version = "WMM/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -924,8 +925,11 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         origine = self.headers.get("Origin")
         if origine and origine not in {f"http://{h}" for h in consentiti}:
             raise ApiError(403, "Forbidden origin.")
+        # API tokens of scripts (2.10) replace the console token; _authorize checks them.
+        if self.headers.get("Authorization", "").startswith("Bearer ") and self.agent.accounts.enabled:
+            return
         # Pairing is the one write without a token: it only works after a click on Yes at the PC.
-        if self.command not in ("GET", "HEAD") and urlsplit(self.path).path != "/api/v1/pair":
+        if self.command not in ("GET", "HEAD") and urlsplit(self.path).path not in ("/api/v1/pair", "/api/v1/auth/oidc/callback"):
             token = self.headers.get("X-WMM-Token", "")
             if not hmac.compare_digest(token, self.agent.token):
                 raise ApiError(403, "Missing or invalid token.")
@@ -943,7 +947,16 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         nome = funzione.__name__
         if nome in permissions.PUBLIC:
             return
-        utente = conti.session(self.headers.get("X-WMM-Session", ""))
+        intestazione = self.headers.get("Authorization", "")
+        if intestazione.startswith("Bearer "):
+            from ..agent import governance
+            utente = governance.token_user(conti, intestazione[7:].strip())
+            if utente is None:
+                raise ApiError(401, "Invalid or expired API token.")
+            if (nome.startswith("auth_") and nome != "auth_me") or nome in ("tokens_get", "token_create", "token_delete"):
+                raise ApiError(403, "API tokens cannot sign in, change passwords or manage tokens.")
+        else:
+            utente = conti.session(self.headers.get("X-WMM-Session", ""))
         if utente is None:
             raise ApiError(401, "Sign in to continue.")
         self.user = utente
@@ -984,6 +997,9 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
             return
         regole = appsettings.load(self.agent.data_dir)
         noti = self._check_role_tools(ids)
+        from ..agent import governance
+        if governance.needs_approval(self.agent.data_dir, self.user, noti):  # a second person decides (2.10)
+            raise ApprovalPending(governance.request(self.agent.accounts, self.user, list(ids), str((corpo or {}).get("reason", ""))))
         if regole["block_high_risk"] and any(a.risk == "high" and a.kind != "report" for a in noti):
             raise ApiError(409, "High-risk tools are blocked on this PC (Settings › Runs).")
         corpo = corpo or {}
@@ -1014,6 +1030,9 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
                         self._authorize(funzione, trovato.groups())
                         try:
                             funzione(self, query, *trovato.groups())
+                        except ApprovalPending as attesa:
+                            self._json(202, {"approval": attesa.request, "message": "This run needs the approval of a second person: the request was sent."})
+                            return
                         except ApiError as errore:
                             self._audit_write(funzione, errore.status < 400)
                             raise
@@ -1414,10 +1433,18 @@ ROUTES: List[Route] = [
     _route("DELETE", r"/schedules/(\d+)", Handler.delete_schedule),
     _route("POST", r"/schedules/(\d+)/resync", Handler.resync_schedule),
     _route("POST", r"/schedules/(\d+)/test", Handler.test_schedule),
-] + [_route(m, s, f) for m, s, f in ACCOUNT_ROUTES] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
+] + [_route(m, s, f) for m, s, f in ENTERPRISE_ROUTES] + [_route(m, s, f) for m, s, f in ACCOUNT_ROUTES] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
 
 
 DISCONNECTED = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, TimeoutError)
+
+
+class ApprovalPending(Exception):
+    """A run that waits for a second person (2.10): answered 202 with the request."""
+
+    def __init__(self, request: dict):
+        super().__init__("approval pending")
+        self.request = request
 
 
 class AgentServer(ThreadingHTTPServer):
@@ -1439,4 +1466,5 @@ def make_server(agent: Agent, port: int) -> ThreadingHTTPServer:
     agent.server = server
     agent.start_fleet_share()  # the read-only PC summary for other consoles, when turned on
     agent.start_phone_server()  # the console from a phone of the local network, when turned on (2.8)
+    agent.start_enterprise()  # central server and client, escalation, SIEM (2.10)
     return server

@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from . import securestore
 from . import notify
 
 DEFAULT_PORT = 8766
@@ -82,14 +83,14 @@ class Fleet:
 
     def _read(self) -> dict:
         try:
-            dati = json.loads(self.path.read_text(encoding="utf-8"))
+            dati = json.loads(securestore.read_text(self.path))
             return dati if isinstance(dati, dict) else {}
         except (OSError, ValueError):
             return {}
 
     def _write(self, dati: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(dati, indent=1), encoding="utf-8")
+        securestore.write_text(self.path, json.dumps(dati, indent=1), encoding="utf-8")
 
     # ---------- sharing this PC ----------
 
@@ -399,6 +400,10 @@ def summary_server(fleet: Fleet, porta: int, riassunto: Callable[[], dict], runs
 
     server = ThreadingHTTPServer(("0.0.0.0", porta), Riassunto)
     server.daemon_threads = True
+    from . import appsettings
+    if appsettings.load(fleet.path.parent).get("https_lan"):  # Settings › Security › HTTPS on the local network (2.10)
+        from . import tlsutil
+        tlsutil.wrap(server, fleet.path.parent)
     threading.Thread(target=server.serve_forever, name="wmm-fleet-share", daemon=True).start()
     return server
 

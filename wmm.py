@@ -41,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", metavar="FOLDER", help="installation folder for --install")
     parser.add_argument("--auto-install", action="store_true",
                         help="install or update the protected copy in Program Files, then start it (used by start_wmm.bat)")
+    parser.add_argument("--background", action="store_true",
+                        help="run the agent in the background (no window, no browser): what the background task of Settings starts")
+    parser.add_argument("--install-background", action="store_true", help="install the background agent task (as administrator) and exit")
+    parser.add_argument("--apply-config", metavar="FILE", help="apply a configuration backup (silent installation) and exit")
     parser.add_argument("--hidden", action="store_true",
                         help="no console window: messages go to dati\\wmm-console.log (used when starting with Windows)")
     parser.add_argument("--sandbox-test", action="store_true",
@@ -196,11 +200,51 @@ def serve(port: int, preview: bool, open_browser: bool) -> int:
     return 0
 
 
+def apply_config(percorso: str) -> int:
+    """Silent installation (2.10): a configuration backup applied at install time, plus an optional central server code
+    ("central_code") so the PC enrolls by itself."""
+    import json as _json
+    from wmm.agent import appsettings, central
+    from wmm.agent.store import Store
+    try:
+        dati = _json.loads(Path(percorso).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as errore:
+        print(f"The configuration file cannot be read: {errore}")
+        return 2
+    esito = appsettings.import_config(DATA_DIR, dati, Store(DATA_DIR / "wmm.db"))
+    print("Applied: " + ", ".join(esito["restored"]))
+    if dati.get("central_code"):
+        try:
+            central.enroll(DATA_DIR, dati["central_code"], socket_hostname(), core.machine_id())
+            print("Enrolled with the central server.")
+        except Exception as errore:  # noqa: BLE001
+            print(f"Enrollment failed: {errore}")
+            return 1
+    return 0
+
+
+def socket_hostname() -> str:
+    import socket
+    return socket.gethostname()
+
+
 def main(argomenti: Optional[Sequence[str]] = None) -> int:
     opzioni = build_parser().parse_args(argomenti)
     # pythonw.exe has no stdout at all: hidden mode gives it the log file.
+    if opzioni.background:
+        opzioni.hidden, opzioni.no_browser = True, True
     if opzioni.hidden or sys.stdout is None:
         go_hidden()
+    if opzioni.apply_config:
+        return apply_config(opzioni.apply_config)
+    if opzioni.install_background:
+        from wmm.agent import appsettings, service
+        try:
+            print(service.install(sys.executable, str(Path(__file__).resolve()), appsettings.load(DATA_DIR)["console_port"] or 8765))
+            return 0
+        except OSError as errore:
+            print(f"The background agent could not be installed: {errore}")
+            return 1
     elif hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     os.chdir(ROOT)

@@ -13,6 +13,7 @@ from typing import Optional
 import wmm
 from ottimizza_pc import Esito, Stato
 
+from . import securestore
 from . import netscan, notify, radio, upnp
 
 DATA_DIR = Path(wmm.ROOT) / "dati"  # the same folder wmm.py gives the agent
@@ -130,7 +131,7 @@ def classify(campione: dict) -> str:
 
 def connection_history(data_dir: Optional[Path] = None) -> dict:
     try:
-        campioni = json.loads(_connection_path(data_dir).read_text(encoding="utf-8")).get("samples", [])
+        campioni = json.loads(securestore.read_text(_connection_path(data_dir))).get("samples", [])
     except (OSError, ValueError):
         campioni = []
     cadute, aperta = [], None
@@ -157,11 +158,11 @@ def record_connection(data_dir: Optional[Path] = None, campione: Optional[dict] 
     campione = campione or connection_sample()
     percorso = _connection_path(data_dir)
     try:
-        campioni = json.loads(percorso.read_text(encoding="utf-8")).get("samples", [])
+        campioni = json.loads(securestore.read_text(percorso)).get("samples", [])
     except (OSError, ValueError):
         campioni = []
     percorso.parent.mkdir(parents=True, exist_ok=True)
-    percorso.write_text(json.dumps({"samples": (campioni + [campione])[-KEEP_CONNECTION_SAMPLES:]}), encoding="utf-8")
+    securestore.write_text(percorso, json.dumps({"samples": (campioni + [campione])[-KEEP_CONNECTION_SAMPLES:]}), encoding="utf-8")
     return campione
 
 

@@ -12,6 +12,7 @@ from typing import Callable, List, Optional
 
 from ottimizza_pc import Esito, Stato
 
+from . import securestore
 from .tools import powershell_command
 
 KEEP_DAYS = 3 * 365
@@ -73,7 +74,7 @@ def _path(data_dir: Path) -> Path:
 
 def history(data_dir: Path) -> List[dict]:
     try:
-        return json.loads(_path(data_dir).read_text(encoding="utf-8")).get("samples", [])
+        return json.loads(securestore.read_text(_path(data_dir))).get("samples", [])
     except (OSError, ValueError):
         return []
 
@@ -87,7 +88,7 @@ def record(data_dir: Path, lettura: Optional[dict] = None, quando: Optional[date
     campioni = sorted([c for c in campioni if str(c.get("t", "")) >= limite] + [campione], key=lambda c: c["t"])
     percorso = _path(data_dir)
     percorso.parent.mkdir(parents=True, exist_ok=True)
-    percorso.write_text(json.dumps({"samples": campioni}), encoding="utf-8")
+    securestore.write_text(percorso, json.dumps({"samples": campioni}), encoding="utf-8")
     return campione
 
 

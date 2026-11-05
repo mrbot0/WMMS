@@ -16,6 +16,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from . import securestore
 from . import drift
 from .tools import powershell_command
 
@@ -43,7 +44,7 @@ def save_snapshot(data_dir: Path, istantanea: Dict[str, Dict[str, str]], giorno:
     cartella = _folder(data_dir)
     cartella.mkdir(parents=True, exist_ok=True)
     percorso = cartella / f"{(giorno or date.today()).isoformat()}.json"
-    percorso.write_text(json.dumps(istantanea, ensure_ascii=False), encoding="utf-8")
+    securestore.write_text(percorso, json.dumps(istantanea, ensure_ascii=False), encoding="utf-8")
     for vecchio in sorted(cartella.glob("????-??-??.json"))[:-KEEP_DAYS]:
         try:
             vecchio.unlink()
@@ -292,7 +293,7 @@ def apply(data_dir: Path, piano: dict, scelte: List[str], runner: Optional[Calla
     fatti = [dict(o, result=e) for o, e in zip(scelti, esiti)]
     riusciti = [o for o in fatti if o["result"]["ok"]]
     if riusciti:
-        _last_path(data_dir).write_text(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "day": piano["day"],
+        securestore.write_text(_last_path(data_dir), json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "day": piano["day"],
                                                     "ops": [{"text": o["text"], "undo": o["undo"]} for o in riusciti]}, ensure_ascii=False),
                                         encoding="utf-8")
     return {"done": len(riusciti), "failed": len(fatti) - len(riusciti),
@@ -301,7 +302,7 @@ def apply(data_dir: Path, piano: dict, scelte: List[str], runner: Optional[Calla
 
 def last(data_dir: Path) -> Optional[dict]:
     try:
-        dati = json.loads(_last_path(data_dir).read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(_last_path(data_dir)))
     except (OSError, ValueError):
         return None
     return {"at": dati.get("at"), "day": dati.get("day"), "count": len(dati.get("ops", [])), "undone": dati.get("undone")}
@@ -311,7 +312,7 @@ def revert(data_dir: Path, runner: Optional[Callable[[str], str]] = None) -> dic
     """Undo the return: the opposites, newest first."""
     percorso = _last_path(data_dir)
     try:
-        dati = json.loads(percorso.read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(percorso))
     except (OSError, ValueError):
         raise GoodConfigError("There is no return to undo.") from None
     if dati.get("undone"):
@@ -319,6 +320,6 @@ def revert(data_dir: Path, runner: Optional[Callable[[str], str]] = None) -> dic
     voci = list(reversed(dati.get("ops", [])))
     esiti = run_ops([v["undo"] for v in voci], runner)
     dati["undone"] = datetime.now().isoformat(timespec="seconds")
-    percorso.write_text(json.dumps(dati, ensure_ascii=False), encoding="utf-8")
+    securestore.write_text(percorso, json.dumps(dati, ensure_ascii=False), encoding="utf-8")
     return {"done": sum(1 for e in esiti if e["ok"]), "failed": sum(1 for e in esiti if not e["ok"]),
             "results": [{"text": v["text"], "ok": e["ok"], "error": e["error"]} for v, e in zip(voci, esiti)]}

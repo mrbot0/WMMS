@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import wmm
+from . import securestore
 
 EVENTS = {
     "run_failed": "A scheduled run failed",
@@ -28,12 +29,16 @@ EVENTS = {
     "config_changed": "Suspicious changes in startup, tasks or extensions",
     "connection_down": "The internet connection dropped",
     "early_warning": "Signs that a part of the PC may fail soon",
+    "ransomware_canary": "Decoy files were touched: possible ransomware",
+    "auto_rollback": "A fix made things worse and was undone",
 }
 EVENTS_IT = {
     "run_failed": "Un'esecuzione pianificata non è riuscita", "disk_low": "Il disco di sistema è quasi pieno",
     "unsafe_apps": "Trovati nuovi programmi non sicuri", "new_device": "Un nuovo dispositivo è entrato nella rete",
     "bt_follower": "Un tracker Bluetooth sconosciuto continua a comparire", "config_changed": "Modifiche sospette ad avvio, attività o estensioni",
     "connection_down": "La connessione a internet è caduta", "early_warning": "Segni che una parte del PC potrebbe guastarsi presto",
+    "ransomware_canary": "File trappola toccati: possibile ransomware",
+    "auto_rollback": "Una correzione ha peggiorato le cose ed è stata annullata",
 }
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {
@@ -91,14 +96,14 @@ class Notifier:
 
     def _read(self) -> dict:
         try:
-            dati = json.loads(self.path.read_text(encoding="utf-8"))
+            dati = json.loads(securestore.read_text(self.path))
             return dati if isinstance(dati, dict) else {}
         except (OSError, ValueError):
             return {}
 
     def _write(self, dati: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(dati, indent=1), encoding="utf-8")
+        securestore.write_text(self.path, json.dumps(dati, indent=1), encoding="utf-8")
 
     def settings(self) -> dict:
         """What the page shows: every field except the secrets, which only say whether they are set."""
@@ -263,6 +268,11 @@ class Notifier:
             return {}
         canali = app["alert_routes"].get(chiave)
         esiti = self.send(titolo, dettaglio, solo=canali if canali is not None else None, evento=chiave)
+        try:  # every alert becomes an incident to take charge of, with a ticket when that is set up (2.10)
+            from . import incidents
+            incidents.open_incident(self.data_dir, chiave, titolo, dettaglio, esiti)
+        except Exception:  # noqa: BLE001 - the alert went out anyway
+            pass
         if any(v == "ok" for v in esiti.values()):
             dati = self._read()
             dati.setdefault("sent", {})[nome] = adesso

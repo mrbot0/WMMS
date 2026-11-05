@@ -13,6 +13,7 @@ from typing import Callable, Dict, Optional
 
 from ottimizza_pc import Esito, Stato
 
+from . import securestore
 from . import notify
 from .tools import powershell_command
 
@@ -120,7 +121,7 @@ def _path(data_dir: Path) -> Path:
 
 def last(data_dir: Path) -> dict:
     try:
-        dati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(_path(data_dir)))
     except (OSError, ValueError):
         dati = {}
     return {"checked": dati.get("checked"), "baseline_from": dati.get("baseline_from"), "last": dati.get("last"),
@@ -132,7 +133,7 @@ def check(data_dir: Path, runner: Optional[Callable[[], str]] = None) -> dict:
     """Takes a new snapshot, compares it with the stored one and keeps the new one as the baseline."""
     percorso = _path(data_dir)
     try:
-        dati = json.loads(percorso.read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(percorso))
     except (OSError, ValueError):
         dati = {}
     adesso = datetime.now().isoformat(timespec="seconds")
@@ -150,7 +151,7 @@ def check(data_dir: Path, runner: Optional[Callable[[], str]] = None) -> dict:
     if totale:
         dati["history"] = (dati.get("history", []) + [esito])[-50:]
     percorso.parent.mkdir(parents=True, exist_ok=True)
-    percorso.write_text(json.dumps(dati, ensure_ascii=False), encoding="utf-8")
+    securestore.write_text(percorso, json.dumps(dati, ensure_ascii=False), encoding="utf-8")
     try:  # the dated copy that "Back to the last good configuration" goes back to (2.8)
         from .goodconfig import save_snapshot
         save_snapshot(percorso.parent, nuovo)

@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
+from . import securestore
 from .tools import powershell_command
 
 MAX_HOSTS = 1022
@@ -323,14 +324,14 @@ class NetworkScanner:
 
     def last(self) -> Optional[dict]:
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
+            return json.loads(securestore.read_text(self.path))
         except (OSError, ValueError):
             return None
 
     def run(self, this_ip: Optional[str] = None, progress=None, alias: Optional[str] = None) -> dict:
         risultato = merge_history(scan(this_ip, progress=progress, alias=alias), self.last())
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(risultato), encoding="utf-8")
+        securestore.write_text(self.path, json.dumps(risultato), encoding="utf-8")
         return risultato
 
 
