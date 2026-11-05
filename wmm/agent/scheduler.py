@@ -17,8 +17,10 @@ from .jobs import RunInProgress
 from .store import Store, now
 
 FOLDER = "\\WindowsMaintenanceManager\\"
-KINDS = ("once", "daily", "weekly", "monthly", "startup", "logon")
-EVENT_KINDS = ("startup", "logon")  # fire on an event, not at a time: `at` is only the date they become active
+KINDS = ("once", "daily", "weekly", "monthly", "startup", "logon", "idle")
+# Fire on an event, not at a time: `at` is only the date they become active. idle (2.12): when nobody used the PC for
+# `delay` minutes (10 when 0).
+EVENT_KINDS = ("startup", "logon", "idle")
 MAX_DELAY_MINUTES = 60
 MAX_MONTH_DAY = 28  # every month has it, so a monthly schedule never skips a month
 WEEKDAYS = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday",
@@ -61,6 +63,8 @@ def trigger_xml(schedule: dict) -> str:
     """The <Triggers> content for a schedule (actions and scripts share it)."""
     inizio = f"<StartBoundary>{schedule['at']}:00</StartBoundary><Enabled>true</Enabled>"
     tipo = schedule["kind"]
+    if tipo == "idle":
+        return f"<IdleTrigger>{inizio}</IdleTrigger>"
     if tipo in EVENT_KINDS:
         ritardo = int(schedule.get("delay") or 0)
         attesa = f"<Delay>PT{ritardo}M</Delay>" if ritardo else ""
@@ -84,6 +88,11 @@ def task_xml(schedule: dict, python: str, script: str) -> str:
     validate(schedule["kind"], schedule["at"], schedule.get("days") or "", int(schedule.get("delay") or 0))
     trigger = trigger_xml(schedule)
     abilitato = "true" if schedule.get("enabled", True) else "false"
+    inattivo = ""
+    if schedule["kind"] == "idle":
+        minuti = int(schedule.get("delay") or 0) or 10
+        inattivo = (f"\n    <IdleSettings><Duration>PT{minuti}M</Duration><WaitTimeout>PT23H</WaitTimeout><StopOnIdleEnd>false</StopOnIdleEnd>"
+                    "<RestartOnIdle>false</RestartOnIdle></IdleSettings><RunOnlyIfIdle>true</RunOnlyIfIdle>")
     # -I: ignore PYTHONPATH and user site-packages in the SYSTEM process.
     argomenti = escape(f'-I "{script}" --run-schedule {schedule["id"]}')
     return f"""<?xml version="1.0" encoding="UTF-16"?>
@@ -102,7 +111,7 @@ def task_xml(schedule: dict, python: str, script: str) -> str:
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <StartWhenAvailable>true</StartWhenAvailable>
     <ExecutionTimeLimit>PT4H</ExecutionTimeLimit>
-    <Enabled>{abilitato}</Enabled>
+    <Enabled>{abilitato}</Enabled>{inattivo}
   </Settings>
   <Actions Context="Author">
     <Exec>

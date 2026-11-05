@@ -1,28 +1,54 @@
-/* Settings: a side menu of sections (one shown at a time, remembered) with branding, appearance, behaviour, dashboard,
-   start-up, data and security, guides and the agent. */
+/* Settings: a side menu of sections (one shown at a time, remembered). 2.12: the sections are grouped in six groups
+   (Personal, Alerts, Maintenance, Security and access, Organization, System and data) with clearer names, and an
+   Overview opens first with the state of everything that matters. */
 (function () {
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
   var SECTIONS = [
-    ["general", "General", "settings", "Report branding"],
+    ["general", "Organization and reports", "settings", "Company, technician, cover and footer"],
     ["appearance", "Appearance", "sun", "Theme, colors, text, animations"],
     ["behaviour", "Behaviour", "bolt", "Start page, formats, tables, keyboard"],
-    ["notifications", "Notifications", "bell", "Sounds, volume, quiet hours, alerts"],
-    ["maintenance", "Maintenance", "clock", "Schedule defaults, battery, reports"],
+    ["notifications", "Sounds and desktop alerts", "bell", "Sounds, volume, quiet hours"],
+    ["maintenance", "Schedule defaults", "clock", "Time, delay, battery, reports"],
     ["dashboard", "Dashboard", "dashboard", "Sections shown on the dashboard"],
     ["startup", "Start-up", "power", "Restore point and start with Windows"],
-    ["data", "Data and security", "shield", "Privacy, inactivity, history, preferences"],
+    ["data", "Privacy", "shield", "Hidden details, lock when idle, preferences"],
     ["guides", "Guides and shortcuts", "support", "Tips, tour, keyboard"],
     ["agent", "This agent", "cpu", "Installation and health check"]
   ];
+
+  // 2.12: the six groups of the side menu, in order; a section not listed goes to the group of its module.
+  var GROUPS = [
+    ["Personal", ["account", "appearance", "behaviour", "dashboard", "guides"]],
+    ["Alerts", ["notifications", "channels"]],
+    ["Maintenance", ["runs", "automation", "maintenance", "startup"]],
+    ["Security and access", ["security", "sso", "tokens", "protection", "data"]],
+    ["Organization and integrations", ["general", "app", "integrations"]],
+    ["System and data", ["agent", "filebackup", "datamgmt"]]
+  ];
+  var RENAME = { channels: ["Alert channels", "E-mail, Telegram, webhook, routing"], app: ["Connections and console", "Organization, port, proxy, offline"],
+    datamgmt: ["Data and backup", "Retention, database, backup, reset"], security: ["Accounts and passwords", "Sign-in, passwords, lockout, sessions"] };
+  function ordered(sezioni) {
+    var byId = {};
+    sezioni.forEach(function (s) { byId[s[0]] = RENAME[s[0]] ? [s[0], RENAME[s[0]][0], s[2], RENAME[s[0]][1]] : s; });
+    var used = {}, out = [];
+    if (byId.overview) { out.push({ group: "", items: [byId.overview] }); used.overview = true; }
+    GROUPS.forEach(function (g) {
+      var items = g[1].filter(function (id) { return byId[id]; }).map(function (id) { used[id] = true; return byId[id]; });
+      if (items.length) out.push({ group: g[0], items: items });
+    });
+    var rest = sezioni.filter(function (s) { return !used[s[0]]; });
+    if (rest.length) out.push({ group: "More", items: rest });
+    return out;
+  }
 
   function store(k, v) { return Components.store(k, v); }
   /* The preferences of each section, for “Reset this section”. */
   var SECTION_KEYS = {
     appearance: ["accent", "fontSize", "density", "corners", "contrast", "cbSafe", "noBlur", "wideText", "underlineLinks", "hideLiveMini", "sidebar",
       "sidebarWidth", "shadows", "typeface", "pageWidth", "hideStatusbar", "noTips"],
-    behaviour: ["startPage", "dashInterval", "pageSize", "toastSpeed", "confirmSafe", "warnOnClose", "noKeyShortcuts", "paletteActions", "pageTabs", "autoScanDays",
+    behaviour: ["startPage", "dashInterval", "pageSize", "toastSpeed", "confirmSafe", "warnOnClose", "noKeyShortcuts", "paletteActions", "pageTabs", "autoScanDays", "simpleMode",
       "liveInterval", "toastLevel", "timeFormat", "dateStyle", "sizeUnits"],
     notifications: ["sound", "soundVolume", "desktopNotify", "notifyProblemsOnly", "titleProgress", "flashTitle", "speak", "scheduleNotice", "quietHours"],
     maintenance: ["defaultTime", "defaultDelay", "batteryWarn", "autoOpenReports", "autoDrawer", "longRunMinutes", "tempAlert", "sensorInterval"],
@@ -45,9 +71,12 @@
       return Promise.all([API.get("/settings"), API.get("/schedules").catch(function () { return { installation: {} }; }),
         API.get("/health").catch(function () { return { checks: [], summary: { ok: 0, warning: 0, error: 0 } }; }), API.get("/agent/autostart").catch(function () { return {}; })]).then(function (r) {
         var s = r[0], inst = r[1].installation || {}, info = App.state.info, hc = r[2], auto = r[3];
-        var active = (/[?&]s=(\w+)/.exec(location.hash) || [])[1] || store("settingsSection") || "general";
-        var sezioni = SECTIONS.concat(window.Settings29 ? Settings29.sections() : [], window.Settings210 ? Settings210.sections() : []);  // 2.9: account, security, channels, app, runs, data
-        if (!sezioni.some(function (x) { return x[0] === active; })) active = "general";
+        var active = (/[?&]s=(\w+)/.exec(location.hash) || [])[1] || store("settingsSection") || "overview";
+        var sezioni = SECTIONS.concat(window.Settings29 ? Settings29.sections() : [], window.Settings210 ? Settings210.sections() : [],
+          window.Settings212 ? Settings212.sections() : []);  // 2.9: account, security, channels, app, runs, data; 2.12: overview, automation, backup
+        var gruppi = ordered(sezioni);
+        sezioni = [].concat.apply([], gruppi.map(function (g) { return g.items; }));
+        if (!sezioni.some(function (x) { return x[0] === active; })) active = sezioni[0][0];
         App.setSubtitle("Preferences of this console and of this PC");
         var theme = Components.theme.get(), dashHidden = store("dashHidden") || [];
         var quiet = Object.assign({ on: false, from: "22:00", to: "07:00" }, store("quietHours") || {});
@@ -112,6 +141,7 @@
             check("warn-close", store("warnOnClose") !== false, "Ask before closing the tab while a run is in progress", "The run goes on in the agent anyway; this only avoids closing the view by mistake.") +
             check("no-keys", store("noKeyShortcuts"), "Turn off single-key shortcuts", "G then a letter, /, ? and Shift shortcuts stop working; Ctrl K still opens search. Useful with screen readers or speech input.") +
             check("page-tabs", store("pageTabs") !== false, "Split long pages into tabs", "Dashboard, area pages, Hardware and Schedules show one group at a time: overview first, details after.") +
+            check("simple-mode", store("simpleMode"), "Simple mode", "The menu shows only the everyday pages; the pages for experts still open from the search (Ctrl K).") +
             check("palette-actions", store("paletteActions") !== false, "List actions in the search (Ctrl K)", "Off: the search shows pages, commands and settings only, without the 200+ tools.") +
             "<label>Scan at start when the last scan is older than" + group("autoScanDays", [[0, "Never"], [1, "1 day"], [3, "3 days"], [7, "1 week"]], store("autoScanDays") || 0) +
             '<span class="hint">Only when the console runs as administrator; the scan changes nothing on the PC.</span></label>' +
@@ -213,12 +243,15 @@
 
         if (window.Settings29) Settings29.sections().forEach(function (x) { body[x[0]] = Settings29.body(x[0]); });
         if (window.Settings210) Settings210.sections().forEach(function (x) { body[x[0]] = Settings210.body(x[0]); });
+        if (window.Settings212) Settings212.sections().forEach(function (x) { body[x[0]] = Settings212.body(x[0]); });
         el.innerHTML = UI.pageHeader("Settings", "Pick a section on the left; every change is saved at once", "") +
           '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">' +
           '<label class="dt-search settings-search">' + UI.icon("search") + '<span class="sr-only">Search settings</span><input type="search" id="settings-q" placeholder="Search settings…"></label>' +
-          '<p class="muted small settings-noresult" hidden>No setting matches.</p>' + sezioni.map(function (x) {
-            return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
-              UI.icon(x[2]) + '<span><strong>' + esc(x[1]) + '</strong><span class="cell-sub">' + esc(x[3]) + "</span></span></button>";
+          '<p class="muted small settings-noresult" hidden>No setting matches.</p>' + gruppi.map(function (g) {
+            return (g.group ? '<div class="settings-group">' + esc(g.group) + "</div>" : "") + g.items.map(function (x) {
+              return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
+                UI.icon(x[2]) + '<span><strong>' + esc(x[1]) + '</strong><span class="cell-sub">' + esc(x[3]) + "</span></span></button>";
+            }).join("");
           }).join("") + "</nav>" + '<div class="settings-panels">' + sezioni.map(function (x) {
             var reset = SECTION_KEYS[x[0]] ? '<div class="section-reset"><button type="button" class="btn btn-sm btn-ghost" data-reset-section="' + x[0] + '" data-title="' + esc(x[1]) + '">' +
               UI.icon("refresh") + "Reset this section</button></div>" : "";
@@ -289,6 +322,7 @@
         if (window.AlertsPanel) AlertsPanel.mount(el.querySelector("#remote-alerts"));
         if (window.Settings29) Settings29.mount(el);
         if (window.Settings210) Settings210.mount(el);
+        if (window.Settings212) Settings212.mount(el, App);
         if (window.Insights28) Insights28.digest(el.querySelector("#remote-digest"));
         if (window.UpdatesPanel) UpdatesPanel.mount(el.querySelector("#program-updates"));
         on("contrast", function (v) { store("contrast", v); App.applyLook(); });
@@ -301,6 +335,7 @@
         });
         on("palette-actions", function (v) { store("paletteActions", v); });
         on("page-tabs", function (v) { store("pageTabs", v); UI.toast(v ? "Long pages are split into tabs." : "Long pages show everything at once.", "ok"); });
+        on("simple-mode", function (v) { store("simpleMode", v); App.renderNav(); UI.toast(v ? "Simple mode: the menu shows the everyday pages." : "Every page is in the menu again.", "ok"); });
         on("flash-title", function (v) { store("flashTitle", v); });
         on("speak", function (v) { store("speak", v); if (v && !window.speechSynthesis) UI.toast("This browser has no voice: nothing will be read.", "warning"); });
         on("schedule-notice", function (v) { store("scheduleNotice", v); });

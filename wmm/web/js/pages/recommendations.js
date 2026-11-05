@@ -7,6 +7,32 @@
 
   /* Improvements the technician chose to ignore on this PC (kept in this browser). */
   function keyOf(x) { return x.area + "|" + x.title; }
+
+  /* 2.12: "Why?" explains a recommendation in plain words: what was found, why it matters, what the fix does, the risk,
+     how long it takes and how to go back. */
+  var IMPACT_WHY = { high: "It has a clear effect on speed, space, safety or stability: worth doing during this visit.",
+    medium: "It helps, but nothing breaks if it waits for the next visit.", low: "A small improvement: do it when convenient." };
+  var RISK_WHY = { safe: "Safe: it changes nothing that could stop something working.",
+    moderate: "Moderate: it changes a setting. A restore point is created first and the change can be undone from History.",
+    high: "High: it touches delicate parts of Windows. A restore point is created first; read the warning before running it." };
+  function explain(App, x) {
+    if (!x) return;
+    var a = x.action_id ? App.state.actions[x.action_id] : null;
+    var righe = [["What was found", x.reason || x.title], ["Why it matters", IMPACT_WHY[x.impact] || ""]];
+    if (a) {
+      righe.push(["What the fix does", a.description]);
+      righe.push(["Risk", (RISK_WHY[a.risk] || a.risk) + (a.warning ? " " + a.warning : "")]);
+      righe.push(["How long", a.minutes < 1 ? "Less than a minute." : "About " + Math.round(a.minutes) + " minutes."]);
+      righe.push(["Going back", a.kind === "report" ? "Nothing to undo: it only reads." : a.risk === "safe" ? "Usually nothing to undo; History shows what it did."
+        : "History › the run › Undo puts back the values it changed; the restore point covers the rest."]);
+    } else {
+      righe.push(["What to do", "Open " + (UI.AREA_LABEL[x.area] || x.area) + " to see the details: this improvement has no one-click fix."]);
+    }
+    righe.push(["Found", "By the scan of " + UI.AREA_LABEL[x.area] + ", " + UI.relative(x.scanned) + "."]);
+    UI.modal(x.title, '<dl class="why-list">' + righe.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("") + "</dl>",
+      a ? [{ label: "Close", cls: "btn-ghost" }, { label: "Apply", cls: "btn-primary", value: function () { return "run"; } }] : [{ label: "Close", cls: "btn-primary" }])
+      .then(function (v) { if (v === "run") App.runActions([x.action_id]); });
+  }
   function dismissed() { return Components.store("recDismissed") || []; }
   /* Snoozed improvements come back by themselves after a week. */
   var SNOOZE_DAYS = 7;
@@ -99,7 +125,7 @@
               : '<button class="btn btn-sm btn-ghost" data-dismiss="' + esc(keyOf(x)) + '" title="' + (x.dismissed ? "Show this improvement again" : "Hide this improvement on this PC") + '">' +
               (x.dismissed ? "Restore" : UI.icon("x")) + "</button>";
             var snooze = x.dismissed ? "" : '<button class="btn btn-sm btn-ghost" data-snooze="' + esc(keyOf(x)) + '" title="Hide it for ' + SNOOZE_DAYS + ' days, then show it again">' + UI.icon("clock") + "</button>";
-            dismiss = snooze + dismiss;
+            dismiss = '<button class="btn btn-sm btn-ghost" data-why="' + esc(keyOf(x)) + '" title="Why it is recommended, what it changes, how to undo it">Why?</button>' + snooze + dismiss;
             return '<li class="rec rec-' + esc(x.impact) + (x.dismissed ? " rec-dismissed" : "") + (x.snoozedUntil ? " rec-snoozed" : "") + '">' + check + '<div class="rec-main"><div class="rec-title">' + esc(x.title) + ' <span class="muted small">· ' +
               esc(UI.AREA_LABEL[x.area] || x.area) + '</span></div><div class="rec-reason">' + esc(x.reason) + '</div><div class="rec-badges">' + UI.impactBadge(x.impact) + UI.riskBadge(x.risk) +
               '<span class="badge">Scanned ' + esc(UI.relative(x.scanned)) + "</span></div></div>" + '<div class="rec-actions">' +
@@ -114,6 +140,8 @@
         }
         list.addEventListener("change", update);
         list.addEventListener("click", function (e) {
+          var why = e.target.closest("[data-why]");
+          if (why) { explain(App, everything.filter(function (x) { return keyOf(x) === why.getAttribute("data-why"); })[0]); return; }
           var sn = e.target.closest("[data-snooze],[data-unsnooze]");
           if (sn) {
             var all = snoozed(), k = sn.getAttribute("data-snooze") || sn.getAttribute("data-unsnooze");

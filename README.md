@@ -1,176 +1,227 @@
-# Windows Maintenance Manager
+# Windows Maintenance Manager (WMM)
 
-Local Windows maintenance suite for IT technicians. The technician starts it on the PC being serviced
-and works from an enterprise web console that runs **offline** on `127.0.0.1`: it assesses nine areas of
-the system, proposes improvements, applies them in one click or on a schedule, keeps a history and
-produces customer-ready reports.
+**WMM checks, repairs and keeps Windows PCs in shape, one or hundreds of them, from a web console that runs on the PC itself.**
 
-- **114 maintenance actions** in nine areas, each rated *safe*, *moderate* or *high risk*, browsable in the Actions catalog
-- **5 playbooks** (Quick tune-up, Full maintenance, Repair Windows, Security hardening, Performance boost)
-- **Live monitor** of CPU, memory, disk, network and processes, refreshed every 2 seconds
-- **Schedules** registered in Windows Task Scheduler, running even when the console is closed
-- **History and reports**: trends, before/after comparison, HTML/PDF reports with your company branding, CSV and JSON export
-- **Python standard library only**: nothing to install besides Python, no internet connection needed
+You start it on the PC to fix and work from a console in your browser, on `127.0.0.1`. The console:
+
+- scans nine areas of the system and gives each one a score from 0 to 100;
+- explains what is wrong and proposes the fixes;
+- applies them with one click or on a schedule, with a restore point before every change;
+- keeps a history of everything and produces reports ready to hand to a customer.
+
+In a company the same PCs are managed from a **central server**, with accounts, roles, approvals, compliance and separate clients.
+
+Everything is plain Python (nothing to install besides Python) and works without internet. Nothing leaves the PC unless you turn it on.
+
+The console speaks English and Italian. The administrator manual and the user guide are in Italian, in [docs/](docs/).
 
 ---
 
 ## Contents
 
-Manuals (Italian): [administrator manual](docs/manuale-amministratore.md) · [user guide](docs/guida-utente.md) · [API and OpenAPI](docs/api.md)
-
-- [Requirements](#requirements)
-- [Quick start](#quick-start)
-- [The console](#the-console)
-- [Areas and actions](#areas-and-actions)
-- [Safety model](#safety-model)
-- [Schedules and protected installation](#schedules-and-protected-installation)
-- [Command line](#command-line)
+- [Who it is for](#who-it-is-for)
+- [What it does](#what-it-does)
+- [How changes are kept safe](#how-changes-are-kept-safe)
+- [Installation](#installation)
+- [First steps](#first-steps)
+- [The console, page by page](#the-console-page-by-page)
+- [Automation](#automation)
+- [In a company](#in-a-company)
 - [Data and privacy](#data-and-privacy)
-- [Local API](#local-api)
+- [Command line](#command-line)
+- [API](#api)
 - [Architecture](#architecture)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
 
-## Requirements
+---
+
+## Who it is for
+
+| Who | What they do with it |
+|---|---|
+| **IT technician** | Visits a customer, starts WMM, scans everything in a couple of minutes, applies the fixes and hands over a before/after report. |
+| **Office or small business** | Leaves WMM installed: schedules maintenance, gets alerts by e-mail or Telegram, keeps the PCs updated and safe. |
+| **IT department** | Manages every PC from the central server: inventory, software, Windows Update rings, compliance, approvals, and sign-in with company accounts (Entra ID, Active Directory). |
+| **Managed service provider (MSP)** | Looks after several customer companies from one server, with technicians limited to the clients they look after. |
+| **Non-expert user** | Uses Simple mode: the dashboard says what to fix first, and every recommendation has a plain-language "Why?". |
+
+## What it does
+
+### Scans and recommendations
+
+- **Nine areas** with a score: Cleanup, System Integrity, Services, Performance, Storage, Network, Startup & Apps, Security, Updates & Drivers.
+- **Recommendations** sorted by impact. Each one has a **Why?** that explains:
+  - what was found and why it matters;
+  - what the fix does and its risk;
+  - how long it takes and how to go back.
+- **What changed since yesterday** on the dashboard: scores up or down, new and solved problems, failed runs.
+- **Goals** (for example "free space on C: at least 20%"), with an alert when the PC drifts outside them.
+
+### 369 tools
+
+There are **209 fixes**, which change something, and **160 reports**, which only read. Each tool is rated *safe*, *moderate* or *high risk*.
+
+| Area | Examples |
+|---|---|
+| Cleanup | temporary files, Windows Update cache, Teams, Office and browser caches, superseded components, Recycle Bin, crash dumps |
+| Integrity | SFC, DISM, CHKDSK, blue screens explained, signs of a coming failure, Windows Update reset |
+| Services | unnecessary services, telemetry, Xbox, putting back the original state |
+| Performance | power plans, visual effects, page file, heaviest processes, "Why is the PC slow right now?" |
+| Storage | SMART health, TRIM, largest folders, folder map, duplicate and forgotten files, disk-full forecast, copy of your files to a disk or NAS |
+| Network | DNS, proxy, Winsock, Wi-Fi, speed test, step-by-step internet check, devices on the network, ports the router opened |
+| Startup & Apps | startup programs, what slows the boot, unsafe or unused applications, recently installed programs, uninstall with leftover cleanup |
+| Security | Defender, firewall, BitLocker and the recovery key, TPM and Secure Boot, what browser extensions can do, listening ports explained, suspicious programs, ransomware decoy files |
+| Updates | Windows Update, old drivers, winget with exceptions, end of support of this Windows, calendar of the updates |
+
+### System tools
+
+- Task Manager and Event Viewer.
+- Registry editor, with an automatic backup before every change.
+- Services.
+- Hardware, with temperatures and an inventory label with a QR code.
+- Network scanner: devices, Wi-Fi, Bluetooth, router, known exploited vulnerabilities.
+- A toolbox searchable by symptom.
+
+### Reports
+
+- HTML and PDF reports with your company branding: full, per area, or the before/after of a visit. You choose which sections to include.
+- An executive PDF report for the central server.
+- CSV and JSON export.
+- A diagnostic package (zip) for the technician, without passwords or tokens.
+
+## How changes are kept safe
+
+- **Risk levels.** *Safe* tools can run unattended. *Moderate* and *high-risk* tools ask for confirmation, also when scheduled.
+- **Restore point first.** Before any change that is not safe, a Windows restore point is created; if that fails, nothing runs.
+- **Precise undo.** History shows what every run changed. Where possible, **Undo** puts the previous values back. With automatic undo, a fix that made things worse is reverted by itself.
+- **Protected services.** Defender, Windows Update, firewall, networking, audio, graphics and virtualization services are never touched.
+- **One job at a time.** Only one job changes the PC at a time, across consoles and schedules.
+- **Company rules** (Settings › Runs and safety):
+  - block high-risk tools;
+  - require a reason or ticket number;
+  - confirm with the PC name;
+  - **approval by a second person**;
+  - maintenance window.
+- **Local only.** The console listens on `127.0.0.1`, checks the `Host` and `Origin` headers, and accepts changes only with the token of the link opened at start. With accounts on, every route checks the permissions of the role; tests call every route with every kind of role.
+
+## Installation
+
+### One PC
 
 | Requirement | Notes |
 |---|---|
-| Windows 10 or 11 | Windows PowerShell 5.1 (included in Windows) |
+| Windows 10 or 11 | PowerShell 5.1, included in Windows |
 | Python 3.9 or newer | Standard library only. Install it **for all users** if you want schedules |
-| Administrator rights | Needed to run actions and create schedules; without them the console is read-only |
-| A modern browser | Edge or Chrome; the console works offline |
+| Administrator rights | Needed to apply fixes; without them the console is read-only |
+| A modern browser | Edge or Chrome |
 
-## Quick start
-
-1. Copy the folder to the PC (or clone this repository).
+1. Copy the folder to the PC, or clone this repository.
 2. Double-click **`start_wmm.bat`**.
 
 The launcher:
-
-1. checks that Python 3.9+ is available;
+1. checks Python;
 2. installs or updates the protected copy in `C:\Program Files\WindowsMaintenanceManager` (UAC prompt);
-3. runs the **health check** (Python, PowerShell, Windows tools, performance counters, data folder, database integrity, port, rights, installation);
-4. opens the console in the browser.
+3. runs the health check;
+4. opens the console.
 
-If UAC is declined, the console opens read-only from the current folder. On the first start the
-dashboard offers **Run the first full scan**: it assesses all nine areas in about one to three minutes
-and changes nothing.
+A signed `WindowsMaintenanceManager-Setup-<version>.exe` is also in every release.
 
-To look around without changing anything, use preview mode:
+To look around without changing anything:
 
 ```
 python wmm.py --preview
 ```
 
-## The console
+### Many PCs
+
+Every GitHub release has an MSI, `WindowsMaintenanceManager-<version>.msi`, for Group Policy and Intune:
+
+```
+msiexec /i WindowsMaintenanceManager-2.12.0.msi /qn CONFIG="\\server\share\wmm-config.json" BACKGROUND=1
+```
+
+The details (Entra ID, roles, central server) are in the [administrator manual](docs/manuale-amministratore.md).
+
+### Updates
+
+Settings › This agent looks for new versions on GitHub and installs them after checking their checksum:
+
+- copies installed with the MSI update with the MSI, and its signature is checked too;
+- other copies update with the zip.
+
+Data is never touched.
+
+## First steps
+
+1. **Dashboard › Scan everything.** In one to three minutes every area has a score, and the scan changes nothing.
+2. **Recommendations.** Start from the high-impact ones. Press **Why?** to understand, then **Apply**.
+3. **Reports.** Download the report for the customer, or the before/after of the visit.
+4. **Schedules.** Make maintenance automatic, for example a cleanup every week or a copy of your files every day.
+5. **Settings › Overview.** See at a glance what is missing: alerts, backup, protection.
+
+## The console, page by page
 
 | Section | Pages |
 |---|---|
-| **Overview** | Dashboard (overall score, quick actions, today on this PC, visit checklist, technician notes, area tiles, live system, key figures, insights) · Recommendations (all improvements with filters, bulk apply and dismiss) |
-| **Optimize** | Performance · Cleanup · Storage · Startup & Apps · Services |
-| **Health** | System Integrity · Security · Updates & Drivers · Network |
-| **Operations** | Actions (whole catalog: details, sort, multi-select) · Activity (runs and scans in progress, step by step, run again) · Playbooks · Schedules · History · Reports |
-| **Support** | User guide: getting started, searchable FAQ, risk levels, shortcuts, diagnostics to copy, areas at a glance |
-| **Settings** | Start-up (restore point at every start, start with Windows), report branding, theme, animations (fun / subtle / off), density, dashboard sections, export / import / reset of console preferences, health check, installation status |
+| **Overview** | Dashboard (health, what changed, goals, pinned pages) · Recommendations |
+| **Optimize** | Performance · Cleanup · Storage · Startup & Apps · Applications |
+| **Health** | Services · System Integrity · Security · Updates & Drivers · Network · Hardware |
+| **System** | Event Viewer · Task Manager · Registry · Network scanner · Toolbox |
+| **Operations** | Activity · Playbooks · Schedules · PCs · Company centre · Scripts · History · Reports |
+| **Help & settings** | Support · Settings · Users and roles |
 
-Every area page shows a **score from 0 to 100**, charts and descriptive data, the **recommended
-improvements** with *Apply* and *Schedule* buttons and a *Fix recommended* button that applies them all,
-the list of actions with their risk, the score trend and the recent activity.
+Conveniences:
 
-Before a run that is not safe, or a batch of actions, the console lists every step in run order with its
-risk and the estimated total time. While a run is in progress the browser tab shows its percentage, and
-the live log can be copied or downloaded.
+- **Universal search** (Ctrl K) across pages, tools, settings and commands.
+- **Pinned and recent pages** at the top of the menu.
+- **Simple mode**, which hides the pages for experts.
+- **Themes**: light and dark, high contrast, color-blind friendly colors, larger text.
+- **The whole interface in English or Italian.**
+- **Tables** with search, filters, saved views, column choice, row selection with bulk actions, and export to CSV, JSON and Markdown.
 
-Productivity features: command palette (**Ctrl+K**: pages, actions, playbooks, preferences), keyboard
-shortcuts (**?** for the list, e.g. `G` then `D` for the dashboard, **Shift+S** scan all, **Shift+C**
-collapse all cards), light/dark theme, collapsible cards, sortable and searchable tables with CSV
-export, notification center, status bar with agent health (click the machine ID to copy it). The
-console reopens the last page used and remembers the scroll position of each page.
+**Settings** come in six groups, with a search that finds a single option:
 
-Animations have three levels in Settings › Appearance: **Fun** (default: pages and cards arrive one after
-the other, hover lifts and wiggles, click ripples, bouncing dialogs and toasts, confetti when a run, a full
-scan or the visit checklist completes), **Subtle** (short fades only, the default when Windows animation
-effects are off) and **Off** (only spinners and progress bars move).
+| Group | Sections |
+|---|---|
+| Personal | My account, Appearance, Behaviour, Dashboard, Guides |
+| Alerts | Sounds and desktop alerts, Alert channels (e-mail, Telegram, webhook) |
+| Maintenance | Runs and safety, Automation, Schedule defaults, Start-up |
+| Security and access | Accounts and passwords, Company sign-in, API tokens, Protection, Privacy |
+| Organization and integrations | Organization and reports, Connections and console, Integrations |
+| System and data | This agent, Backup of your files, Data and backup |
 
-## Areas and actions
+## Automation
 
-| Area | What it assesses | Actions |
-|---|---|---|
-| **Performance** | Live CPU/memory/disk/network, top processes, power plan, page file, memory modules, visual effects, Fast Startup, Game DVR, battery health | Power plan High performance / Balanced, visual effects, Fast Startup on/off, Game DVR on/off, transparency on/off, mouse acceleration off, free standby memory, restart Explorer |
-| **Cleanup** | Recoverable space in temp folders, update cache, shader caches, crash dumps, Recycle Bin | Temporary files and caches, obsolete Windows components (DISM), empty Recycle Bin, delete crash dumps |
-| **Storage** | Volumes and disks, largest folders and files of the profile, browser caches, error reports, thumbnails, Windows.old, restore point storage, Storage Sense | Optimize all drives (TRIM/defrag), browser caches, error reports, thumbnail cache, Delivery Optimization cache, legacy Internet Explorer cache, delete the oldest restore point, Storage Sense; **disk management**: disk health report, SMART failure prediction, volume and partition reports, dirty bit check, C: speed test, restore point storage report, largest folders on C:, rescan disks, TRIM every SSD, defragment hard disks only, bring offline disks online, limit restore point storage to 8%, reserved storage on/off, reduce the hibernation file, system-managed page file, stop last-access updates, Windows Disk Cleanup, delete Windows.old |
-| **Startup & Apps** | Startup programs (registry and startup folders), installed applications, third-party scheduled tasks | **Optimize startup** (turns off non-essential programs), per-entry on/off switch |
-| **Services** | Start types and states of all services, non-essential services, restore backup | Disable non-essential services, Xbox services, print services, Windows Search on manual, restart Windows Update / Bluetooth services, restore from backup |
-| **System Integrity** | Disk health (SMART), stability events, event log errors (7 days), firmware age, Defender and firewall, last repair checks | DISM RestoreHealth, SFC, SFC verify only, CHKDSK online (system or all drives), disk repair at reboot, TRIM, verify and repair WMI, reset Windows Update components |
-| **Security** | Defender, firewall, UAC, SmartScreen, Secure Boot, TPM, BitLocker, RDP, SMBv1, insecure SMB guest logons, LSA protection, LLMNR, telemetry level, advertising ID, recent items, local administrators, Guest, restore points | Quick, full and offline scan, update signatures, turn on firewall, disable SMBv1, block SMB guest logons, LSA protection, disable LLMNR, reduce telemetry, turn off advertising ID, clear recent items, create restore point |
-| **Updates & Drivers** | Pending Windows updates by severity, update history, devices with errors, third-party driver age, Microsoft 365 / Office Click-to-Run | Check for updates, install updates, scan for new devices and drivers, update Office, update Microsoft Store apps |
-| **Network** | Adapters, latency/jitter/packet loss to router, Cloudflare and Google, DNS time, connections | Flush DNS, purge NetBIOS cache, optimize TCP, renew IP, DNS Cloudflare / Google / automatic, reset hosts file (with backup), full network reset |
+- **Schedules** in Windows Task Scheduler, run as SYSTEM even with the console closed. They can run once, daily, weekly or monthly, at startup, at sign-in, or **when the PC is idle**.
+- **Playbooks and routines**: several tools in a row, such as "Quick tune-up" or "Full maintenance".
+- **Rules "when this happens, run a tool"**: for example, when the disk is almost full, clean the temporary files. Rules run only safe tools.
+- **Goals**, with an alert when they are not met.
+- **Nightly program updates** with winget, except the programs you exclude.
+- **Copy of your files** to another disk or a NAS: only new and changed files, nothing deleted at the destination.
+- **Alerts** by e-mail, Telegram, Teams, Slack or Discord, with quiet hours, routing per alert type, and incidents to take charge of.
 
-The overall score is a weighted average of the scanned areas (Security and System Integrity weigh most).
-A scan that could not read its data is marked **incomplete** and capped at 50, so a failed collection
-never looks healthy.
+## In a company
 
-## Safety model
-
-- **Risk levels.** *Safe* actions (no data loss, no persistent configuration change) can run unattended.
-  *Moderate* and *high risk* actions always ask for confirmation, also when scheduled.
-- **Restore point first.** Before any action that is not safe, a System Restore point is created; if that
-  fails, nothing runs.
-- **Restore point at every start.** When the console starts as administrator it creates a restore point
-  as an automatic action (Settings › Start-up, on by default), lifting Windows' one-per-day limit for that
-  call only.
-- **Protected services.** Defender, Windows Update, firewall, networking, audio, GPU and virtualization
-  services are never modified. Changed services are backed up and can be restored.
-- **Reversible by design.** Startup entries are turned off with the same switch as Task Manager;
-  Windows Update reset renames folders instead of deleting them.
-- **One job at a time.** A lock shared with scheduled runs prevents two operations from changing the
-  system at the same time.
-- **Power button.** In a console running as administrator (never in preview or read-only), the power
-  button in the top bar stops every Windows Maintenance Manager process on this PC: other consoles,
-  scheduled runs in progress and the commands they started, then the console itself. Interrupted runs
-  are marked as such at the next start; schedules stay registered.
-- **Local only.** The server listens on `127.0.0.1`, checks the `Host` and `Origin` headers, serves only
-  known static files, and accepts changes only with the session token that travels in the link the
-  launcher opens (never in the served page).
-
-## Schedules and protected installation
-
-Every action can be scheduled once, daily or weekly. Schedules are registered in **Windows Task
-Scheduler** (folder `\WindowsMaintenanceManager\`) and run as SYSTEM, so they work with the console
-closed and nobody signed in.
-
-Because those tasks run as SYSTEM, the code they load must not be writable by standard users. The suite
-refuses to create schedules unless:
-
-- the program runs from the protected copy in `C:\Program Files\WindowsMaintenanceManager`
-  (`start_wmm.bat` installs it automatically, or run `python wmm.py --install`), and
-- Python is installed **for all users** (python.org installer › *Customize installation* ›
-  *Install Python for all users*).
-
-The Schedules page and the health check show which of the two is missing. Schedules created from another
-folder show *Program moved* and can be fixed with **Resync**.
-
-**Start with Windows** (Settings › Start-up) registers the task `\WindowsMaintenanceManager\WMM-Autostart`:
-at sign-in it starts the console for that user with the highest rights, without a UAC prompt and without
-opening the browser (the link is in the console window). For the same reason as the schedules it is
-available only from the protected installation.
-
-## Command line
-
-```
-python wmm.py                     start the console (asks for administrator rights)
-python wmm.py --preview           read-only console; actions are simulated
-python wmm.py --port 9000         use another local port (default 8765)
-python wmm.py --no-browser        do not open the browser
-python wmm.py --install           install or update C:\Program Files\WindowsMaintenanceManager
-python wmm.py --auto-install      install/update, then start the installed copy (used by start_wmm.bat)
-python wmm.py --run-schedule ID   run a scheduled action and exit (used by Task Scheduler)
-python wmm.py --sandbox-test      run every fix for real in Windows Sandbox, check it and test its undo
-                                  (--only ID,ID for some tools, --quick for the short ones; needs Windows Sandbox)
-```
-
-The original command-line tool `ottimizza_pc.py` (Italian) is still included and works on its own;
-the suite reuses its logic.
+- **Accounts and roles.**
+  - Five built-in roles: Administrator, Technician, Operator, Viewer, Auditor.
+  - Custom roles with more than 100 permissions: what each role sees, runs and manages.
+  - Two-step verification, password policies, sessions.
+  - Temporary roles that end by themselves, and periodic access reviews.
+- **Company sign-in** with Microsoft Entra ID (OpenID Connect with PKCE) or Windows and Active Directory accounts. The role comes from the groups.
+- **Tamper-evident audit log**, hash-chained and verifiable, forwarded to a SIEM (syslog) or a webhook.
+- **Central server**: every PC contacts it over HTTPS with a pinned certificate, also from other offices. From the server you manage:
+  - hardware and software inventory, and assets;
+  - a software catalog with winget;
+  - Windows Update rings;
+  - compliance baselines with their fixes;
+  - **campaigns** with a deadline and progress;
+  - a ranking of the PCs that need attention first;
+  - an executive PDF report.
+- **Several clients** (MSP): every PC belongs to a client, and a technician can be limited to their own clients.
+- **Backup and move of the server**: one password-encrypted file. The PCs follow the server to a new address without enrolling again.
+- **Integrations**: tickets in Jira, ServiceNow or GLPI, scoped API tokens, and a PowerShell module (`tools/WMM.psm1`).
 
 ## Data and privacy
 
@@ -178,84 +229,104 @@ Everything stays on the PC, in the `dati` folder next to the program:
 
 | File | Content |
 |---|---|
-| `dati/wmm.db` | SQLite history: scans, runs, schedules, settings |
-| `dati/servizi-backup.json` | Original start type of every service changed by the suite |
-| `dati/registro.txt` | Plain-text log of every change |
+| `dati/wmm.db` | History: scans, runs, schedules |
+| `dati/accounts.db` | Users, roles, sessions, audit log, tokens, approvals |
+| `dati/central.db` | Central server (only on the PC that hosts it) |
+| `dati/db-backups/` | Copies of the databases made before every schema upgrade |
+| `dati/app_settings.json`, `dati/integrations.json` | Settings |
+| `dati/*.json` | Network, Wi-Fi and alert history, snapshots; can be encrypted with DPAPI |
 
-Nothing is sent over the network, except the latency test (ping to the router, 1.1.1.1 and 8.8.8.8, one DNS
-lookup) and Windows Update when you check or install updates. The `dati` folder is excluded from this
-repository.
+Nothing leaves the PC, except:
+- the network tests you start;
+- Windows Update and winget, when you use them;
+- the alerts and integrations you set up;
+- the check for new versions, when it is on.
 
-## Local API
+**Offline mode** turns off everything that uses the internet.
 
-The console uses a JSON API that a future central console can call on each agent. Every payload carries
-the `machine_id`. Requests that change something need the `X-WMM-Token` header. The full list, with the permissions of
-every route, is in [docs/openapi.json](docs/openapi.json) (also served at `/api/v1/openapi.json`); see [docs/api.md](docs/api.md).
+## Command line
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/v1/agent/info` | Agent identity, version, mode |
-| GET | `/api/v1/health` | Health check (`?refresh=1` to run it again) |
-| GET | `/api/v1/dashboard` | Scores, highlights, trends, recent activity |
-| GET / POST | `/api/v1/areas/{area}` · `/areas/{area}/scan` | Area view · new scan |
-| POST | `/api/v1/scan` | Scan all areas in parallel |
-| GET | `/api/v1/recommendations` | All improvements |
-| GET | `/api/v1/actions` · `/playbooks` | Catalog |
-| POST | `/api/v1/runs` · `/runs/safe` | Run actions (`confirmed` required for non-safe ones) |
-| GET | `/api/v1/runs/{id}` · `/runs/current` · `/activity` | Progress |
-| GET | `/api/v1/live?since=` | Live samples |
-| POST | `/api/v1/startup/{id}/toggle` | Turn a startup entry on or off |
-| GET / POST / PATCH / DELETE | `/api/v1/schedules[/{id}]` | Schedules (`/{id}/resync`) |
-| GET | `/api/v1/history` · `/export/{area\|all}.{csv\|json}` | History and export |
-| GET / PUT | `/api/v1/settings` | Report branding |
+```
+python wmm.py                       start the console (asks for administrator rights)
+python wmm.py --preview             read-only console: changes are simulated
+python wmm.py --port 9000           another local port (default 8765, or the one in Settings)
+python wmm.py --no-browser          do not open the browser
+python wmm.py --install             install or update the protected copy in Program Files
+python wmm.py --auto-install        install or update, then start the installed copy (used by start_wmm.bat)
+python wmm.py --background          background agent: schedules, alerts and central server without a console
+python wmm.py --install-background  install the background agent task (as administrator)
+python wmm.py --apply-config FILE   apply a configuration backup (silent installations)
+python wmm.py --run-schedule ID     run a schedule and exit (used by Task Scheduler)
+python wmm.py --sandbox-test        try every fix in Windows Sandbox, with its check and its undo
+```
+
+The original command-line tool `ottimizza_pc.py` (Italian) is still included and works on its own; the suite reuses its logic.
+
+## API
+
+The console uses a local JSON API (`/api/v1/…`). Scripts and integrations call it with an API token. The full description, with the permissions of every route, is in [docs/openapi.json](docs/openapi.json); the console also serves it at `/api/v1/openapi.json`. Examples are in [docs/api.md](docs/api.md).
 
 ## Architecture
 
 ```
-start_wmm.bat           launcher: Python check, auto-install, start
-wmm.py                  entry point (console, install, scheduled runs)
-ottimizza_pc.py         original maintenance engine, reused by the suite
+start_wmm.bat            launcher: Python check, installation, start
+wmm.py                   entry point (console, installation, schedules, background agent)
+ottimizza_pc.py          original maintenance engine, reused by the suite
 wmm/
-  installer.py          protected copy in Program Files
-  agent/
-    collectors.py       system, cleanup, integrity and services data
-    inventory.py        performance, storage, network, startup, security, updates data
-    advisor.py          scores and recommendations
-    actions.py          action catalog and playbooks
-    tools.py            implementations of the extended actions
-    jobs.py             one-at-a-time execution, task registry
-    scheduler.py        Task Scheduler XML, protection checks
-    live.py             performance counters (PDH) sampler
-    health.py           health check and dependency verification
-    store.py            SQLite history
-    core.py             execution context, machine id
-  server/api.py         HTTP server and JSON API
-  web/                  console: HTML, CSS, vanilla JS, SVG charts
-tests/                  unittest suite
-docs/                   manuals, OpenAPI (tools/build_docs.py), design documents (docs/superpowers)
+  agent/                 the work on the PC
+    actions.py           catalog of the 369 tools, playbooks
+    collectors.py, inventory.py   data of the areas; advisor.py scores and recommendations
+    tools*.py            the fixes and the reports
+    jobs.py              one job at a time, automatic undo
+    scheduler.py         Task Scheduler (also "when the PC is idle")
+    accounts.py, governance.py, sso.py   accounts, roles, approvals, tokens, company sign-in
+    central.py, centralmove.py   central server, clients, campaigns, backup and move
+    migrations.py        versioned databases, copied before every upgrade
+    plus212.py, qrcode.py         2.12 features (diagnosis, files, rules, goals, QR label…)
+    store.py             SQLite history
+  server/                HTTP server and API (api.py, accounts_api.py, enterprise_api.py, routes_*.py,
+                         permissions.py, openapi.py)
+  web/                   console: HTML, CSS, JavaScript without a build step, SVG charts, Italian
+packaging/, tools/       MSI (WiX), setup, release, docs, type check
+tests/                   unit, API, permission and browser tests (Playwright)
+docs/                    manuals, OpenAPI
 ```
 
 ## Development
 
 ```
-python -m unittest discover -s tests -t .   run the test suite
-python -m ruff check .                     lint (CI)
-python tools/typecheck.py                  type check: no file may get more errors than tools/mypy_baseline.json
+python -m unittest discover -s tests -t .   every test (also in a browser when Playwright is installed)
+python -m ruff check .                     lint
+python tools/typecheck.py                  type check: no file may get worse
 python tools/build_docs.py                 rebuild docs/openapi.json after changing a route
 python wmm.py --preview                    try the console without changing the PC
 ```
 
-The tests use temporary folders and mocked PowerShell, Task Scheduler and registry calls; they do not
-change the system. JavaScript has no build step: edit the files in `wmm/web` and reload the page.
+On GitHub every change goes through:
+- unit and API tests;
+- the permission matrix on every route;
+- browser tests (every page, the Italian text, the sign-in and approval flows);
+- lint and types;
+- the MSI build.
+
+`main` accepts only changes whose checks are green.
+
+The tests use temporary folders and mock PowerShell, Task Scheduler and the registry, so they never change the system. The JavaScript has no build step: edit the files in `wmm/web` and reload the page.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Problem | Fix |
 |---|---|
-| *Python was not found* | Install Python 3.9+ from python.org with *Add python.exe to PATH* |
-| *Port 8765 is already in use* | Another console is open; close it or start with `--port 9000` |
-| *This window is not connected* / access denied | Click **Request access** and answer **Yes** in the confirmation that appears on the desktop of the PC (or open the link printed in the Windows Maintenance Manager window) |
-| *Read-only* / administrator rights needed | Click **Restart as administrator** in the banner and approve UAC: the console reopens with full rights |
+| *Python was not found* | Install Python 3.9 or newer from python.org, with *Add python.exe to PATH* |
+| *Port 8765 is already in use* | Another console is open: close it, or start with `--port 9000` |
+| *This window is not connected* | Click **Request access** and answer **Yes** on the desktop of the PC, or open the link printed in the WMM window |
+| *Read-only* | Click **Restart as administrator** and approve UAC |
 | Schedules refused | Run from Program Files and install Python for all users (see the health check in Settings) |
-| *Scan incomplete* | Some data needs administrator rights or a PowerShell module was unavailable; scan again as administrator |
-| Very large `%TEMP%` | Sizes are measured for 20 seconds and shown as a minimum |
+| *Scan incomplete* | Some data needs administrator rights: scan again as administrator |
+
+## Documentation
+
+- [Administrator manual](docs/manuale-amministratore.md) (Italian): company installation, MSI, roles, Entra ID step by step, central server, clients, moving the server, migrations
+- [User guide](docs/guida-utente.md) (Italian)
+- [API and OpenAPI](docs/api.md) (Italian)
+- [What changed in every version](CHANGELOG.md)

@@ -327,8 +327,8 @@
 
   var DAY_NAME = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
   var KINDS = [["once", "Once"], ["daily", "Every day"], ["weekly", "Every week"], ["monthly", "Every month"],
-    ["startup", "At every startup"], ["logon", "At every sign-in"]];
-  var EVENT_KINDS = { startup: 1, logon: 1 };
+    ["startup", "At every startup"], ["logon", "At every sign-in"], ["idle", "When the PC is idle"]];
+  var EVENT_KINDS = { startup: 1, logon: 1, idle: 1 };
 
   /* The frequency of a schedule (actions, routines and scripts) in plain words. */
   function scheduleText(s) {
@@ -337,6 +337,7 @@
     var after = delay ? ", after " + delay + " min" : "";
     if (s.kind === "startup") return "At every startup" + after;
     if (s.kind === "logon") return "At every sign-in" + after;
+    if (s.kind === "idle") return "When nobody uses the PC for " + (delay || 10) + " min";
     if (s.kind === "once") return "Once on " + at;
     if (s.kind === "daily") return "Every day at " + t;
     if (s.kind === "monthly") return "Every month on day " + (+at.slice(8, 10)) + " at " + t;

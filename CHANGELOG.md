@@ -3,6 +3,53 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.12.0 — 2026-11-05
+
+**Settings reorganized, a refreshed console and thirty everyday features.**
+
+Settings: six groups (Personal, Alerts, Maintenance, Security and access, Organization and integrations, System and data) instead of a list of
+twenty sections, clearer names, an **Overview** that opens first with the state of accounts, alerts, installation, risky tools, encryption,
+updates, backup and automation, and Simple mode.
+
+Console: a calmer look (depth, type, tables with sticky headers, visible focus), **pinned and recent pages** at the top of the menu, and tables
+that select rows with **bulk actions**, choose their **columns** and save **views** (search, filters and sort).
+
+The thirty features (planned as a list of 100, the 30 most useful chosen):
+
+1. **Why is the PC slow right now** (Performance): processor, memory, disk, uptime, power plan and background work in plain words, with the tools that help.
+2. **When the disk will be full** (Storage): forecast from the scans of the last 90 days.
+3. **Folder map** (Storage): a treemap of the user folder, click to go inside.
+4. **Duplicate files** with selection and move to the Recycle Bin.
+5. **Forgotten files**: larger than 100 MB, untouched for a year.
+6. **Installed recently** (Applications): 7, 30 or 90 days.
+7. **Saved views and column choice** in every named table.
+8. **Nightly winget update with exceptions** (`updates.winget_nightly`).
+9. **Browser extensions: what they can do** (Security): Chrome, Edge and Brave rated by their permissions.
+10. **Access review** (Users): never or long not signed in, administrators without two-step verification, tokens about to expire.
+11. **BitLocker and the recovery key** (Security): whether drive C: is encrypted, whether a recovery key exists and where to keep it.
+12. **Listening ports explained** (Security): what each one is, who can reach it, how risky it is.
+13. **End of support of this Windows** (Updates): the date of the installed version.
+14. **Calendar of the updates** (Updates): month by month, with the failed ones.
+15. **Internet does not work? Check step by step** (Network): adapter, address, router, DNS, internet, HTTPS; stops at the first failure with the tools that fix it.
+16. **Temporary roles** (Users): a role for hours or days, the previous one comes back by itself.
+17. **Simple mode**: the menu shows the everyday pages.
+18. **Inventory label with QR code** (Hardware): a QR encoder in pure Python, checked against a reference encoder.
+19. **Copy of your files** to another disk or a NAS (`storage.user_backup`, Settings › Backup of your files).
+20. **Rules "when this happens, run a tool"** (Settings › Automation): alert events start safe tools, at most once every 30 minutes.
+21. **Schedules when the PC is idle**.
+22. **Diagnostic package** (Support): one zip, secrets removed.
+23. **Custom reports**: choose the sections to include.
+24. **Campaigns** on the central server: a job for many PCs with a deadline and progress.
+25. **PCs that need attention first** (Company centre).
+26. **What changed since yesterday** (Dashboard).
+27. **Goals** with the alert "A goal of this PC is not met".
+28. **Pinned and recent pages** in the menu.
+29. **Selection and bulk actions** in tables.
+30. **"Why?"** on every recommendation: what was found, why it matters, what the fix does, risk, time, how to undo it.
+
+Four ideas of the list already existed (battery forecast, unused programs, DNS speed test, connection log) and were replaced by 7, 10, 16
+and 17. README rewritten: what WMM is, who it is for and everything it does.
+
 ## 2.11.0 — 2026-11-05
 
 **Several clients, server backup and move, and a sturdier project.** Ten improvements:

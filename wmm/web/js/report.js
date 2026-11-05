@@ -305,7 +305,19 @@
     });
   }
 
+  // 2.12: the sections the user left out of the report (by their title).
+  function dropSections(body, hide) {
+    if (!hide || !hide.length || !window.DOMParser) return body;
+    var doc = new DOMParser().parseFromString("<div>" + body + "</div>", "text/html"), root = doc.body.firstChild;
+    Array.prototype.slice.call(root.querySelectorAll("section")).forEach(function (s) {
+      var h = s.querySelector("h2");
+      if (h && hide.indexOf(h.textContent.trim()) >= 0) s.remove();
+    });
+    return root.innerHTML;
+  }
+
   function wrap(scope, info, settings, options, score, body) {
+        body = dropSections(body, options.hide);
         var technician = options.technician || settings.technician;
         var now = new Date();
         var cover = '<div class="cover"><div><div class="brand">' + LOGO + "<div><b>Windows Maintenance Manager</b><span>" + esc(SCOPE_LABEL[scope]) + " report</span></div></div></div><div>" +

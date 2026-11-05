@@ -52,6 +52,12 @@ class AgentEnterprise:
                 incidents.escalate_due(self.data_dir)
             except Exception:  # noqa: BLE001 - try again in a minute
                 pass
+            tick = getattr(self, "plus_tick", None)
+            if tick:
+                try:
+                    tick()
+                except Exception:  # noqa: BLE001 - the same
+                    pass
             time.sleep(60)
 
     def central_server_settings(self) -> dict:
@@ -116,6 +122,8 @@ class HandlerEnterprise:
     agent: Any
     user: Optional[dict]
     _body: Any
+    _check_role_tools: Any
+    _check_tools: Any
     def _me(self) -> dict:
         if self.user is None:
             raise ApiError(409, "Turn accounts on first (Settings › Accounts and security).")
@@ -371,6 +379,11 @@ class HandlerEnterprise:
 
     def central_jobs_post(self, query):
         corpo = self._body()
+        tipo, carico, destinatari = self._central_job(corpo)
+        self._json(202, self._wrap(self._srv.queue, destinatari, tipo, carico, (self.user or {}).get("username", "local")))
+
+    def _central_job(self, corpo: dict) -> tuple:
+        """The checks of a job for the PCs (also for campaigns, 2.12): the same rules as running the tools here."""
         tipo, carico = corpo.get("kind"), corpo.get("payload") or {}
         if tipo in ("actions", "baseline"):
             ids = list(carico.get("actions") or []) if tipo == "actions" else (list(carico.get("checks") or []) if carico.get("fix") else [])
@@ -390,8 +403,18 @@ class HandlerEnterprise:
         if tipo == "winget" and not deploy.valid_id(str(carico.get("id", ""))):
             raise ApiError(400, "Unknown winget ID.")
         ambito = self._scope
-        destinatari = self._srv.targets(corpo.get("agents"), str(corpo.get("group", "")), ambito, str(corpo.get("tenant", "") or ""))
-        self._json(202, self._wrap(self._srv.queue, destinatari, tipo, carico, (self.user or {}).get("username", "local")))
+        return tipo, carico, self._srv.targets(corpo.get("agents"), str(corpo.get("group", "")), ambito, str(corpo.get("tenant", "") or ""))
+
+    def central_campaigns_get(self, query):
+        self._json(200, {"campaigns": self._srv.campaigns(self._scope)})
+
+    def central_campaigns_post(self, query):
+        corpo = self._body()
+        tipo, carico, destinatari = self._central_job(corpo)
+        if tipo == "relocate":
+            raise ApiError(400, "Moving the server is not a campaign.")
+        self._json(201, self._wrap(self._srv.create_campaign, corpo.get("name"), str(corpo.get("deadline") or ""), destinatari, tipo, carico,
+                                   (self.user or {}).get("username", "local")))
 
     def central_batch_get(self, query, lotto):
         self._json(200, {"jobs": self._srv.batch(lotto, self._scope)})
@@ -623,6 +646,8 @@ ENTERPRISE_ROUTES = [
     ("DELETE", "/agent/service", HandlerEnterprise.service_remove),
     ("GET", "/central", HandlerEnterprise.central_get),
     ("GET", "/central/tenants", HandlerEnterprise.central_tenants_get),
+    ("GET", "/central/campaigns", HandlerEnterprise.central_campaigns_get),
+    ("POST", "/central/campaigns", HandlerEnterprise.central_campaigns_post),
     ("POST", "/central/backup", HandlerEnterprise.central_backup),
     ("POST", "/central/backup/inspect", HandlerEnterprise.central_inspect),
     ("POST", "/central/restore", HandlerEnterprise.central_restore),
@@ -674,7 +699,7 @@ RULES = {
     "tls_get": "view.settings", "tls_put": "integrations.manage", "tls_regenerate": "integrations.manage", "encryption_put": "settings.security",
     "canary_get": "view.security", "canary_place": "settings.edit", "canary_remove": "settings.edit", "cfa_put": "settings.edit",
     "service_get": "view.settings", "service_install": "agent.control", "service_remove": "agent.control",
-    "central_get": "view.fleet", "central_backup": ("central.manage", "data.backup"), "central_inspect": ("central.manage", "data.backup"),
+    "central_get": "view.fleet", "central_campaigns_get": "view.fleet", "central_campaigns_post": "central.manage", "central_backup": ("central.manage", "data.backup"), "central_inspect": ("central.manage", "data.backup"),
     "central_restore": ("central.manage", "data.backup"), "central_tenants_get": "view.fleet", "central_tenants_post": "central.manage", "central_tenant_delete": "central.manage",
     "central_tenants_move": "central.manage", "central_tenants_access": ("central.manage", "users.manage"),
     "central_server_put": "central.manage", "central_code": "central.manage", "central_agent_get": "view.fleet",

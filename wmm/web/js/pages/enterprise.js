@@ -61,7 +61,7 @@
           a.compliance == null ? "—" : esc(a.compliance + "%"), (a.online ? UI.statusIcon("ok") : UI.statusIcon("warning")) + " " + esc(when(a.last_seen)),
           esc([a.asset_tag, a.owner, a.location].filter(Boolean).join(" · ") || "—"),
           '<button class="btn btn-sm" data-agent="' + esc(a.id) + '">Details</button>'];
-      }), "No PC enrolled yet: create an enrollment code and paste it on each PC (Company centre › This PC).");
+      }), "No PC enrolled yet: create an enrollment code and paste it on each PC (Company centre › This PC).") + ranking(c);
     box.onclick = function (e) {
       var b = e.target.closest("button");
       if (!b) return;
@@ -93,6 +93,70 @@
         API.get("/central" + (scelto ? "?tenant=" + encodeURIComponent(scelto) : "")).then(function (d) { d.tenantFilter = scelto; pcs(box, App, d); }, fail);
       }
     };
+  }
+
+  // 2.12: the PCs that need attention first: lowest health, most open problems, longest silence.
+  function ranking(c) {
+    var ora = Date.now();
+    var voti = c.agents.map(function (a) {
+      var silenzio = a.last_seen ? (ora - new Date(a.last_seen).getTime()) / 86400e3 : 30;
+      var punti = (100 - (a.overall == null ? 70 : a.overall)) + (a.open_issues || 0) * 2 + Math.min(30, silenzio) * 2 + (a.compliance == null ? 0 : (100 - a.compliance) / 2);
+      return { a: a, p: Math.round(punti), giorni: Math.floor(silenzio) };
+    }).filter(function (x) { return x.p > 20; }).sort(function (x, y) { return y.p - x.p; }).slice(0, 8);
+    if (!voti.length) return "";
+    return UI.card("PCs that need attention first", UI.table([{ title: "PC" }, { title: "Why" }, { title: "Points" }], voti.map(function (x) {
+      var motivi = [];
+      if (x.a.overall != null && x.a.overall < 70) motivi.push("health " + x.a.overall);
+      if (x.a.open_issues) motivi.push(x.a.open_issues + " problems");
+      if (x.giorni >= 2) motivi.push("silent for " + x.giorni + " days");
+      if (x.a.compliance != null && x.a.compliance < 80) motivi.push("compliance " + x.a.compliance + "%");
+      return ["<strong>" + esc(x.a.hostname) + "</strong>" + (x.a.tenant_name ? '<div class="cell-sub">' + esc(x.a.tenant_name) + "</div>" : ""), esc(motivi.join(", ") || "—"),
+        '<span class="badge badge-status-' + (x.p >= 80 ? "error" : "warning") + '">' + x.p + "</span>"];
+    })), "", "card-flat");
+  }
+
+  // 2.12: campaigns, a job for many PCs with a name and a deadline, followed until every PC has done it.
+  function campaigns(box, App, c) {
+    API.get("/central/campaigns").then(function (d) {
+      var puo = can("central.manage") && c.server.enabled;
+      box.innerHTML = '<p class="muted" style="margin-top:0">For example: "Chrome updated on every PC by Friday". Each PC runs it at its next contact; the bar shows how many are done.</p>' +
+        (puo ? '<div class="page-actions" style="justify-content:flex-start">' + UI.button("New campaign", "data-camp-new", "btn-sm btn-primary", "play") + "</div>" : "") +
+        (d.campaigns.length ? '<ul class="campaigns">' + d.campaigns.map(function (k) {
+          return '<li class="campaign"><div class="grow"><strong>' + esc(k.name) + '</strong><div class="cell-sub">' + esc(k.kind + " · " + k.total + " PCs · created " + UI.formatDate(k.created) +
+            (k.deadline ? " · by " + UI.formatDate(k.deadline) : "")) + "</div>" +
+            '<div class="progress"><span style="width:' + k.percent + '%"></span></div><div class="cell-sub">' + esc(k.done + " done, " + k.error + " failed, " + (k.queued + k.sent) + " waiting") +
+            (k.overdue ? ' <span class="badge badge-status-error">Late</span>' : k.percent === 100 ? ' <span class="badge badge-status-ok">Complete</span>' : "") + "</div></div>" +
+            '<button type="button" class="btn btn-sm" data-camp-open="' + esc(k.batch) + '">Details</button></li>';
+        }).join("") + "</ul>" : '<p class="empty">No campaign yet.</p>');
+      box.onclick = function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        if (b.getAttribute("data-camp-open")) watchBatch(App, b.getAttribute("data-camp-open"));
+        if (b.hasAttribute("data-camp-new")) newCampaign(box, App, c);
+      };
+    }, function (e) { box.innerHTML = UI.errorBox(e); });
+  }
+  function newCampaign(box, App, c) {
+    var strumenti = pickTools(App, function (a) { return a.allowed !== false && a.id.indexOf("custom.") !== 0; });
+    var body = '<form class="form" onsubmit="return false"><label>Name<input name="name" maxlength="80" placeholder="Chrome updated everywhere"></label>' +
+      '<label>Deadline<input type="date" name="deadline"></label>' +
+      '<label>What<select class="cp-kind"><option value="winget">Install or update a program</option><option value="actions">Run tools</option><option value="inventory">Refresh the inventory</option></select></label>' +
+      '<div class="cp cp-winget"><select class="cp-app">' + c.catalog.map(function (s) { return '<option value="' + esc(s.winget_id) + '">' + esc(s.name) + "</option>"; }).join("") +
+      '</select><span class="cell-sub">Programs of the catalog (Software tab).</span></div>' +
+      '<div class="cp cp-actions" hidden><select multiple size="8" class="cp-tools" style="width:100%">' + strumenti.map(function (a) {
+        return '<option value="' + esc(a.id) + '">' + esc(a.title) + "</option>"; }).join("") + "</select></div>" +
+      '<label>Which PCs<select class="cp-group"><option value="">Every PC</option>' + c.groups.map(function (g) { return '<option value="' + esc(g.name) + '">' + esc(g.name + " (" + g.members + ")") + "</option>"; }).join("") +
+      "</select></label></form>";
+    var shown = UI.modal("New campaign", body, [{ label: "Cancel", cls: "btn-ghost" }, { label: "Start", cls: "btn-primary", value: function (w) {
+      var f = w.querySelector("form"), tipo = w.querySelector(".cp-kind").value, carico = {};
+      if (tipo === "winget") carico = { op: "install", id: w.querySelector(".cp-app").value };
+      if (tipo === "actions") carico = { actions: Array.prototype.map.call(w.querySelector(".cp-tools").selectedOptions, function (o) { return o.value; }).slice(0, 20) };
+      var gruppo = w.querySelector(".cp-group").value, dati = { name: f.name.value.trim(), deadline: f.deadline.value, kind: tipo, payload: carico };
+      if (gruppo) dati.group = gruppo; else dati.agents = c.agents.map(function (a) { return a.id; });
+      return dati; } }]);
+    var tutte = document.querySelectorAll("#modal-root .modal"), w = tutte[tutte.length - 1];
+    w.querySelector(".cp-kind").addEventListener("change", function (e) { w.querySelectorAll(".cp").forEach(function (x) { x.hidden = !x.classList.contains("cp-" + e.target.value); }); });
+    shown.then(function (d) { if (d) return API.post("/central/campaigns", d).then(function () { UI.toast("Campaign started.", "ok"); campaigns(box, App, c); }); }).catch(fail);
   }
 
   // 2.11: the clients of a provider that manages the PCs of several companies
@@ -395,7 +459,7 @@
     render: function (el, App) {
       return API.get("/central").then(function (c) {
         App.setSubtitle(c.overview.agents + " managed PCs · " + c.overview.online + " online");
-        var tabs = [["pcs", "Managed PCs", "network"], ["clients", "Clients", "users"], ["inventory", "Inventory", "storage"], ["software", "Software", "download"], ["updates", "Updates", "updates"],
+        var tabs = [["pcs", "Managed PCs", "network"], ["campaigns", "Campaigns", "play"], ["clients", "Clients", "users"], ["inventory", "Inventory", "storage"], ["software", "Software", "download"], ["updates", "Updates", "updates"],
           ["compliance", "Compliance", "shield"], ["approvals", "Approvals", "check"], ["incidents", "Incidents", "alert"], ["report", "Executive report", "reports"], ["move", "Backup and move", "storage"], ["thispc", "This PC", "cpu"]];
         var attiva = (/[?&]tab=(\w+)/.exec(location.hash) || [])[1] || Components.store("entTab") || "pcs";
         if (!tabs.some(function (t) { return t[0] === attiva; })) attiva = "pcs";
@@ -408,7 +472,7 @@
           var vecchio = el.querySelector("#ent-body"), nuovo = document.createElement("div");
           nuovo.id = "ent-body"; nuovo.className = "card-body";
           vecchio.parentNode.replaceChild(nuovo, vecchio);
-          ({ pcs: pcs, clients: clients, move: move, inventory: inventory, software: software, updates: updates, compliance: compliance, approvals: approvals, incidents: incidentsTab, report: report, thispc: thisPc })[id](nuovo, App, c);
+          ({ pcs: pcs, campaigns: campaigns, clients: clients, move: move, inventory: inventory, software: software, updates: updates, compliance: compliance, approvals: approvals, incidents: incidentsTab, report: report, thispc: thisPc })[id](nuovo, App, c);
         }
         el.querySelector(".tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-etab]"); if (b) show(b.getAttribute("data-etab")); });
         show(attiva);

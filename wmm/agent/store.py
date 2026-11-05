@@ -110,6 +110,22 @@ class Store:
             return None
         return {"id": riga["id"], "area": riga["area"], "created": riga["created"], "score": riga["score"], "data": json.loads(riga["data_json"])}
 
+    def scan_history(self, machine_id: str, area: str, limit: int = 120) -> List[dict]:
+        """The last scans of an area with their data, oldest first (2.12: disk forecast, changes since yesterday)."""
+        with self._db() as db:
+            righe = db.execute(
+                "SELECT id, area, created, score, data_json FROM scans WHERE machine_id = ? AND area = ? ORDER BY id DESC LIMIT ?",
+                (machine_id, area, limit),
+            ).fetchall()
+        return [{"id": r["id"], "area": r["area"], "created": r["created"], "score": r["score"], "data": json.loads(r["data_json"])} for r in reversed(righe)]
+
+    def scan_before(self, machine_id: str, area: str, before: str) -> Optional[dict]:
+        """The last scan of an area made before a moment (ISO text)."""
+        with self._db() as db:
+            r = db.execute("SELECT id, area, created, score, data_json FROM scans WHERE machine_id = ? AND area = ? AND created <= ? ORDER BY id DESC LIMIT 1",
+                           (machine_id, area, before)).fetchone()
+        return None if r is None else {"id": r["id"], "area": r["area"], "created": r["created"], "score": r["score"], "data": json.loads(r["data_json"])}
+
     def trend(self, machine_id: str, area: str, limit: int = 30) -> List[dict]:
         with self._db() as db:
             righe = db.execute(

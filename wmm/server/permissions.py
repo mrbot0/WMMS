@@ -106,4 +106,9 @@ def required(nome: str, metodo: str, gruppi: tuple) -> List[str]:
 from .enterprise_api import PUBLIC as _ENTERPRISE_PUBLIC, RULES as _ENTERPRISE_RULES  # noqa: E402
 
 RULES.update(_ENTERPRISE_RULES)
+
+# 2.12: the routes of wmm/server/routes212.py
+from .routes212 import RULES as _PLUS_RULES  # noqa: E402
+
+RULES.update(_PLUS_RULES)
 PUBLIC |= _ENTERPRISE_PUBLIC

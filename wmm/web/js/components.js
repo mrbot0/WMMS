@@ -54,7 +54,14 @@
 
   /* columns: [{key, title, render(row), value(row) for sort/search/csv, cls, sortable}] */
   function dataTable(el, options) {
-    var state = { query: "", sort: options.sort || null, desc: !!options.desc, page: 0, filters: {}, size: store("pageSize") || options.pageSize || 10 };
+    var state = { query: "", sort: options.sort || null, desc: !!options.desc, page: 0, filters: {}, size: store("pageSize") || options.pageSize || 10, selected: {} };
+    // 2.12: columns each named table hides, and its saved views (search, filters and sort under a name).
+    var tableName = options.exportName || "";
+    var hiddenCols = tableName ? ((store("tableCols") || {})[tableName] || []) : [];
+    function views() { return tableName ? ((store("tableViews") || {})[tableName] || []) : []; }
+    function saveViews(list) { var all = store("tableViews") || {}; all[tableName] = list; store("tableViews", all); }
+    function visibleCols() { return options.columns.filter(function (c) { return !c.title || hiddenCols.indexOf(c.key) < 0; }); }
+    function rowKey(row) { return String(row[options.select.key]); }
     var value = function (col, row) { return col.value ? col.value(row) : row[col.key]; };
     // Every table with a name remembers the column it was last sorted by.
     var sortKey = options.exportName || "";
@@ -100,12 +107,20 @@
               return '<option value="' + esc(o[0]) + '"' + (state.filters[f.key] === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>";
             }).join("") + "</select>";
           }).join("") + '<span style="flex:1"></span>' + (options.tools || "") +
+          (tableName ? '<select data-view aria-label="Saved views"><option value="">Views</option>' + views().map(function (v, i) {
+            return '<option value="' + i + '">' + esc(v.name) + "</option>"; }).join("") + '<option value="save">+ Save this view…</option>' +
+            (views().length ? '<option value="delete">Delete a view…</option>' : "") + "</select>" +
+            '<button class="btn btn-sm" type="button" data-cols title="Choose the columns">' + UI.icon("settings") + "Columns</button>" : "") +
           (options.exportName ? '<button class="btn btn-sm" type="button" data-copy title="Copy the filtered rows">Copy</button>' +
             '<button class="btn btn-sm" type="button" data-copy-md title="Copy the filtered rows as a Markdown table (tickets, chats, wikis)">MD</button>' +
             '<button class="btn btn-sm" type="button" data-export>' + UI.icon("download") + "CSV</button>" +
             '<button class="btn btn-sm" type="button" data-export-json title="Download the filtered rows as JSON">JSON</button>' : "") + "</div>";
       }
-      var head = "<thead><tr>" + options.columns.map(function (c) {
+      var cols = visibleCols();
+      var pageKeys = options.select ? shown.map(rowKey) : [];
+      var allOn = pageKeys.length && pageKeys.every(function (k) { return state.selected[k]; });
+      var head = "<thead><tr>" + (options.select ? '<th class="dt-sel"><input type="checkbox" data-sel-all aria-label="Select the rows of this page"' + (allOn ? " checked" : "") + "></th>" : "") +
+        cols.map(function (c) {
         var sortable = c.sortable !== false && c.title;
         var mark = state.sort === c.key ? (state.desc ? "▼" : "▲") : "▲▼";
         return '<th class="' + (c.cls || "") + (sortable ? " sortable" : "") + (state.sort === c.key ? " sorted" : "") + '"' +
@@ -113,11 +128,13 @@
           esc(c.title || "") + (sortable ? '<span class="sort">' + mark + "</span>" : "") + "</th>";
       }).join("") + "</tr></thead>";
       var body = shown.length ? shown.map(function (row) {
-        return "<tr>" + options.columns.map(function (c) {
+        var k = options.select ? rowKey(row) : "";
+        return "<tr" + (options.select && state.selected[k] ? ' class="dt-picked"' : "") + ">" + (options.select ? '<td class="dt-sel"><input type="checkbox" data-sel="' + esc(k) + '"' +
+          (state.selected[k] ? " checked" : "") + ' aria-label="Select row"></td>' : "") + cols.map(function (c) {
           var v = c.render ? c.render(row) : esc(value(c, row) == null ? "—" : value(c, row));
           return '<td class="' + (c.cls || "") + '">' + v + "</td>";
         }).join("") + "</tr>";
-      }).join("") : '<tr><td colspan="' + options.columns.length + '"><p class="empty">' + esc(options.empty || "Nothing to show.") + "</p></td></tr>";
+      }).join("") : '<tr><td colspan="' + (cols.length + (options.select ? 1 : 0)) + '"><p class="empty">' + esc(options.empty || "Nothing to show.") + "</p></td></tr>";
       var foot = list.length > 10 || options.alwaysFoot ? '<div class="dt-foot"><span>' + (list.length ? (state.page * size + 1) + "–" + Math.min(list.length, (state.page + 1) * size) + " of " : "") + list.length +
         (list.length !== options.rows.length ? " (filtered from " + options.rows.length + ")" : "") + '</span><span class="dt-pages">' +
         '<label class="dt-size">Rows <select data-size aria-label="Rows per page">' + [10, 25, 50, 100].map(function (n) {
@@ -126,7 +143,11 @@
         '<button class="btn btn-sm" type="button" data-page="-1"' + (state.page ? "" : " disabled") + ">Previous</button>" +
         '<button class="btn btn-sm" type="button" data-page="1"' + (state.page < pages - 1 ? "" : " disabled") + ">Next</button></span></div>" : "";
       var hadFocus = document.activeElement && el.contains(document.activeElement) && document.activeElement.type === "search";
-      el.innerHTML = bar + '<div class="table-wrap"><table class="table">' + head + "<tbody>" + body + "</tbody></table></div>" + foot;
+      var picked = options.select ? Object.keys(state.selected).length : 0;
+      var bulk = picked ? '<div class="dt-bulk" role="region" aria-label="Selected rows"><strong>' + picked + " selected</strong>" + options.select.actions.map(function (a, i) {
+        return '<button class="btn btn-sm ' + (a.cls || "") + '" type="button" data-bulk="' + i + '">' + (a.icon ? UI.icon(a.icon) : "") + esc(a.label) + "</button>";
+      }).join("") + '<button class="btn btn-sm btn-ghost" type="button" data-sel-clear>Clear</button></div>' : "";
+      el.innerHTML = bar + bulk + '<div class="table-wrap"><table class="table">' + head + "<tbody>" + body + "</tbody></table></div>" + foot;
       if (state.query && shown.length) highlight(el.querySelector("tbody"), state.query);
       if (hadFocus) {
         var input = el.querySelector('input[type="search"]');
@@ -148,7 +169,45 @@
         return;
       }
       var key = e.target.getAttribute && e.target.getAttribute("data-filter");
-      if (key) { state.filters[key] = e.target.value; state.page = 0; draw(); }
+      if (key) { state.filters[key] = e.target.value; state.page = 0; draw(); return; }
+      if (e.target.hasAttribute("data-sel")) {
+        var sk = e.target.getAttribute("data-sel");
+        if (e.target.checked) state.selected[sk] = true; else delete state.selected[sk];
+        draw();
+        return;
+      }
+      if (e.target.hasAttribute("data-sel-all")) {
+        var on = e.target.checked, pg = rows().slice(state.page * state.size, state.page * state.size + state.size);
+        pg.forEach(function (r) { if (on) state.selected[rowKey(r)] = true; else delete state.selected[rowKey(r)]; });
+        draw();
+        return;
+      }
+      if (e.target.hasAttribute("data-view")) {
+        var v = e.target.value;
+        if (v === "save") {
+          UI.modal("Save this view", '<form class="form" onsubmit="return false"><label>Name<input name="n" maxlength="40" placeholder="e.g. Unsafe programs"></label></form>',
+            [{ label: "Cancel", cls: "btn-ghost" }, { label: "Save", cls: "btn-primary", value: function (w) { return w.querySelector("[name=n]").value.trim(); } }])
+            .then(function (name) {
+              if (name) {
+                saveViews(views().filter(function (x) { return x.name !== name; }).concat([{ name: name, query: state.query, filters: state.filters, sort: state.sort, desc: state.desc }]));
+                UI.toast("View saved.", "ok");
+              }
+              draw();
+            });
+          return;
+        }
+        if (v === "delete") {
+          UI.modal("Delete a view", '<form class="form" onsubmit="return false"><select name="n">' + views().map(function (x, i) { return '<option value="' + i + '">' + esc(x.name) + "</option>"; }).join("") +
+            "</select></form>", [{ label: "Cancel", cls: "btn-ghost" }, { label: "Delete", cls: "btn-danger", value: function (w) { return w.querySelector("[name=n]").value; } }])
+            .then(function (i) { if (i != null && i !== false && i !== "") { var l = views(); l.splice(Number(i), 1); saveViews(l); } draw(); });
+          return;
+        }
+        if (v !== "") {
+          var vista = views()[Number(v)];
+          if (vista) { state.query = vista.query || ""; state.filters = Object.assign({}, vista.filters || {}); state.sort = vista.sort; state.desc = !!vista.desc; state.page = 0; }
+          draw();
+        }
+      }
     });
     function sortBy(th) {
       var key = th.getAttribute("data-sort");
@@ -170,6 +229,30 @@
     el.addEventListener("click", function (e) {
       var th = e.target.closest("[data-sort]");
       if (th) { sortBy(th); return; }
+      var bulkBtn = e.target.closest("[data-bulk]");
+      if (bulkBtn) {
+        var chosen = options.rows.filter(function (r) { return state.selected[rowKey(r)]; });
+        Promise.resolve(options.select.actions[Number(bulkBtn.getAttribute("data-bulk"))].run(chosen)).then(function (done) {
+          if (done !== false) { state.selected = {}; draw(); }
+        });
+        return;
+      }
+      if (e.target.closest("[data-sel-clear]")) { state.selected = {}; draw(); return; }
+      if (e.target.closest("[data-cols]")) {
+        var titled = options.columns.filter(function (c) { return c.title; });
+        UI.modal("Columns", '<div class="form">' + titled.map(function (c) {
+          return '<label class="check"><input type="checkbox" value="' + esc(c.key) + '"' + (hiddenCols.indexOf(c.key) < 0 ? " checked" : "") + "> " + esc(c.title) + "</label>";
+        }).join("") + "</div>", [{ label: "Cancel", cls: "btn-ghost" }, { label: "Apply", cls: "btn-primary", value: function (w) {
+          return Array.prototype.filter.call(w.querySelectorAll("input"), function (x) { return !x.checked; }).map(function (x) { return x.value; });
+        } }]).then(function (hide) {
+          if (!hide) return;
+          if (hide.length >= titled.length) { UI.toast("Keep at least one column.", "warning"); return; }
+          hiddenCols = hide;
+          var all = store("tableCols") || {}; all[tableName] = hide; store("tableCols", all);
+          draw();
+        });
+        return;
+      }
       var page = e.target.closest("[data-page]");
       if (page) { state.page += Number(page.getAttribute("data-page")); draw(); return; }
       if (e.target.closest("[data-copy]")) {
@@ -214,7 +297,8 @@
       if (th && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); sortBy(th); }
     });
     draw();
-    return { redraw: draw, setRows: function (r) { options.rows = r; draw(); } };
+    return { redraw: draw, setRows: function (r) { options.rows = r; state.selected = {}; draw(); },
+      selected: function () { return options.select ? options.rows.filter(function (r) { return state.selected[rowKey(r)]; }) : []; } };
   }
 
   /* ---------- tooltips ---------- */
