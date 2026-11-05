@@ -9,6 +9,7 @@ through the same preview, permission and audit checks as every other change.
   package · temporary delegation of a role · access review."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -323,8 +324,10 @@ def recycle(percorsi: List[str], ammessi: Optional[List[Path]] = None, preview: 
             rifiutati.append(p)
     if preview or not validi:
         return {"moved": 0, "would_move": len(validi), "refused": rifiutati, "preview": preview}
-    elenco = ",".join("'" + v.replace("'", "''") + "'" for v in validi[:500])
-    script = ("Add-Type -AssemblyName Microsoft.VisualBasic; $ok = 0; foreach ($f in @(" + elenco + ")) { try { "
+    # The paths travel as base64 JSON: data, never script text (a name with a typographic quote cannot break out).
+    elenco = base64.b64encode(json.dumps(validi[:500]).encode("utf-8")).decode("ascii")
+    script = ("Add-Type -AssemblyName Microsoft.VisualBasic; $ok = 0; $l = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + elenco + "')) | ConvertFrom-Json; "
+              "foreach ($f in @($l)) { try { "
               "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($f, 'OnlyErrorDialogs', 'SendToRecycleBin'); $ok++ } catch {} }; "
               "[ordered]@{ moved = $ok } | ConvertTo-Json -Compress")
     r = crashes.run_json(script, runner, timeout=300)

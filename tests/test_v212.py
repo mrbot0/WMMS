@@ -146,6 +146,14 @@ class Files(unittest.TestCase):
         chiamato = []
         r = plus212.recycle([str(dentro)], ammessi=plus212.default_folders(self.casa), runner=lambda: chiamato.append(1) or '{"moved": 1}')
         self.assertEqual((r["moved"], chiamato), (1, [1]))
+        # A name with quotes PowerShell recognises never reaches the script as text.
+        strano = self.casa / "Documents" / "a’); Remove-Item x; (’.txt"
+        strano.write_text("x")
+        visti = []
+        with mock.patch.object(plus212.crashes, "run_json", side_effect=lambda script, runner, timeout: visti.append(script) or {"moved": 1}):
+            plus212.recycle([str(strano)], ammessi=plus212.default_folders(self.casa))
+        self.assertNotIn("Remove-Item", visti[0])
+        self.assertNotIn("’", visti[0])
 
 
 class SettingsAndRules(unittest.TestCase):
