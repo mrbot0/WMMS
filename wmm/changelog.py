@@ -2,6 +2,26 @@
 
 CHANGELOG = [
     {
+        "version": "2.11.0",
+        "date": "2026-11-05",
+        "title": "Several clients on the central server, server backup and move, versioned databases",
+        "highlights": [
+            "Clients on the central server: for a provider that looks after several companies, every PC belongs to a client and a technician "
+            "can be limited to the clients they look after.",
+            "Backup and move of the central server: one file encrypted with a password; restored on another PC, the PCs follow it to the new "
+            "address without enrolling again.",
+            "Versioned databases: before an upgrade changes a database, a copy is kept in dati\\db-backups; if a step fails nothing changes.",
+            "The MSI is built (and signed when the certificate is set) by GitHub with every release; MSI installations update with the MSI.",
+        ],
+        "changes": [
+            "Quality: every API route is called by every kind of role in the tests, the console is checked in a browser (every page, the Italian "
+            "text and the sign-in, role and approval flows), lint and type checks run on GitHub and main only accepts changes that pass.",
+            "Documentation: an administrator manual and a user guide in Italian, and the OpenAPI description of the API (/api/v1/openapi.json).",
+            "Italian: more than 100 phrases translated, among them the Company centre, the first scan and the security notes of programs.",
+            "Fixed: a job could look finished before the agent was free again.",
+        ],
+    },
+    {
         "version": "2.10.0",
         "date": "2026-11-05",
         "title": "Company centre: central server, company sign-in, approvals and compliance",

@@ -275,8 +275,9 @@ class JobManager:
         finally:
             job.current = None
             job.finished = time.time()
-            job.active = False
+            # Release first: whoever sees the job finished must also find the agent free (a test raced on this).
             self._release()
+            job.active = False
 
     @staticmethod
     def probe(action_id: str) -> verify.Probe:

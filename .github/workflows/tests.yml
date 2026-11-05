@@ -20,6 +20,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Lint and type check
+        run: |
+          python -m pip install --quiet ruff==0.17.3 mypy==2.4.1
+          python -m ruff check .
+          python tools/typecheck.py
+      # 2.11: the browser tests (every page, the Italian check and the critical flows) run here too, not only on a PC with Playwright.
+      - name: Browser for the console tests
+        shell: pwsh
+        run: |
+          npm install -g playwright@1.64
+          playwright install chromium
       - name: Unit and API tests
         run: python -m unittest discover -s tests -t . -v
       - name: JavaScript syntax
@@ -31,3 +42,26 @@ jobs:
           }
       - name: Italian dictionaries are valid JSON
         run: python -c "import json,pathlib; [json.loads(pathlib.Path(f).read_text(encoding='utf-8').split(' = ',1)[1].rstrip().rstrip(';')) for f in ('wmm/web/js/i18n_pages.js','wmm/web/js/i18n_tools.js')]"
+
+  # 2.11: the MSI must build on every change (WiX on the runner); the file is kept for 7 days for a manual test.
+  msi:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          ./tools/build_msi.ps1 -OutDir dist
+          $msi = Get-ChildItem dist -Filter *.msi | Select-Object -First 1
+          if (-not $msi -or $msi.Length -lt 100KB) { throw "The MSI was not built." }
+          Write-Host "$($msi.Name): $([math]::Round($msi.Length / 1MB, 1)) MB"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: dist/*.msi
+          retention-days: 7

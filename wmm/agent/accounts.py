@@ -21,9 +21,9 @@ import threading
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence
+from typing import Iterator, List, Optional, Sequence
 
-from . import notify
+from . import migrations, notify
 
 # ---------- the catalog of permissions ----------
 
@@ -222,6 +222,12 @@ PUBLIC_USER = ("id", "username", "display", "email", "telegram", "role_id", "act
                "password_changed", "totp_on", "expires", "notes", "lang")
 
 
+# Versioned steps (2.11): never edit or reorder, only append. The first 2.9 build had no totp_pending; 2.10 added the
+# company identity (Entra ID, Windows) a user is linked to and the hash chain of the audit log.
+MIGRATIONS = [migrations.add_column("users", "totp_pending", "TEXT NOT NULL DEFAULT ''"), migrations.add_column("users", "subject", "TEXT NOT NULL DEFAULT ''"),
+              migrations.add_column("audit", "prev_hash", "TEXT NOT NULL DEFAULT ''"), migrations.add_column("audit", "hash", "TEXT NOT NULL DEFAULT ''")]
+
+
 class Accounts:
     def __init__(self, path: Path, clock=time.time):
         self.path = Path(path)
@@ -229,13 +235,8 @@ class Accounts:
         self._lock = threading.RLock()
         self.audit_hooks = []  # called with every audit entry (SIEM forwarding, 2.10)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.migration = migrations.upgrade(self.path, "accounts", SCHEMA, MIGRATIONS)
         with self._db() as db:
-            db.executescript(SCHEMA)
-            colonne = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
-            if "totp_pending" not in colonne:  # databases created by the first 2.9 build
-                db.execute("ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''")
-            if "subject" not in colonne:  # 2.10: the company identity (Entra ID, Windows) a user is linked to
-                db.execute("ALTER TABLE users ADD COLUMN subject TEXT NOT NULL DEFAULT ''")
             for ident, r in BUILTIN.items():
                 db.execute("INSERT OR IGNORE INTO roles (id, name, description, color, permissions, builtin, created, updated) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
                            (ident, r["name"], r["description"], r["color"], json.dumps(r["permissions"]), now_iso(), now_iso()))

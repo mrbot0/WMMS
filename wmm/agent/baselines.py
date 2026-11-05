@@ -5,12 +5,11 @@ central server. Built in: "Security baseline" and "Business workstation"; your o
 from __future__ import annotations
 
 import json
-import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from . import verify
 
@@ -90,7 +89,7 @@ def evaluate(controlli: List[str], runner: Optional[Callable[[str], str]] = None
     def uno(ident: str) -> dict:
         c = verify.CHECKS[ident]
         valore = verify.read(c, runner)
-        ok = None if valore is None else bool(c.ok(valore))
+        ok = None if valore is None or c.ok is None else bool(c.ok(valore))  # no rule: only shown
         return {"id": ident, "label": c.label, "value": valore, "ok": ok}
     with ThreadPoolExecutor(max_workers=8) as pool:
         righe = list(pool.map(uno, [c for c in controlli if c in verify.CHECKS]))

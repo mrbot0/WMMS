@@ -1,9 +1,10 @@
 <#
   Builds the MSI of Windows Maintenance Manager with the WiX Toolset (v4 or v5: dotnet tool install --global wix).
-  Usage:  .\tools\build_msi.ps1 [-Sign -CertThumbprint <thumbprint>]
+  Usage:  .\tools\build_msi.ps1 [-Sign -CertThumbprint <thumbprint>] [-OutDir release]
+  In CI (2.11) the certificate comes from WMM_SIGN_PFX / WMM_SIGN_PASSWORD, like tools\build_installer.ps1.
   Output: dist\WindowsMaintenanceManager-<version>.msi
 #>
-param([switch]$Sign, [string]$CertThumbprint = "")
+param([switch]$Sign, [string]$CertThumbprint = "", [string]$OutDir = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $version = (Select-String -Path "$root\wmm\__init__.py" -Pattern 'VERSION = "([\d.]+)"').Matches[0].Groups[1].Value
@@ -30,13 +31,25 @@ foreach ($f in $files) {
 [void]$xml.AppendLine('</ComponentGroup></Fragment></Wix>')
 Set-Content -Path "$stage\WmmFiles.wxs" -Value $xml.ToString() -Encoding UTF8
 
-New-Item -ItemType Directory "$root\dist" -Force | Out-Null
-$out = "$root\dist\WindowsMaintenanceManager-$version.msi"
+$dest = if ($OutDir) { $OutDir } else { "$root\dist" }
+New-Item -ItemType Directory $dest -Force | Out-Null
+$out = Join-Path (Resolve-Path $dest) "WindowsMaintenanceManager-$version.msi"
 wix build "$root\packaging\wmm.wxs" "$stage\WmmFiles.wxs" -d Version=$version -arch x64 -o $out
 if ($LASTEXITCODE -ne 0) { throw "wix build failed" }
+$signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue | ForEach-Object Source
+if (-not $signtool) {
+  $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+}
 if ($Sign) {
   if (-not $CertThumbprint) { throw "-Sign needs -CertThumbprint" }
-  signtool sign /sha1 $CertThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $out
+  & $signtool sign /sha1 $CertThumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $out
   if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+} elseif ($env:WMM_SIGN_PFX) {
+  if (-not $signtool) { throw "A signing certificate is set but signtool.exe (Windows SDK) was not found." }
+  & $signtool sign /f $env:WMM_SIGN_PFX /p $env:WMM_SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "Windows Maintenance Manager" $out
+  if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+} else {
+  Write-Warning "No signing certificate: the MSI is NOT signed."
 }
 Write-Host "Built $out"

@@ -21,7 +21,6 @@ import sys
 import threading
 import time
 from datetime import datetime
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -41,7 +40,8 @@ from . import permissions
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 from .errors import ApiError  # noqa: F401 - part of this module's interface
-from .features import AgentFeatures, HandlerFeatures, FEATURE_ROUTES
+from .features import AgentFeatures
+from .routes_features import FEATURE_ROUTES, HandlerFeatures
 from .accounts_api import ACCOUNT_ROUTES, AccountsHandler
 from .enterprise_api import ENTERPRISE_ROUTES, AgentEnterprise, HandlerEnterprise
 
@@ -900,7 +900,9 @@ class Handler(HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPReque
         except ValueError:
             self.close_connection = True
             raise ApiError(400, "Invalid Content-Length.") from None
-        if lunghezza > 1_000_000:
+        # The backup of the central server is the only large upload (2.11): it is read, then refused, without the permission.
+        limite = 64_000_000 if urlsplit(self.path).path in ("/api/v1/central/restore", "/api/v1/central/backup/inspect") else 1_000_000
+        if lunghezza > limite:
             self.close_connection = True
             raise ApiError(413, "Request too large.")
         if lunghezza > 0:
@@ -1079,6 +1081,11 @@ class Handler(HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPReque
         self._send(200, file.read_bytes(), tipo, {"ETag": etag}, cache="no-cache")
 
     # ---------- routes ----------
+
+    def openapi_get(self, query):
+        """The OpenAPI 3.1 description of this API, built from the route table (2.11)."""
+        from . import openapi
+        self._json(200, openapi.document())
 
     def info(self, query):
         self._json(200, self.agent.info())
@@ -1375,6 +1382,7 @@ def _route(metodo: str, schema: str, funzione: Callable) -> Route:
 AREA = r"(cleanup|integrity|services|[^/]+)"
 ROUTES: List[Route] = [
     _route("GET", "/agent/info", Handler.info),
+    _route("GET", "/openapi.json", Handler.openapi_get),
     _route("POST", "/pair", Handler.pair),
     _route("POST", "/agent/token-check", Handler.token_check),
     _route("POST", "/agent/elevate", Handler.elevate),

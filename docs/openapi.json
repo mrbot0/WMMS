@@ -1,0 +1,9201 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "Windows Maintenance Manager API",
+  "version": "2.11.0",
+  "description": "The API of the console. Every write needs the X-WMM-Token header of the console or, with accounts on, an API token (Settings › API tokens) sent as Authorization: Bearer wmm_…. With accounts on, x-permissions lists what the role of the user (or the scopes of the token) must include. Runs of tools are also checked tool by tool."
+ },
+ "servers": [
+  {
+   "url": "http://127.0.0.1:8765",
+   "description": "the console on this PC"
+  }
+ ],
+ "components": {
+  "securitySchemes": {
+   "token": {
+    "type": "http",
+    "scheme": "bearer",
+    "description": "API token (wmm_…)"
+   },
+   "session": {
+    "type": "apiKey",
+    "in": "header",
+    "name": "X-WMM-Session",
+    "description": "session of a signed-in user"
+   }
+  }
+ },
+ "security": [
+  {
+   "token": []
+  },
+  {
+   "session": []
+  }
+ ],
+ "paths": {
+  "/api/v1/actions": {
+   "get": {
+    "operationId": "list_actions",
+    "summary": "Optional filters: area, kind (fix/report), risk and q (text in title, description or id).",
+    "tags": [
+     "actions"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/activity": {
+   "get": {
+    "operationId": "activity",
+    "summary": "Activity",
+    "tags": [
+     "activity"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/agent/autostart": {
+   "get": {
+    "operationId": "get_autostart",
+    "summary": "Get autostart",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "put_autostart",
+    "summary": "Put autostart",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/agent/elevate": {
+   "post": {
+    "operationId": "elevate",
+    "summary": "Elevate",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/agent/info": {
+   "get": {
+    "operationId": "info",
+    "summary": "Info",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/agent/protect": {
+   "post": {
+    "operationId": "protect",
+    "summary": "Protect",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "operationId": "protection_status",
+    "summary": "Protection status",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/agent/service": {
+   "get": {
+    "operationId": "service_get",
+    "summary": "Service get",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "service_install",
+    "summary": "Service install",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "service_remove",
+    "summary": "Service remove",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/agent/shutdown": {
+   "post": {
+    "operationId": "stop_all",
+    "summary": "Stop all",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/agent/token-check": {
+   "post": {
+    "operationId": "token_check",
+    "summary": "Token check",
+    "tags": [
+     "agent"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/app-settings": {
+   "get": {
+    "operationId": "app_settings_get",
+    "summary": "App settings get",
+    "tags": [
+     "app-settings"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "app_settings_put",
+    "summary": "App settings put",
+    "tags": [
+     "app-settings"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/app-settings/reset": {
+   "post": {
+    "operationId": "app_settings_reset",
+    "summary": "App settings reset",
+    "tags": [
+     "app-settings"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/app-settings/smtp-presets": {
+   "get": {
+    "operationId": "smtp_presets",
+    "summary": "Smtp presets",
+    "tags": [
+     "app-settings"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/approvals": {
+   "get": {
+    "operationId": "approvals_get",
+    "summary": "Approvals get",
+    "tags": [
+     "approvals"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/approvals/{id}/{action}": {
+   "post": {
+    "operationId": "approval_decide",
+    "summary": "Approval decide",
+    "tags": [
+     "approvals"
+    ],
+    "x-permissions": [
+     "approvals.decide"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d{1,9}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^approve|reject$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps": {
+   "get": {
+    "operationId": "app_list",
+    "summary": "App list",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "view.apps"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/apps/browsers/{name}/clean": {
+   "post": {
+    "operationId": "browser_clean",
+    "summary": "Browser clean",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z]{3,10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps/rules": {
+   "get": {
+    "operationId": "app_rules",
+    "summary": "App rules",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "view.apps"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/apps/rules/update": {
+   "post": {
+    "operationId": "update_app_rules",
+    "summary": "Update app rules",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps/store/{name}/remove": {
+   "post": {
+    "operationId": "store_remove",
+    "summary": "Store remove",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps/update": {
+   "post": {
+    "operationId": "app_update",
+    "summary": "App update",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps/updates": {
+   "get": {
+    "operationId": "app_updates",
+    "summary": "App updates",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "view.apps"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/apps/{name}/leftovers": {
+   "post": {
+    "operationId": "clean_leftovers",
+    "summary": "Clean leftovers",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/apps/{name}/uninstall-status": {
+   "get": {
+    "operationId": "uninstall_status",
+    "summary": "Uninstall status",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "view.apps"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/apps/{name}/{action}": {
+   "post": {
+    "operationId": "app_operation",
+    "summary": "App operation",
+    "tags": [
+     "apps"
+    ],
+    "x-permissions": [
+     "apps.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^uninstall|remove-entry|open-folder|size$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/areas/{area}": {
+   "get": {
+    "operationId": "area",
+    "summary": "Area",
+    "tags": [
+     "areas"
+    ],
+    "x-permissions": [
+     "view.cleanup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "area",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^cleanup|integrity|services|[^/]+$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/areas/{area}/scan": {
+   "post": {
+    "operationId": "scan_area",
+    "summary": "Scan area",
+    "tags": [
+     "areas"
+    ],
+    "x-permissions": [
+     "scan.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "area",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^cleanup|integrity|services|[^/]+$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant": {
+   "get": {
+    "operationId": "assistant_get",
+    "summary": "Assistant get",
+    "tags": [
+     "assistant"
+    ],
+    "x-permissions": [
+     "assistant.use"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/chat": {
+   "post": {
+    "operationId": "assistant_chat_post",
+    "summary": "Assistant chat post",
+    "tags": [
+     "assistant"
+    ],
+    "x-permissions": [
+     "assistant.use"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/chat/{name}": {
+   "get": {
+    "operationId": "assistant_chat_get",
+    "summary": "Assistant chat get",
+    "tags": [
+     "assistant"
+    ],
+    "x-permissions": [
+     "assistant.use"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/assistant/install": {
+   "post": {
+    "operationId": "assistant_install_post",
+    "summary": "Assistant install post",
+    "tags": [
+     "assistant"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/key": {
+   "put": {
+    "operationId": "assistant_key_put",
+    "summary": "Assistant key put",
+    "tags": [
+     "assistant"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/audit": {
+   "get": {
+    "operationId": "audit_get",
+    "summary": "Audit get",
+    "tags": [
+     "audit"
+    ],
+    "x-permissions": [
+     "audit.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/audit/export.csv": {
+   "get": {
+    "operationId": "audit_export",
+    "summary": "Audit export",
+    "tags": [
+     "audit"
+    ],
+    "x-permissions": [
+     "audit.view",
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/audit/prune": {
+   "post": {
+    "operationId": "audit_prune",
+    "summary": "Audit prune",
+    "tags": [
+     "audit"
+    ],
+    "x-permissions": [
+     "settings.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/audit/verify": {
+   "get": {
+    "operationId": "audit_verify",
+    "summary": "Audit verify",
+    "tags": [
+     "audit"
+    ],
+    "x-permissions": [
+     "audit.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/2fa/begin": {
+   "post": {
+    "operationId": "auth_2fa_begin",
+    "summary": "Auth 2fa begin",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/2fa/confirm": {
+   "post": {
+    "operationId": "auth_2fa_confirm",
+    "summary": "Auth 2fa confirm",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/2fa/disable": {
+   "post": {
+    "operationId": "auth_2fa_disable",
+    "summary": "Auth 2fa disable",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/disable": {
+   "post": {
+    "operationId": "auth_disable",
+    "summary": "Auth disable",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [
+     "users.manage",
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/login": {
+   "post": {
+    "operationId": "auth_login",
+    "summary": "Auth login",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/logout": {
+   "post": {
+    "operationId": "auth_logout",
+    "summary": "Auth logout",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/me": {
+   "get": {
+    "operationId": "auth_me",
+    "summary": "Auth me",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/oidc/callback": {
+   "get": {
+    "operationId": "oidc_callback",
+    "summary": "Oidc callback",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/oidc/start": {
+   "get": {
+    "operationId": "oidc_start",
+    "summary": "Oidc start",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/password": {
+   "post": {
+    "operationId": "auth_password",
+    "summary": "Auth password",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/policy": {
+   "get": {
+    "operationId": "policy_get",
+    "summary": "Policy get",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "policy_put",
+    "summary": "Policy put",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [
+     "settings.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/profile": {
+   "put": {
+    "operationId": "auth_profile",
+    "summary": "Auth profile",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/sessions": {
+   "get": {
+    "operationId": "auth_sessions",
+    "summary": "Auth sessions",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/sessions/signout-others": {
+   "post": {
+    "operationId": "auth_signout_others",
+    "summary": "Auth signout others",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/setup": {
+   "post": {
+    "operationId": "auth_setup",
+    "summary": "Auth setup",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/sso": {
+   "get": {
+    "operationId": "sso_state",
+    "summary": "Sso state",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/state": {
+   "get": {
+    "operationId": "auth_state",
+    "summary": "Auth state",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/auth/windows": {
+   "post": {
+    "operationId": "windows_login",
+    "summary": "Windows login",
+    "tags": [
+     "auth"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/baselines": {
+   "get": {
+    "operationId": "baselines_get",
+    "summary": "Baselines get",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "baseline_post",
+    "summary": "Baseline post",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "compliance.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/baselines/{name}": {
+   "put": {
+    "operationId": "baseline_put",
+    "summary": "Baseline put",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "compliance.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z0-9]{2,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "baseline_delete",
+    "summary": "Baseline delete",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "compliance.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z0-9]{2,20}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/baselines/{name}/fix": {
+   "post": {
+    "operationId": "baseline_fix",
+    "summary": "Baseline fix",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "compliance.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z0-9]{2,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/baselines/{name}/run": {
+   "post": {
+    "operationId": "baseline_run",
+    "summary": "Baseline run",
+    "tags": [
+     "baselines"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z0-9]{2,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central": {
+   "get": {
+    "operationId": "central_get",
+    "summary": "Central get",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/central/agents/{agent_id}": {
+   "get": {
+    "operationId": "central_agent_get",
+    "summary": "Central agent get",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^a[0-9a-f]{16}$"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "operationId": "central_agent_delete",
+    "summary": "Central agent delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^a[0-9a-f]{16}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/central/agents/{agent_id}/asset": {
+   "put": {
+    "operationId": "central_agent_asset",
+    "summary": "Central agent asset",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^a[0-9a-f]{16}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/agents/{agent_id}/tags": {
+   "put": {
+    "operationId": "central_agent_tags",
+    "summary": "Central agent tags",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^a[0-9a-f]{16}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/backup": {
+   "post": {
+    "operationId": "central_backup",
+    "summary": "Central backup",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage",
+     "data.backup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/backup/inspect": {
+   "post": {
+    "operationId": "central_inspect",
+    "summary": "Central inspect",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage",
+     "data.backup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/batches/{batch}": {
+   "get": {
+    "operationId": "central_batch_get",
+    "summary": "Central batch get",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/central/catalog": {
+   "post": {
+    "operationId": "central_catalog_post",
+    "summary": "Central catalog post",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "deploy.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/catalog/{catalog_id}": {
+   "delete": {
+    "operationId": "central_catalog_delete",
+    "summary": "Central catalog delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "deploy.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "catalog_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^c[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/central/client": {
+   "get": {
+    "operationId": "client_get",
+    "summary": "Client get",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "client_put",
+    "summary": "Client put",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "client_leave",
+    "summary": "Client leave",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/central/client/contact": {
+   "post": {
+    "operationId": "client_contact",
+    "summary": "Client contact",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/client/enroll": {
+   "post": {
+    "operationId": "client_enroll",
+    "summary": "Client enroll",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/enroll-code": {
+   "post": {
+    "operationId": "central_code",
+    "summary": "Central code",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/groups": {
+   "post": {
+    "operationId": "central_groups_post",
+    "summary": "Central groups post",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/groups/delete": {
+   "post": {
+    "operationId": "central_group_delete",
+    "summary": "Central group delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/inventory.csv": {
+   "get": {
+    "operationId": "central_inventory_csv",
+    "summary": "Central inventory csv",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet",
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/central/jobs": {
+   "post": {
+    "operationId": "central_jobs_post",
+    "summary": "Central jobs post",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/jobs/{id}": {
+   "delete": {
+    "operationId": "central_job_delete",
+    "summary": "Central job delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d{1,9}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/central/restore": {
+   "post": {
+    "operationId": "central_restore",
+    "summary": "Replaces the central server of this PC with a backup (moving the server to this PC).",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage",
+     "data.backup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/rings": {
+   "post": {
+    "operationId": "central_rings_post",
+    "summary": "Central rings post",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "updates.policy"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/rings/assign": {
+   "post": {
+    "operationId": "central_rings_assign",
+    "summary": "Central rings assign",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "updates.policy"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/rings/{ring_id}": {
+   "delete": {
+    "operationId": "central_ring_delete",
+    "summary": "Central ring delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "updates.policy"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ring_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^r[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/central/server": {
+   "put": {
+    "operationId": "central_server_put",
+    "summary": "Central server put",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/software": {
+   "get": {
+    "operationId": "central_software",
+    "summary": "Central software",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/central/tenants": {
+   "get": {
+    "operationId": "central_tenants_get",
+    "summary": "Central tenants get",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "central_tenants_post",
+    "summary": "Central tenants post",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/tenants/access": {
+   "put": {
+    "operationId": "central_tenants_access",
+    "summary": "Which clients a console user may see: none = every client.",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage",
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/tenants/move": {
+   "post": {
+    "operationId": "central_tenants_move",
+    "summary": "Central tenants move",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/central/tenants/{tenant_id}": {
+   "delete": {
+    "operationId": "central_tenant_delete",
+    "summary": "Central tenant delete",
+    "tags": [
+     "central"
+    ],
+    "x-permissions": [
+     "central.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "tenant_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^k[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/changelog": {
+   "get": {
+    "operationId": "changelog",
+    "summary": "Changelog",
+    "tags": [
+     "changelog"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/config/export": {
+   "get": {
+    "operationId": "config_export",
+    "summary": "Config export",
+    "tags": [
+     "config"
+    ],
+    "x-permissions": [
+     "data.backup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/config/import": {
+   "post": {
+    "operationId": "config_import",
+    "summary": "Config import",
+    "tags": [
+     "config"
+    ],
+    "x-permissions": [
+     "data.backup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/custom-tools": {
+   "get": {
+    "operationId": "custom_tools_get",
+    "summary": "Custom tools get",
+    "tags": [
+     "custom-tools"
+    ],
+    "x-permissions": [
+     "view.toolbox"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "custom_tools_post",
+    "summary": "Custom tools post",
+    "tags": [
+     "custom-tools"
+    ],
+    "x-permissions": [
+     "custom_tools.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/custom-tools/{script_id}": {
+   "put": {
+    "operationId": "custom_tool_put",
+    "summary": "Custom tool put",
+    "tags": [
+     "custom-tools"
+    ],
+    "x-permissions": [
+     "custom_tools.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "script_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "custom_tool_delete",
+    "summary": "Custom tool delete",
+    "tags": [
+     "custom-tools"
+    ],
+    "x-permissions": [
+     "custom_tools.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "script_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/dashboard": {
+   "get": {
+    "operationId": "dashboard",
+    "summary": "Dashboard",
+    "tags": [
+     "dashboard"
+    ],
+    "x-permissions": [
+     "view.dashboard"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/data/info": {
+   "get": {
+    "operationId": "db_info",
+    "summary": "Db info",
+    "tags": [
+     "data"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/data/maintenance": {
+   "post": {
+    "operationId": "db_maintenance",
+    "summary": "Db maintenance",
+    "tags": [
+     "data"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/data/retention": {
+   "post": {
+    "operationId": "retention_run",
+    "summary": "Retention run",
+    "tags": [
+     "data"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/diagnostics": {
+   "get": {
+    "operationId": "agent_log",
+    "summary": "Agent log",
+    "tags": [
+     "diagnostics"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/digest": {
+   "get": {
+    "operationId": "digest_get",
+    "summary": "Digest get",
+    "tags": [
+     "digest"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "digest_put",
+    "summary": "Digest put",
+    "tags": [
+     "digest"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/digest/send": {
+   "post": {
+    "operationId": "digest_send_post",
+    "summary": "Digest send post",
+    "tags": [
+     "digest"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/events": {
+   "get": {
+    "operationId": "event_list",
+    "summary": "Event list",
+    "tags": [
+     "events"
+    ],
+    "x-permissions": [
+     "view.events"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/events/meta": {
+   "get": {
+    "operationId": "event_meta",
+    "summary": "Event meta",
+    "tags": [
+     "events"
+    ],
+    "x-permissions": [
+     "view.events"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/export/{name}.{action}": {
+   "get": {
+    "operationId": "export",
+    "summary": "Export",
+    "tags": [
+     "export"
+    ],
+    "x-permissions": [
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z]+$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^json|csv$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/fleet": {
+   "get": {
+    "operationId": "fleet_get",
+    "summary": "Fleet get",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/batch": {
+   "post": {
+    "operationId": "fleet_batch_post",
+    "summary": "Fleet batch post",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/batch/{name}": {
+   "get": {
+    "operationId": "fleet_batch_get",
+    "summary": "Fleet batch get",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/fleet/pcs": {
+   "post": {
+    "operationId": "fleet_add_post",
+    "summary": "Fleet add post",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/pcs/{batch}": {
+   "delete": {
+    "operationId": "fleet_remove_delete",
+    "summary": "Fleet remove delete",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/fleet/pcs/{batch}/run": {
+   "post": {
+    "operationId": "fleet_run_post",
+    "summary": "Fleet run post",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/pcs/{batch}/runs/{run_id}": {
+   "get": {
+    "operationId": "fleet_run_get",
+    "summary": "Fleet run get",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$"
+      }
+     },
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{32}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/fleet/share": {
+   "put": {
+    "operationId": "fleet_share_put",
+    "summary": "Fleet share put",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/share/firewall": {
+   "post": {
+    "operationId": "fleet_firewall_post",
+    "summary": "Fleet firewall post",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/fleet/share/key": {
+   "post": {
+    "operationId": "fleet_key_post",
+    "summary": "Fleet key post",
+    "tags": [
+     "fleet"
+    ],
+    "x-permissions": [
+     "fleet.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/hardware": {
+   "get": {
+    "operationId": "hardware_inventory",
+    "summary": "Hardware inventory",
+    "tags": [
+     "hardware"
+    ],
+    "x-permissions": [
+     "view.hardware"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/hardware/monitor-tool": {
+   "post": {
+    "operationId": "hardware_monitor_tool",
+    "summary": "Hardware monitor tool",
+    "tags": [
+     "hardware"
+    ],
+    "x-permissions": [
+     "view.hardware"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/hardware/sensors": {
+   "get": {
+    "operationId": "hardware_sensors",
+    "summary": "Hardware sensors",
+    "tags": [
+     "hardware"
+    ],
+    "x-permissions": [
+     "view.hardware"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/hardware/trends": {
+   "get": {
+    "operationId": "trends_get",
+    "summary": "Trends get",
+    "tags": [
+     "hardware"
+    ],
+    "x-permissions": [
+     "view.hardware"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "trends_post",
+    "summary": "Trends post",
+    "tags": [
+     "hardware"
+    ],
+    "x-permissions": [
+     "view.hardware"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/health": {
+   "get": {
+    "operationId": "health",
+    "summary": "Health",
+    "tags": [
+     "health"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/history": {
+   "get": {
+    "operationId": "history",
+    "summary": "History",
+    "tags": [
+     "history"
+    ],
+    "x-permissions": [
+     "view.history"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/history/prune": {
+   "post": {
+    "operationId": "prune_history",
+    "summary": "Prune history",
+    "tags": [
+     "history"
+    ],
+    "x-permissions": [
+     "history.prune"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/history/runs/{id}/log": {
+   "get": {
+    "operationId": "run_log",
+    "summary": "Run log",
+    "tags": [
+     "history"
+    ],
+    "x-permissions": [
+     "view.history"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d+$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/history/runs/{id}/undo": {
+   "post": {
+    "operationId": "run_undo_post",
+    "summary": "Run undo post",
+    "tags": [
+     "history"
+    ],
+    "x-permissions": [
+     "history.undo"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d{1,10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/incidents": {
+   "get": {
+    "operationId": "incidents_get",
+    "summary": "Incidents get",
+    "tags": [
+     "incidents"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/incidents/{batch}/{action}": {
+   "post": {
+    "operationId": "incident_update",
+    "summary": "Incident update",
+    "tags": [
+     "incidents"
+    ],
+    "x-permissions": [
+     "incidents.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "batch",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{12}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^ack|close|reopen$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/escalation": {
+   "get": {
+    "operationId": "escalation_get",
+    "summary": "Escalation get",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "incidents.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "escalation_put",
+    "summary": "Escalation put",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/siem": {
+   "get": {
+    "operationId": "siem_get",
+    "summary": "Siem get",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "siem_put",
+    "summary": "Siem put",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/siem/test": {
+   "post": {
+    "operationId": "siem_test",
+    "summary": "Siem test",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/sso": {
+   "get": {
+    "operationId": "sso_get",
+    "summary": "Sso get",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "sso_put",
+    "summary": "Sso put",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/tickets": {
+   "get": {
+    "operationId": "tickets_get",
+    "summary": "Tickets get",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "tickets_put",
+    "summary": "Tickets put",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrations/tickets/test": {
+   "post": {
+    "operationId": "tickets_test",
+    "summary": "Tickets test",
+    "tags": [
+     "integrations"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/integrity/crashes": {
+   "get": {
+    "operationId": "crashes_get",
+    "summary": "Crashes get",
+    "tags": [
+     "integrity"
+    ],
+    "x-permissions": [
+     "view.integrity"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/integrity/early-warning": {
+   "get": {
+    "operationId": "early_warning_get",
+    "summary": "Early warning get",
+    "tags": [
+     "integrity"
+    ],
+    "x-permissions": [
+     "view.integrity"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/live": {
+   "get": {
+    "operationId": "live",
+    "summary": "Live",
+    "tags": [
+     "live"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/network/bluetooth/ignore": {
+   "post": {
+    "operationId": "bluetooth_ignore_post",
+    "summary": "Bluetooth ignore post",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "network.scan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/network/connection": {
+   "get": {
+    "operationId": "connection_get",
+    "summary": "Connection get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "connection_post",
+    "summary": "Connection post",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/network/devices": {
+   "get": {
+    "operationId": "network_devices",
+    "summary": "Network devices",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/network/interfaces": {
+   "get": {
+    "operationId": "scan_interfaces_get",
+    "summary": "Scan interfaces get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/network/kev": {
+   "get": {
+    "operationId": "kev_get",
+    "summary": "Kev get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "kev_post",
+    "summary": "Kev post",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/network/scan": {
+   "post": {
+    "operationId": "network_scan",
+    "summary": "Network scan",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "network.scan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/network/upnp": {
+   "get": {
+    "operationId": "upnp_get",
+    "summary": "Upnp get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/network/upnp/scan": {
+   "post": {
+    "operationId": "upnp_scan_post",
+    "summary": "Upnp scan post",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "network.scan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/network/wifi/history": {
+   "get": {
+    "operationId": "wifi_history_get",
+    "summary": "Wifi history get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/network/{action}": {
+   "get": {
+    "operationId": "radio_get",
+    "summary": "Radio get",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "view.netscan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^wifi|bluetooth$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/network/{action}/scan": {
+   "post": {
+    "operationId": "radio_scan_post",
+    "summary": "Radio scan post",
+    "tags": [
+     "network"
+    ],
+    "x-permissions": [
+     "network.scan"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^wifi|bluetooth$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications": {
+   "get": {
+    "operationId": "notification_get",
+    "summary": "Notification get",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "notification_put",
+    "summary": "Notification put",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/log": {
+   "get": {
+    "operationId": "notify_log_get",
+    "summary": "Notify log get",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "delete": {
+    "operationId": "notify_log_clear",
+    "summary": "Notify log clear",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/telegram/bot": {
+   "post": {
+    "operationId": "telegram_bot",
+    "summary": "Telegram bot",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/telegram/chats": {
+   "post": {
+    "operationId": "telegram_detect",
+    "summary": "Telegram detect",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/test": {
+   "post": {
+    "operationId": "notification_test",
+    "summary": "Notification test",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/test/{action}": {
+   "post": {
+    "operationId": "notify_test_channel",
+    "summary": "Notify test channel",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^email|telegram|webhook$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/webhook/test": {
+   "post": {
+    "operationId": "webhook_test",
+    "summary": "Webhook test",
+    "tags": [
+     "notifications"
+    ],
+    "x-permissions": [
+     "notifications.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/openapi.json": {
+   "get": {
+    "operationId": "openapi_get",
+    "summary": "The OpenAPI 3.1 description of this API, built from the route table (2.11).",
+    "tags": [
+     "openapi.json"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/pair": {
+   "post": {
+    "operationId": "pair",
+    "summary": "Pair",
+    "tags": [
+     "pair"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/api/v1/permissions": {
+   "get": {
+    "operationId": "permissions_get",
+    "summary": "Permissions get",
+    "tags": [
+     "permissions"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/phone": {
+   "get": {
+    "operationId": "phone_get",
+    "summary": "Phone get",
+    "tags": [
+     "phone"
+    ],
+    "x-permissions": [
+     "view.fleet"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "phone_put",
+    "summary": "Phone put",
+    "tags": [
+     "phone"
+    ],
+    "x-permissions": [
+     "phone.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/phone/devices/{name}": {
+   "delete": {
+    "operationId": "phone_remove_delete",
+    "summary": "Phone remove delete",
+    "tags": [
+     "phone"
+    ],
+    "x-permissions": [
+     "phone.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16,32}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/phone/firewall": {
+   "post": {
+    "operationId": "phone_firewall_post",
+    "summary": "Phone firewall post",
+    "tags": [
+     "phone"
+    ],
+    "x-permissions": [
+     "phone.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/phone/pair": {
+   "post": {
+    "operationId": "phone_pair_post",
+    "summary": "Phone pair post",
+    "tags": [
+     "phone"
+    ],
+    "x-permissions": [
+     "phone.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/playbooks": {
+   "get": {
+    "operationId": "playbooks",
+    "summary": "Playbooks",
+    "tags": [
+     "playbooks"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/processes": {
+   "get": {
+    "operationId": "process_list",
+    "summary": "Process list",
+    "tags": [
+     "processes"
+    ],
+    "x-permissions": [
+     "view.processes"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/processes/start": {
+   "post": {
+    "operationId": "process_start",
+    "summary": "Process start",
+    "tags": [
+     "processes"
+    ],
+    "x-permissions": [
+     "processes.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/processes/{id}/{action}": {
+   "post": {
+    "operationId": "process_operation",
+    "summary": "Process operation",
+    "tags": [
+     "processes"
+    ],
+    "x-permissions": [
+     "processes.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d{1,10}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^end|priority|reveal$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/recommendations": {
+   "get": {
+    "operationId": "recommendations",
+    "summary": "Recommendations",
+    "tags": [
+     "recommendations"
+    ],
+    "x-permissions": [
+     "view.recommendations"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/registry": {
+   "get": {
+    "operationId": "registry_key",
+    "summary": "Registry key",
+    "tags": [
+     "registry"
+    ],
+    "x-permissions": [
+     "view.registry"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/registry/backups": {
+   "get": {
+    "operationId": "registry_backups",
+    "summary": "Registry backups",
+    "tags": [
+     "registry"
+    ],
+    "x-permissions": [
+     "view.registry"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/registry/export": {
+   "get": {
+    "operationId": "registry_export",
+    "summary": "Registry export",
+    "tags": [
+     "registry"
+    ],
+    "x-permissions": [
+     "view.registry",
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/registry/search": {
+   "get": {
+    "operationId": "registry_search",
+    "summary": "Registry search",
+    "tags": [
+     "registry"
+    ],
+    "x-permissions": [
+     "view.registry"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/registry/{action}": {
+   "post": {
+    "operationId": "registry_change",
+    "summary": "Registry change",
+    "tags": [
+     "registry"
+    ],
+    "x-permissions": [
+     "registry.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^set|delete-value|rename-value|create-key|delete-key|restore$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/reports/executive.pdf": {
+   "get": {
+    "operationId": "executive_pdf",
+    "summary": "Executive pdf",
+    "tags": [
+     "reports"
+    ],
+    "x-permissions": [
+     "view.reports",
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/restore-points": {
+   "get": {
+    "operationId": "restore_list",
+    "summary": "Restore list",
+    "tags": [
+     "restore-points"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/restore-points/open": {
+   "post": {
+    "operationId": "restore_open",
+    "summary": "Restore open",
+    "tags": [
+     "restore-points"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/roles": {
+   "get": {
+    "operationId": "roles_get",
+    "summary": "Roles get",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "role_create",
+    "summary": "Role create",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/roles/compare": {
+   "get": {
+    "operationId": "roles_compare",
+    "summary": "Roles compare",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/roles/import": {
+   "post": {
+    "operationId": "role_import",
+    "summary": "Role import",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/roles/templates": {
+   "get": {
+    "operationId": "role_templates",
+    "summary": "Role templates",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/roles/{name}": {
+   "get": {
+    "operationId": "role_get",
+    "summary": "Role get",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ]
+   },
+   "put": {
+    "operationId": "role_update",
+    "summary": "Role update",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "role_delete",
+    "summary": "Role delete",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/roles/{name}/copy": {
+   "post": {
+    "operationId": "role_copy",
+    "summary": "Role copy",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/roles/{name}/export": {
+   "get": {
+    "operationId": "role_export",
+    "summary": "Role export",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/roles/{name}/reset": {
+   "post": {
+    "operationId": "role_reset",
+    "summary": "Role reset",
+    "tags": [
+     "roles"
+    ],
+    "x-permissions": [
+     "roles.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9]{1,20}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/routines": {
+   "get": {
+    "operationId": "list_routines",
+    "summary": "List routines",
+    "tags": [
+     "routines"
+    ],
+    "x-permissions": [
+     "view.schedules"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/runs": {
+   "post": {
+    "operationId": "start_run",
+    "summary": "Start run",
+    "tags": [
+     "runs"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/runs/current": {
+   "get": {
+    "operationId": "current_run",
+    "summary": "Current run",
+    "tags": [
+     "runs"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/runs/safe": {
+   "post": {
+    "operationId": "start_safe",
+    "summary": "Start safe",
+    "tags": [
+     "runs"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/runs/{run_id}": {
+   "get": {
+    "operationId": "run_status",
+    "summary": "Run status",
+    "tags": [
+     "runs"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{32}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/scan": {
+   "post": {
+    "operationId": "scan_all",
+    "summary": "Scan all",
+    "tags": [
+     "scan"
+    ],
+    "x-permissions": [
+     "scan.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/schedules": {
+   "get": {
+    "operationId": "list_schedules",
+    "summary": "List schedules",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "view.schedules"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "create_schedule",
+    "summary": "Create schedule",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "schedules.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/schedules/{id}": {
+   "patch": {
+    "operationId": "update_schedule",
+    "summary": "Update schedule",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "schedules.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d+$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "delete_schedule",
+    "summary": "Delete schedule",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "schedules.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d+$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/schedules/{id}/resync": {
+   "post": {
+    "operationId": "resync_schedule",
+    "summary": "Resync schedule",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "schedules.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d+$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/schedules/{id}/test": {
+   "post": {
+    "operationId": "test_schedule",
+    "summary": "Test schedule",
+    "tags": [
+     "schedules"
+    ],
+    "x-permissions": [
+     "schedules.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^\\d+$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/scripts": {
+   "get": {
+    "operationId": "script_list",
+    "summary": "Script list",
+    "tags": [
+     "scripts"
+    ],
+    "x-permissions": [
+     "view.scripts"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "script_create",
+    "summary": "Script create",
+    "tags": [
+     "scripts"
+    ],
+    "x-permissions": [
+     "scripts.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/scripts/{script_id}": {
+   "get": {
+    "operationId": "script_get",
+    "summary": "Script get",
+    "tags": [
+     "scripts"
+    ],
+    "x-permissions": [
+     "view.scripts"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "script_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/scripts/{script_id}/{action}": {
+   "post": {
+    "operationId": "script_operation",
+    "summary": "Script operation",
+    "tags": [
+     "scripts"
+    ],
+    "x-permissions": [
+     "scripts.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "script_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^save|delete|run|schedule|unschedule$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/canary": {
+   "get": {
+    "operationId": "canary_get",
+    "summary": "Canary get",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "canary_place",
+    "summary": "Canary place",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "canary_remove",
+    "summary": "Canary remove",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/security/cfa": {
+   "put": {
+    "operationId": "cfa_put",
+    "summary": "Cfa put",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/drift": {
+   "get": {
+    "operationId": "drift_get",
+    "summary": "Drift get",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "drift_post",
+    "summary": "Drift post",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/encryption": {
+   "put": {
+    "operationId": "encryption_put",
+    "summary": "Encryption put",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "settings.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/good-config": {
+   "get": {
+    "operationId": "goodconfig_get",
+    "summary": "Goodconfig get",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/security/good-config/apply": {
+   "post": {
+    "operationId": "goodconfig_apply_post",
+    "summary": "Goodconfig apply post",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "goodconfig.apply"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/good-config/plan": {
+   "post": {
+    "operationId": "goodconfig_plan_post",
+    "summary": "Goodconfig plan post",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/good-config/revert": {
+   "post": {
+    "operationId": "goodconfig_revert_post",
+    "summary": "Goodconfig revert post",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "goodconfig.apply"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/suspicious": {
+   "get": {
+    "operationId": "suspicious_get",
+    "summary": "Suspicious get",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "suspicious_post",
+    "summary": "Suspicious post",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.security"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/suspicious/settings": {
+   "put": {
+    "operationId": "suspicious_settings_put",
+    "summary": "Suspicious settings put",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/tls": {
+   "get": {
+    "operationId": "tls_get",
+    "summary": "Tls get",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "tls_put",
+    "summary": "Tls put",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/security/tls/regenerate": {
+   "post": {
+    "operationId": "tls_regenerate",
+    "summary": "Tls regenerate",
+    "tags": [
+     "security"
+    ],
+    "x-permissions": [
+     "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/services/live": {
+   "get": {
+    "operationId": "service_list",
+    "summary": "Service list",
+    "tags": [
+     "services"
+    ],
+    "x-permissions": [
+     "view.processes"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/services/{name}/{action}": {
+   "post": {
+    "operationId": "service_control",
+    "summary": "Service control",
+    "tags": [
+     "services"
+    ],
+    "x-permissions": [
+     "services.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\w.\\-@$]{1,128}$"
+      }
+     },
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^start|stop|restart$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/sessions": {
+   "get": {
+    "operationId": "sessions_get",
+    "summary": "Sessions get",
+    "tags": [
+     "sessions"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/sessions/{name}": {
+   "delete": {
+    "operationId": "session_revoke",
+    "summary": "Session revoke",
+    "tags": [
+     "sessions"
+    ],
+    "x-permissions": [
+     "sessions.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/settings": {
+   "get": {
+    "operationId": "get_settings",
+    "summary": "Get settings",
+    "tags": [
+     "settings"
+    ],
+    "x-permissions": [],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "put": {
+    "operationId": "put_settings",
+    "summary": "Put settings",
+    "tags": [
+     "settings"
+    ],
+    "x-permissions": [
+     "settings.edit"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/shutdown-timer": {
+   "post": {
+    "operationId": "timer_start",
+    "summary": "Timer start",
+    "tags": [
+     "shutdown-timer"
+    ],
+    "x-permissions": [
+     "scripts.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/shutdown-timer/cancel": {
+   "post": {
+    "operationId": "timer_cancel",
+    "summary": "Timer cancel",
+    "tags": [
+     "shutdown-timer"
+    ],
+    "x-permissions": [
+     "scripts.run"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/software/winget": {
+   "post": {
+    "operationId": "winget_post",
+    "summary": "Winget post",
+    "tags": [
+     "software"
+    ],
+    "x-permissions": [
+     "deploy.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/startup/boot": {
+   "get": {
+    "operationId": "boot_get",
+    "summary": "Boot get",
+    "tags": [
+     "startup"
+    ],
+    "x-permissions": [
+     "view.startup"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/startup/{name}/toggle": {
+   "post": {
+    "operationId": "toggle_startup",
+    "summary": "Toggle startup",
+    "tags": [
+     "startup"
+    ],
+    "x-permissions": [
+     "startup.toggle"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/symptoms": {
+   "get": {
+    "operationId": "symptoms_get",
+    "summary": "Symptoms get",
+    "tags": [
+     "symptoms"
+    ],
+    "x-permissions": [
+     "view.toolbox"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/symptoms/{name}/diagnose": {
+   "post": {
+    "operationId": "diagnose_post",
+    "summary": "Diagnose post",
+    "tags": [
+     "symptoms"
+    ],
+    "x-permissions": [
+     "view.toolbox"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^[a-z_]{2,40}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/tokens": {
+   "get": {
+    "operationId": "tokens_get",
+    "summary": "Tokens get",
+    "tags": [
+     "tokens"
+    ],
+    "x-permissions": [
+     "api.tokens"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "token_create",
+    "summary": "Token create",
+    "tags": [
+     "tokens"
+    ],
+    "x-permissions": [
+     "api.tokens"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/tokens/{token_id}": {
+   "delete": {
+    "operationId": "token_delete",
+    "summary": "Token delete",
+    "tags": [
+     "tokens"
+    ],
+    "x-permissions": [
+     "api.tokens"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "token_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^t[0-9a-f]{12}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/update/check": {
+   "get": {
+    "operationId": "update_check",
+    "summary": "Update check",
+    "tags": [
+     "update"
+    ],
+    "x-permissions": [
+     "view.settings"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/update/install": {
+   "post": {
+    "operationId": "update_install",
+    "summary": "Update install",
+    "tags": [
+     "update"
+    ],
+    "x-permissions": [
+     "agent.control"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/updates/compliance": {
+   "get": {
+    "operationId": "updates_compliance",
+    "summary": "Updates compliance",
+    "tags": [
+     "updates"
+    ],
+    "x-permissions": [
+     "view.updates"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/updates/ring/apply": {
+   "post": {
+    "operationId": "updates_ring_apply",
+    "summary": "Updates ring apply",
+    "tags": [
+     "updates"
+    ],
+    "x-permissions": [
+     "updates.policy"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users": {
+   "get": {
+    "operationId": "users_get",
+    "summary": "Users get",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "user_create",
+    "summary": "User create",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/bulk": {
+   "post": {
+    "operationId": "users_bulk",
+    "summary": "Users bulk",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/export.csv": {
+   "get": {
+    "operationId": "users_export",
+    "summary": "Users export",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.view",
+     "export.data"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/users/import": {
+   "post": {
+    "operationId": "users_import",
+    "summary": "Users import",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/overview": {
+   "get": {
+    "operationId": "users_overview",
+    "summary": "Users overview",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/users/{user_id}": {
+   "get": {
+    "operationId": "user_get",
+    "summary": "User get",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ]
+   },
+   "put": {
+    "operationId": "user_update",
+    "summary": "User update",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "user_delete",
+    "summary": "User delete",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/users/{user_id}/2fa-reset": {
+   "post": {
+    "operationId": "user_reset_2fa",
+    "summary": "User reset 2fa",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/{user_id}/activity": {
+   "get": {
+    "operationId": "user_activity",
+    "summary": "User activity",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.view",
+     "audit.view"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/users/{user_id}/copy": {
+   "post": {
+    "operationId": "user_copy",
+    "summary": "User copy",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/{user_id}/password": {
+   "post": {
+    "operationId": "user_reset_password",
+    "summary": "User reset password",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/{user_id}/signout": {
+   "post": {
+    "operationId": "user_signout",
+    "summary": "User signout",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "sessions.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/users/{user_id}/unlock": {
+   "post": {
+    "operationId": "user_unlock",
+    "summary": "User unlock",
+    "tags": [
+     "users"
+    ],
+    "x-permissions": [
+     "users.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^u[0-9a-f]{12}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

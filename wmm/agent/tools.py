@@ -12,7 +12,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import wmm  # noqa: F401
 import ottimizza_pc as op
-from ottimizza_pc import Esito, SequenzaFermata, Stato
+from ottimizza_pc import Esito, Stato
 
 from . import undo
 

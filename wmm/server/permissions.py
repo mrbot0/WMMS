@@ -88,6 +88,7 @@ RULES: Dict[str, Rule] = {
     "notify_test_channel": "notifications.manage", "telegram_detect": "notifications.manage", "telegram_bot": "notifications.manage",
     "webhook_test": "notifications.manage", "notify_log_clear": "notifications.manage", "smtp_presets": "view.settings",
     "retention_run": "settings.edit",
+    "openapi_get": (),  # 2.11: any signed-in user or token
 }
 
 

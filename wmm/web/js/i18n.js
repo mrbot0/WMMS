@@ -296,6 +296,35 @@
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
   var MONTHS = { Jan: "gen", Feb: "feb", Mar: "mar", Apr: "apr", May: "mag", Jun: "giu", Jul: "lug", Aug: "ago", Sep: "set", Oct: "ott", Nov: "nov", Dec: "dic" };
   var RULES = [
+    // 2.11: texts with numbers found by the Italian check of every page (tests/e2e/i18n_check.js).
+    [/^(\d+) of (\d+) scripts$/, "$1 di $2 script"],
+    [/^(\d+) modules of (\d+) slots$/, "$1 moduli su $2 slot"],
+    [/^(\d+)% of the limit$/, "$1% del limite"],
+    [/^Health: (\d+) of 100$/, "Salute: $1 su 100"],
+    [/^(\d+) shortcuts to recently opened files are stored\.$/, "Sono salvati $1 collegamenti ai file aperti di recente."],
+    [/^(\d+) setup files older than (\d+) days in (.+): ([\d.,]+ [KMGT]?B)\. The programs are installed: you can delete the files from File Explorer\.$/,
+      "$1 file di installazione più vecchi di $2 giorni in $3: $4. I programmi sono installati: puoi eliminare i file da Esplora file."],
+    [/^([\d.,]+ [KMGT]?B) of temporary files and caches can be recovered\.$/, "Si possono recuperare $1 di file temporanei e cache."],
+    [/^([\d.,]+ [KMGT]?B) to free$/, "$1 da liberare"],
+    [/^(\d+) preinstalled extras you can remove safely$/, "$1 extra preinstallati che puoi togliere senza rischi"],
+    [/^: (\d+) programs with none of these problems\. Keep them updated from the Updates tab\.$/, ": $1 programmi senza nessuno di questi problemi. Tienili aggiornati dalla scheda Aggiornamenti."],
+    [/^(\d+) non-essential services are enabled: (.+)\.$/, "$1 servizi non essenziali sono attivi: $2."],
+    [/^(\d+) protected services \((.+)\) are never modified\.$/, "$1 servizi protetti ($2) non vengono mai modificati."],
+    [/^(\d+) scripts and the stylesheet are present$/, "$1 script e il foglio di stile sono presenti"],
+    [/^Rules of (.+) \(built in\): (\d+) end-of-support products and (\d+) minimum safe versions\.$/, "Regole del $1 (incluse): $2 prodotti a fine supporto e $3 versioni minime sicure."],
+    [/^Dependencies and environment verified at start-up · (.+)$/, "Dipendenze e ambiente verificati all'avvio · $1"],
+    [/^Removing them frees about ([\d.,]+ [KMGT]?B) and leaves fewer programs to keep updated\.$/, "Toglierli libera circa $1 e lascia meno programmi da aggiornare."],
+    [/^Live, every (\d+) s$/, "In tempo reale, ogni $1 s"],
+    [/^Every (\d+) s$/, "Ogni $1 s"],
+    [/^Disks alert (\d+) °C lower\. The Hardware page warns once every (\d+) minutes per sensor\.$/, "Per i dischi l'avviso scatta $1 °C prima. La pagina Hardware avvisa una volta ogni $2 minuti per sensore."],
+    [/^Controlled folder access of Defender: (On|Off)$/, function (m, v) { return "Accesso controllato alle cartelle di Defender: " + (v === "On" ? "attivo" : "spento"); }],
+    [/^(\d+) PCs will move at their next contact\.$/, "$1 PC si sposteranno al prossimo contatto."],
+    [/^(\d+) PCs moved\.$/, "$1 PC spostati."],
+    [/^Restored: (\d+) PCs\.$/, "Ripristinato: $1 PC."],
+    [/^(\d+)% free · (\d+)% after cleanup$/, "$1% libero · $2% dopo la pulizia"],
+    [/^Drivers older than (\d+) years$/, "Driver più vecchi di $1 anni"],
+    [/^Last (\d+) readings, from (.+) to (.+)$/, "Ultime $1 letture, da $2 a $3"],
+    [/^Before \/ After report( · .+)?$/, function (m, pc) { return "Report Prima / Dopo" + (pc || ""); }],
     // 2.6: precise undo, router ports, Bluetooth sightings, Wi-Fi history.
     [/^Put back only the (\d+) registry values this fix changed$/, "Ripristina solo i $1 valori di registro modificati da questo fix"],
     [/^(\d+) of (\d+) values put back(?:; (\d+) could not be changed)?\.$/, function (m, a, b, c) {
@@ -451,6 +480,9 @@
   var SKIP = "pre, code, textarea, script, style, .cell-mono, .log, .notes-area, [data-no-i18n], .kbd";
   var ATTRS = ["title", "placeholder", "aria-label", "data-tip"];
 
+  // 2.11: the browser check sets wmm.i18nAudit and reads I18N.misses(): the English text left untranslated on screen.
+  var AUDIT = false, MISSES = {};
+  try { AUDIT = localStorage.getItem("wmm.i18nAudit") === "1"; } catch (e) { /* storage unavailable */ }
   function translate(text) {
     var core = text.trim();
     if (!core || core.length > 400 || !/[A-Za-z]/.test(core)) return null;
@@ -460,6 +492,7 @@
       var t = core.replace(RULES[i][0], RULES[i][1]);
       if (t !== core) out = t;
     }
+    if (out == null && AUDIT) MISSES[core] = (MISSES[core] || 0) + 1;
     return out == null ? null : text.replace(core, out);
   }
   function skipped(el) { return !!(el && el.closest && el.closest(SKIP)); }
@@ -514,7 +547,8 @@
     },
     t: function (s) { return lang === "it" ? (translate(s) || s) : s; },
     translateHtml: translateHtml,
-    size: function () { return Object.keys(IT).length; }
+    size: function () { return Object.keys(IT).length; },
+    misses: function () { return Object.keys(MISSES); }
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();

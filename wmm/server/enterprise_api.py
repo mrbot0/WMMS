@@ -4,18 +4,20 @@ background agent, central server, inventory, software, update rings, baselines a
 Mixed into Agent and Handler like the other feature modules; wmm/server/permissions.py maps every route."""
 from __future__ import annotations
 
+import base64
 import json
 import re
 import socket
 import sys
 import threading
 import time
+from typing import Any, Optional
+from datetime import datetime
 from html import escape as html_escape
-from pathlib import Path
 
 import wmm
 
-from ..agent import (accounts, appsettings, baselines, canary, central, deploy, governance, incidents, pdfreport, securestore, service, sso,
+from ..agent import (accounts, appsettings, baselines, canary, central, centralmove, deploy, governance, incidents, pdfreport, securestore, service, sso,
                      tickets, tlsutil, updatepolicy)
 from .errors import ApiError
 
@@ -25,6 +27,14 @@ def _err(e: Exception) -> ApiError:
 
 
 class AgentEnterprise:
+    # Set by Agent in api.py, which mixes this class in (declared for the type checker).
+    accounts: Any
+    data_dir: Any
+    hostname: str
+    machine_id: str
+    preview: bool
+    jobs: Any
+    pc_summary: Any
     # ---------- start ----------
 
     def start_enterprise(self) -> None:
@@ -85,7 +95,27 @@ class AgentEnterprise:
         raise ValueError("unknown job")
 
 
+class _ScopedServer:
+    """The central server as a user limited to some clients sees it (for the executive report)."""
+
+    def __init__(self, server, scope):
+        self._server, self._scope = server, scope
+
+    def agents(self, *a, **k):
+        return self._server.agents(*a, scope=self._scope, **k)
+
+    def agent(self, agent_id):
+        return self._server.agent(agent_id, self._scope)
+
+    def overview(self):
+        return self._server.overview(self._scope)
+
+
 class HandlerEnterprise:
+    # Set by Handler in api.py, which mixes this class in (declared for the type checker).
+    agent: Any
+    user: Optional[dict]
+    _body: Any
     def _me(self) -> dict:
         if self.user is None:
             raise ApiError(409, "Turn accounts on first (Settings › Accounts and security).")
@@ -278,13 +308,30 @@ class HandlerEnterprise:
     def _srv(self) -> central.Server:
         return self.agent._central_server
 
+    @property
+    def _scope(self) -> central.Scope:
+        """The clients the signed-in user may see on the central server (None: every client)."""
+        return self._srv.scope_for((self.user or {}).get("username"))
+
+    def _shared_change(self) -> None:
+        """Server settings, groups, catalog and rings are shared by every client: not for someone limited to some clients."""
+        if self._scope is not None:
+            raise ApiError(403, "You manage only some clients: settings shared by every client are changed by the provider's staff.")
+
     def central_get(self, query):
         info = tlsutil.ensure(self.agent.data_dir) if self.agent.central_server_settings()["enabled"] else None
+        ambito = self._scope
+        clienti = [t for t in self._srv.tenants() if ambito is None or t["id"] in ambito]
+        if ambito is not None:
+            clienti = [dict(t, users=[]) for t in clienti]
         self._json(200, {"server": self.agent.central_server_settings(), "fingerprint": info["fingerprint"] if info else None,
-                         "overview": self._srv.overview(), "agents": self._srv.agents(query.get("group", ""), query.get("q", "")),
-                         "groups": self._srv.groups(), "rings": self._srv.rings(), "catalog": self._srv.catalog(), "jobs": self._srv.recent_jobs(50)})
+                         "overview": self._srv.overview(ambito),
+                         "agents": self._srv.agents(query.get("group", ""), query.get("q", ""), ambito, query.get("tenant", "")),
+                         "groups": self._srv.groups(ambito), "rings": self._srv.rings(), "catalog": self._srv.catalog(), "jobs": self._srv.recent_jobs(50, ambito),
+                         "tenants": clienti, "limited": ambito is not None})
 
     def central_server_put(self, query):
+        self._shared_change()
         corpo = self._body()
         porta = corpo.get("port", central.DEFAULT_PORT)
         if isinstance(porta, bool) or not isinstance(porta, int) or not 1024 <= porta <= 65535:
@@ -302,20 +349,25 @@ class HandlerEnterprise:
             raise ApiError(400, "The address the PCs use to reach this server: a name or an IP.")
         info = tlsutil.ensure(self.agent.data_dir)
         tags = corpo.get("tags") or []
-        self._json(200, self._srv.enrollment_code(host, self.agent.central_server_settings()["port"], info["fingerprint"], tags if isinstance(tags, list) else []))
+        cliente = str(corpo.get("tenant") or "")
+        ambito = self._scope
+        if ambito is not None and cliente not in ambito:
+            raise ApiError(403, "Choose one of your clients for the new PCs.")
+        self._json(200, self._wrap(self._srv.enrollment_code, host, self.agent.central_server_settings()["port"], info["fingerprint"],
+                                   tags if isinstance(tags, list) else [], cliente))
 
     def central_agent_get(self, query, ident):
-        self._json(200, self._wrap(self._srv.agent, ident))
+        self._json(200, self._wrap(self._srv.agent, ident, self._scope))
 
     def central_agent_delete(self, query, ident):
-        self._wrap(self._srv.remove, ident)
+        self._wrap(self._srv.remove, ident, self._scope)
         self._json(200, {"ok": True})
 
     def central_agent_tags(self, query, ident):
-        self._json(200, {"tags": self._wrap(self._srv.set_tags, ident, self._body().get("tags"))})
+        self._json(200, {"tags": self._wrap(self._srv.set_tags, ident, self._body().get("tags"), self._scope)})
 
     def central_agent_asset(self, query, ident):
-        self._json(200, self._wrap(self._srv.set_asset, ident, self._body()))
+        self._json(200, self._wrap(self._srv.set_asset, ident, self._body(), self._scope))
 
     def central_jobs_post(self, query):
         corpo = self._body()
@@ -333,50 +385,130 @@ class HandlerEnterprise:
             raise ApiError(403, "Your role does not allow installing software.")
         if tipo == "policy" and "updates.policy" not in (self.user or {"permissions": ["updates.policy"]})["permissions"]:
             raise ApiError(403, "Your role does not allow update policies.")
+        if tipo == "relocate":
+            self._shared_change()
         if tipo == "winget" and not deploy.valid_id(str(carico.get("id", ""))):
             raise ApiError(400, "Unknown winget ID.")
-        destinatari = self._srv.targets(corpo.get("agents"), str(corpo.get("group", "")))
+        ambito = self._scope
+        destinatari = self._srv.targets(corpo.get("agents"), str(corpo.get("group", "")), ambito, str(corpo.get("tenant", "") or ""))
         self._json(202, self._wrap(self._srv.queue, destinatari, tipo, carico, (self.user or {}).get("username", "local")))
 
     def central_batch_get(self, query, lotto):
-        self._json(200, {"jobs": self._srv.batch(lotto)})
+        self._json(200, {"jobs": self._srv.batch(lotto, self._scope)})
 
     def central_job_delete(self, query, ident):
-        self._wrap(self._srv.cancel_job, int(ident))
+        self._wrap(self._srv.cancel_job, int(ident), self._scope)
         self._json(200, {"ok": True})
 
     def central_groups_post(self, query):
+        self._shared_change()
         self._json(200, self._wrap(self._srv.save_group, self._body()))
 
     def central_group_delete(self, query):
+        self._shared_change()
         self._srv.delete_group(str(self._body().get("name", "")))
         self._json(200, {"ok": True})
 
     def central_software(self, query):
-        self._json(200, {"software": self._srv.software_search(query.get("q", ""))})
+        self._json(200, {"software": self._srv.software_search(query.get("q", ""), self._scope)})
 
     def central_inventory_csv(self, query):
-        self._send(200, ("\ufeff" + self._srv.inventory_csv()).encode("utf-8"), "text/csv; charset=utf-8",
+        self._send(200, ("\ufeff" + self._srv.inventory_csv(self._scope)).encode("utf-8"), "text/csv; charset=utf-8",
                    {"Content-Disposition": 'attachment; filename="wmm-inventory.csv"'})
 
     def central_catalog_post(self, query):
+        self._shared_change()
         self._json(200, self._wrap(self._srv.save_catalog, self._body()))
 
     def central_catalog_delete(self, query, ident):
+        self._shared_change()
         self._srv.delete_catalog(ident)
         self._json(200, {"ok": True})
 
     def central_rings_post(self, query):
+        self._shared_change()
         self._json(200, self._wrap(self._srv.save_ring, self._body()))
 
     def central_ring_delete(self, query, ident):
+        self._shared_change()
         self._srv.delete_ring(ident)
         self._json(200, {"ok": True})
 
     def central_rings_assign(self, query):
         corpo = self._body()
-        self._json(200, {"assigned": self._wrap(self._srv.assign_ring, self._srv.targets(corpo.get("agents"), str(corpo.get("group", ""))),
-                                                str(corpo.get("ring", "")))})
+        ambito = self._scope
+        self._json(200, {"assigned": self._wrap(self._srv.assign_ring, self._srv.targets(corpo.get("agents"), str(corpo.get("group", "")), ambito),
+                                                str(corpo.get("ring", "")), ambito)})
+
+    # ---------- backup, restore and move (2.11) ----------
+
+    def _bundle(self) -> tuple:
+        corpo = self._body()
+        try:
+            blob = base64.b64decode(str(corpo.get("bundle", "")), validate=True)
+        except ValueError:
+            raise ApiError(400, "Choose the backup file.") from None
+        return blob, str(corpo.get("password", ""))
+
+    def central_backup(self, query):
+        self._shared_change()
+        corpo = self._body()
+        blob = self._wrap(centralmove.export, self.agent.data_dir, str(corpo.get("password", "")), self.agent.central_server_settings()["port"])
+        nome = f"wmm-central-{datetime.now().strftime('%Y%m%d-%H%M')}.wmmcentral"
+        self._send(200, blob, "application/octet-stream", {"Content-Disposition": f'attachment; filename="{nome}"'})
+
+    def central_inspect(self, query):
+        self._shared_change()
+        blob, password = self._bundle()
+        self._json(200, self._wrap(centralmove.inspect, blob, password))
+
+    def central_restore(self, query):
+        """Replaces the central server of this PC with a backup (moving the server to this PC)."""
+        self._shared_change()
+        blob, password = self._bundle()
+        if self._body().get("confirm") is not True:
+            raise ApiError(400, "Confirm that the central server of this PC is replaced.")
+        vecchio = getattr(self.agent, "_central_http", None)
+        if vecchio is not None:
+            vecchio.shutdown()
+            vecchio.server_close()
+            self.agent._central_http = None
+        esito = self._wrap(centralmove.restore, self.agent.data_dir, blob, password)
+        self.agent._central_server = central.Server(self.agent.data_dir)
+        governance.save_settings(self.agent.data_dir, "central_server", {"enabled": True, "port": int(esito["port"])})
+        self.agent.start_central_server()
+        self._json(200, esito)
+
+    # ---------- clients (tenants, 2.11) ----------
+
+    def central_tenants_get(self, query):
+        ambito = self._scope
+        self._json(200, {"tenants": [dict(t, users=t["users"] if ambito is None else []) for t in self._srv.tenants() if ambito is None or t["id"] in ambito],
+                         "limited": ambito is not None})
+
+    def central_tenants_post(self, query):
+        self._shared_change()
+        self._json(200, self._wrap(self._srv.save_tenant, self._body()))
+
+    def central_tenant_delete(self, query, ident):
+        self._shared_change()
+        self._wrap(self._srv.delete_tenant, ident)
+        self._json(200, {"ok": True})
+
+    def central_tenants_move(self, query):
+        self._shared_change()
+        corpo = self._body()
+        agenti = corpo.get("agents") if isinstance(corpo.get("agents"), list) else []
+        self._json(200, {"moved": self._wrap(self._srv.move_to_tenant, agenti, str(corpo.get("tenant", "") or ""))})
+
+    def central_tenants_access(self, query):
+        """Which clients a console user may see: none = every client."""
+        self._shared_change()
+        corpo = self._body()
+        nome = str(corpo.get("username", "")).strip()
+        if not re.fullmatch(r"[\w.\-@]{1,64}", nome):
+            raise ApiError(400, "User name.")
+        self._json(200, {"username": nome, "tenants": self._wrap(self._srv.set_access, nome, corpo.get("tenants"))})
 
     # ---------- this PC as an agent ----------
 
@@ -447,7 +579,8 @@ class HandlerEnterprise:
             giorni = max(7, min(366, int(query.get("days", 30))))
         except ValueError:
             giorni = 30
-        srv = self._srv if self._srv.agents() else None
+        ambito = self._scope
+        srv = _ScopedServer(self._srv, ambito) if self._srv.agents(scope=ambito) else None  # only the clients this user sees (2.11)
         dati = pdfreport.collect(self.agent.data_dir, self.agent.store, self.agent.machine_id, srv, appsettings.load(self.agent.data_dir)["org_name"],
                                  lingua, giorni)
         self._send(200, pdfreport.build(dati, lingua), "application/pdf", {"Content-Disposition": 'attachment; filename="wmm-executive-report.pdf"'})
@@ -489,6 +622,14 @@ ENTERPRISE_ROUTES = [
     ("POST", "/agent/service", HandlerEnterprise.service_install),
     ("DELETE", "/agent/service", HandlerEnterprise.service_remove),
     ("GET", "/central", HandlerEnterprise.central_get),
+    ("GET", "/central/tenants", HandlerEnterprise.central_tenants_get),
+    ("POST", "/central/backup", HandlerEnterprise.central_backup),
+    ("POST", "/central/backup/inspect", HandlerEnterprise.central_inspect),
+    ("POST", "/central/restore", HandlerEnterprise.central_restore),
+    ("POST", "/central/tenants", HandlerEnterprise.central_tenants_post),
+    ("DELETE", r"/central/tenants/(k[0-9a-f]{10})", HandlerEnterprise.central_tenant_delete),
+    ("POST", "/central/tenants/move", HandlerEnterprise.central_tenants_move),
+    ("PUT", "/central/tenants/access", HandlerEnterprise.central_tenants_access),
     ("PUT", "/central/server", HandlerEnterprise.central_server_put),
     ("POST", "/central/enroll-code", HandlerEnterprise.central_code),
     ("GET", f"/central/agents/{ID_AGENT}", HandlerEnterprise.central_agent_get),
@@ -533,7 +674,10 @@ RULES = {
     "tls_get": "view.settings", "tls_put": "integrations.manage", "tls_regenerate": "integrations.manage", "encryption_put": "settings.security",
     "canary_get": "view.security", "canary_place": "settings.edit", "canary_remove": "settings.edit", "cfa_put": "settings.edit",
     "service_get": "view.settings", "service_install": "agent.control", "service_remove": "agent.control",
-    "central_get": "view.fleet", "central_server_put": "central.manage", "central_code": "central.manage", "central_agent_get": "view.fleet",
+    "central_get": "view.fleet", "central_backup": ("central.manage", "data.backup"), "central_inspect": ("central.manage", "data.backup"),
+    "central_restore": ("central.manage", "data.backup"), "central_tenants_get": "view.fleet", "central_tenants_post": "central.manage", "central_tenant_delete": "central.manage",
+    "central_tenants_move": "central.manage", "central_tenants_access": ("central.manage", "users.manage"),
+    "central_server_put": "central.manage", "central_code": "central.manage", "central_agent_get": "view.fleet",
     "central_agent_delete": "central.manage", "central_agent_tags": "central.manage", "central_agent_asset": "central.manage",
     "central_jobs_post": "central.manage", "central_batch_get": "view.fleet", "central_job_delete": "central.manage",
     "central_groups_post": "central.manage", "central_group_delete": "central.manage", "central_software": "view.fleet",

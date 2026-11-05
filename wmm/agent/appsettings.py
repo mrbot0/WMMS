@@ -404,7 +404,7 @@ def webhook_send(url: str, tipo: str, titolo: str, testo: str, opener=None) -> s
 
 # ---------- data ----------
 
-DATA_FILES = ("wmm.db", "accounts.db", "app_settings.json", "notifications.json", "notify_log.json", "connection_history.json", "wifi_history.json",
+DATA_FILES = ("wmm.db", "accounts.db", "central.db", "app_settings.json", "notifications.json", "notify_log.json", "connection_history.json", "wifi_history.json",
               "health_history.json", "drift.json", "suspicious.json", "kev.json", "fleet.json", "phone.json", "custom_tools.json", "digest.json")
 
 
@@ -418,7 +418,8 @@ def data_info(data_dir: Path) -> dict:
     snapshot = list((cartella / "drift_snapshots").glob("*.json")) if (cartella / "drift_snapshots").exists() else []
     if snapshot:
         voci.append({"name": "drift_snapshots", "bytes": sum(p.stat().st_size for p in snapshot), "files": len(snapshot)})
-    return {"folder": str(cartella), "files": voci, "total_bytes": sum(v["bytes"] for v in voci)}
+    from . import migrations
+    return {"folder": str(cartella), "files": voci, "total_bytes": sum(v["bytes"] for v in voci), "databases": migrations.status(cartella)}
 
 
 def db_maintenance(data_dir: Path, azione: str) -> List[dict]:
@@ -426,7 +427,7 @@ def db_maintenance(data_dir: Path, azione: str) -> List[dict]:
     if azione not in ("integrity", "compact"):
         raise SettingsError("Unknown action.")
     esiti = []
-    for nome in ("wmm.db", "accounts.db"):
+    for nome in ("wmm.db", "accounts.db", "central.db"):
         p = Path(data_dir) / nome
         if not p.exists():
             continue

@@ -1,6 +1,10 @@
 """Program updates from the GitHub releases of the project. A release carries the program as a zip and a SHA256SUMS
 file (built by .github/workflows/release.yml); an update is installed only when the zip matches its checksum, has no
-path outside its folder and really is the announced version. Data (dati) is never touched."""
+path outside its folder and really is the announced version. Data (dati) is never touched.
+
+2.11: a copy installed with the MSI (Group Policy, Intune) is updated with the MSI of the release, so Windows Installer
+keeps knowing what is installed (repair, uninstall, inventory). The MSI must match SHA256SUMS too; when it carries a
+signature, the signature must be valid. Windows Installer replaces the files and the console restarts."""
 from __future__ import annotations
 
 import hashlib
@@ -8,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import urllib.error
 import urllib.request
 import zipfile
@@ -21,6 +26,8 @@ REPO = "mrbot0/WMMS"
 LATEST_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 ALLOWED_HOSTS = ("https://github.com/", "https://objects.githubusercontent.com/", "https://api.github.com/")
 MAX_ZIP_BYTES = 50 * 1024 * 1024
+MAX_MSI_BYTES = 120 * 1024 * 1024
+MSI_KEY = r"SOFTWARE\Windows Maintenance Manager"  # written by packaging/wmm.wxs
 TIMEOUT = 30
 
 
@@ -50,15 +57,19 @@ def parse_release(dati: dict) -> dict:
     """The fields of a GitHub release the updater needs."""
     versione = ".".join(map(str, version_tuple(str(dati.get("tag_name") or ""))))
     nome_zip = f"WindowsMaintenanceManager-{versione}.zip"
-    zip_url = sums_url = None
+    nome_msi = f"WindowsMaintenanceManager-{versione}.msi"
+    zip_url = sums_url = msi_url = None
     for asset in dati.get("assets") or []:
         nome, url = str(asset.get("name") or ""), str(asset.get("browser_download_url") or "")
         if nome == nome_zip:
             zip_url = url
+        elif nome == nome_msi:
+            msi_url = url
         elif nome == "SHA256SUMS.txt":
             sums_url = url
     return {"version": versione, "notes": str(dati.get("body") or "")[:4000], "published": str(dati.get("published_at") or ""),
-            "page": str(dati.get("html_url") or ""), "zip_url": zip_url, "sums_url": sums_url, "zip_name": nome_zip}
+            "page": str(dati.get("html_url") or ""), "zip_url": zip_url, "sums_url": sums_url, "zip_name": nome_zip,
+            "msi_url": msi_url, "msi_name": nome_msi}
 
 
 def check(attuale: str = wmm.VERSION) -> dict:
@@ -110,8 +121,51 @@ def packaged_version(radice: Path) -> str:
     return trovato.group(1)
 
 
+def msi_installed() -> bool:
+    """The program was installed by the MSI (per machine, Program Files)."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, MSI_KEY) as k:
+            return bool(winreg.QueryValueEx(k, "Installed")[0])
+    except (OSError, ImportError):
+        return False
+
+
+def signature_status(percorso: Path, runner=subprocess.run) -> str:
+    """Valid, NotSigned or the reason it is not valid (Authenticode, read by Windows)."""
+    comando = ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"(Get-AuthenticodeSignature -LiteralPath '{percorso}').Status.ToString()"]
+    try:
+        r = runner(comando, capture_output=True, text=True, timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"unknown ({e})"
+    return (r.stdout or "").strip() or "unknown"
+
+
+def install_msi(rilascio: dict, data_dir: Path, runner=subprocess.run, launcher=subprocess.Popen) -> Dict[str, object]:
+    """Downloads and checks the MSI, then hands it to Windows Installer (silent, no restart of the PC)."""
+    if not rilascio.get("msi_url") or not rilascio.get("sums_url"):
+        raise UpdateError("the release has no MSI package and checksum")
+    cartella = Path(data_dir) / "updates"
+    cartella.mkdir(parents=True, exist_ok=True)
+    pacchetto = _get(rilascio["msi_url"], MAX_MSI_BYTES)
+    atteso = expected_hash(_get(rilascio["sums_url"], 64 * 1024).decode("utf-8", "replace"), rilascio["msi_name"])
+    trovato = hashlib.sha256(pacchetto).hexdigest()
+    if trovato != atteso:
+        raise UpdateError("the downloaded MSI does not match its checksum: nothing was installed")
+    msi = cartella / rilascio["msi_name"]
+    msi.write_bytes(pacchetto)
+    firma = signature_status(msi, runner)
+    if firma not in ("Valid", "NotSigned"):
+        raise UpdateError(f"the signature of the MSI is not valid ({firma}): nothing was installed")
+    registro = cartella / f"msi-{rilascio['version']}.log"
+    launcher(["msiexec", "/i", str(msi), "/qn", "/norestart", "/l*v", str(registro)], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return {"installed": rilascio["version"], "sha256": trovato, "method": "msi", "signature": firma, "log": str(registro)}
+
+
 def install(rilascio: dict, data_dir: Path, target: Optional[Path] = None) -> Dict[str, object]:
     """Downloads, checks and installs a release over the running copy (`target`, the program folder)."""
+    if target is None and msi_installed() and rilascio.get("msi_url"):
+        return install_msi(rilascio, data_dir)
     if not rilascio.get("zip_url") or not rilascio.get("sums_url"):
         raise UpdateError("the release has no program package and checksum")
     cartella = Path(data_dir) / "updates"
