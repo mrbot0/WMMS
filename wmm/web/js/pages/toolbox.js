@@ -68,6 +68,7 @@
           '<button type="button" class="btn btn-sm btn-ghost" id="tb-reset">' + UI.icon("x") + "Reset filters</button></div>";
 
         el.innerHTML = UI.pageHeader("Toolbox", "Every maintenance tool in one place: find it, run it, schedule it or combine several",
+          UI.button("Your tools", 'id="tb-custom" title="Your own PowerShell tools, with check and undo"', "", "scripts") +
           UI.button("Run diagnostics", 'id="tb-reports" title="Run every read-only report in the current view"', "", "reports") +
           UI.button(view.list ? "Cards" : "List", 'id="tb-layout" title="Compact list or cards with descriptions"', "", view.list ? "dashboard" : "playbooks")) + kpis +
           '<div class="tb-layout">' +
@@ -200,11 +201,14 @@
               (m.reports.length ? '<span class="tb-label">Read first</span>' + chips(m.reports, 0) : "") +
               (m.fixes.length ? '<span class="tb-label">Then try</span>' + chips(m.fixes, m.reports.length) : "") + "</div>" +
               '<div class="tb-symptom-actions">' + (m.reports.length ? UI.button("Run the reports", 'data-sym-reports="' + i + '"', "btn-sm btn-primary", "reports") : "") +
+              (m.fixes.length ? UI.button("Guided diagnosis", 'data-sym-diagnose="' + i + '" title="Reads this PC and tells which fixes are really needed; changes nothing"', "btn-sm btn-primary", "search") : "") +
               (m.fixes.length ? UI.button("Select the fixes", 'data-sym-fixes="' + i + '" title="Pick them in the selection bar, then run the ones the reports point to"', "btn-sm", "check") : "") +
               "</div></div>";
           }).join("");
           box.onclick = function (e) {
             var step = e.target.closest("[data-step]"), rep = e.target.closest("[data-sym-reports]"), fix = e.target.closest("[data-sym-fixes]");
+            var diag = e.target.closest("[data-sym-diagnose]");
+            if (diag) Insights.diagnose(matches[+diag.getAttribute("data-sym-diagnose")], App);
             if (step) App.actionDetail(step.getAttribute("data-step"));
             if (rep) App.runActions(matches[+rep.getAttribute("data-sym-reports")].reports);
             if (fix) {
@@ -274,6 +278,7 @@
           });
         });
         el.querySelector("#tb-run").addEventListener("click", function () { App.runActions(App.order(Object.keys(picked))); picked = {}; draw(); });
+        el.querySelector("#tb-custom").addEventListener("click", function () { Insights.manageTools(App); });
         el.querySelector("#tb-reports").addEventListener("click", function () {
           App.runActions(visible.filter(function (id) { return App.state.actions[id].kind === "report"; }));
         });

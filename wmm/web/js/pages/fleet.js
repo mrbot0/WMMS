@@ -1,5 +1,5 @@
 /* PCs of the network: the read-only summary of other PCs where Windows Maintenance Manager shares it, side by side with
-   this one, and the sharing of this PC (key, port, firewall). Nothing on another PC can be changed from here. */
+   this one, the sharing of this PC (key, port, firewall) and, when the other PC allows it, reports or safe fixes run on it. */
 (function () {
   "use strict";
   window.Pages = window.Pages || {};
@@ -58,16 +58,28 @@
             { key: "last_scan", title: "Last scan", render: function (r) { return r.last_scan ? esc(UI.relative(r.last_scan)) : "—"; } },
             { key: "version", title: "Version", render: function (r) { return '<span class="cell-mono">' + esc(r.version || "—") + "</span>"; } },
             { key: "id", title: "", sortable: false, csv: false, render: function (r) {
-              return r.id ? '<button class="btn btn-sm btn-ghost" type="button" data-fleet-remove="' + esc(r.id) + '" title="Remove from the list">' + UI.icon("trash") + "</button>" : ""; } }
+              return r.id ? (r.status === "online" ? '<button class="btn btn-sm" type="button" data-fleet-run="' + esc(r.id) + '" title="Run reports or safe fixes on this PC">' +
+                UI.icon("play") + "Run…</button> " : "") + '<button class="btn btn-sm btn-ghost" type="button" data-fleet-remove="' + esc(r.id) + '" title="Remove from the list">' +
+                UI.icon("trash") + "</button>" : ""; } }
           ]
         });
 
+        root.addEventListener("change", function (e) {
+          if (e.target.id !== "fleet-remote") return;
+          API.put("/fleet/share", { enabled: d.share.enabled, port: d.share.port, remote_runs: e.target.value }).then(function () {
+            UI.toast(e.target.value === "off" ? "Remote runs turned off." : "Saved: other consoles with the key can run what you allowed.", "ok");
+          }, function (err) { UI.toast(err.message, "error"); App.render(); });
+        });
         root.addEventListener("click", function (e) {
           var b = e.target.closest("button");
           if (!b) return;
           var id;
           if (b.hasAttribute("data-fleet-refresh")) { App.render(); return; }
           if (b.hasAttribute("data-fleet-add")) { add(App); return; }
+          if ((id = b.getAttribute("data-fleet-run"))) {
+            Insights.remoteRun(App, righe.filter(function (r) { return r.id === id; })[0]);
+            return;
+          }
           if ((id = b.getAttribute("data-fleet-remove"))) {
             UI.confirm("Remove this PC", "It leaves this list; nothing changes on the PC itself.", { ok: "Remove" }).then(function (ok) {
               if (ok) API.del("/fleet/pcs/" + id).then(function () { App.render(); }, function (err) { UI.toast(err.message, "error"); });
@@ -92,12 +104,13 @@
 
   function share(s) {
     return '<p class="muted" style="margin-top:0">Other consoles can read a short summary of this PC: health scores, number of improvements, unsafe programs, ' +
-      "free space on C:, version and last scan. Nothing else, and nothing can be changed from outside. Only PCs that know the key can read it.</p>" +
+      "free space on C:, version and last scan. Only PCs that know the key can read it, and they can run tools here only if you allow it below.</p>" +
       '<div class="form"><label>Port<input id="share-port" type="number" min="1024" max="65535" value="' + esc(String(s.port)) + '" style="max-width:120px"></label></div>' +
       '<div class="page-actions" style="justify-content:flex-start">' +
       UI.button(s.has_key ? "Create a new key" : "Create the key", "data-share-key", s.has_key ? "btn-sm" : "btn-sm btn-primary", "security") +
       (s.has_key ? UI.button(s.enabled ? "Stop sharing" : "Share this PC", "data-share-toggle", s.enabled ? "btn-sm" : "btn-sm btn-primary", "network") : "") +
       (s.enabled ? UI.button("Allow it in the firewall", "data-share-firewall", "btn-sm btn-ghost", "shield") : "") + "</div>" +
+      '<div class="form" style="margin-top:10px">' + Insights.remoteSetting(s) + "</div>" +
       '<p class="cell-sub">The summary travels in clear text on the local network: share it on trusted networks (office, home), not on public Wi-Fi.</p>';
   }
 

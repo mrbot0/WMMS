@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
-VERDICTS = ("fixed", "already_ok", "not_fixed", "worse", "changed", "unchanged", "applied", "already_set", "unknown")
+VERDICTS = ("fixed", "already_ok", "not_fixed", "worse", "changed", "unchanged", "applied", "already_set", "freed", "nothing_freed", "unknown")
 TIMEOUT = 45
 
 
@@ -175,6 +175,66 @@ CHECKS: Dict[str, Check] = {
                                      lambda value: value in ("0", "absent")),
 }
 
+# 2.7: more fixes with a check of their own.
+_SVC_START = "$s = Get-Service {0} -ErrorAction SilentlyContinue; if ($s) {{ \"$($s.StartType)\" }} else {{ 'Missing' }}"
+CHECKS.update({
+    "security.ps_policy_remotesigned": Check("PowerShell policy (this PC)", "Get-ExecutionPolicy -Scope LocalMachine", _equals("RemoteSigned")),
+    "security.ransomware_audit": _pref("EnableControlledFolderAccess", "Controlled folder access", lambda value: value in ("1", "2")),
+    "security.enable_restore": _registry(r"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore", "RPSessionInterval",
+                                         "System Restore", _equals("1")),
+    "security.restore_point": Check("Restore points", "\"$(@(Get-ComputerRestorePoint -ErrorAction SilentlyContinue).Count) restore points\""),
+    "security.uac_on": _registry(r"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA", "User Account Control", _equals("1")),
+    "security.rdp_off": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server", "fDenyTSConnections", "Remote Desktop", _equals("1")),
+    "security.smartscreen_on": _registry(r"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "SmartScreenEnabled", "SmartScreen",
+                                         lambda value: value in ("Warn", "RequireAdmin")),
+    "security.wdigest_off": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest", "UseLogonCredential",
+                                      "Passwords kept in memory (WDigest)", lambda value: value in ("0", "absent")),
+    "storage.pagefile_auto": Check("Page file managed by Windows", "(Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile", _equals("True")),
+    "storage.reserved_storage_off": Check("Reserved storage", "(Get-WindowsReservedStorageState -ErrorAction SilentlyContinue).ReservedStorageState",
+                                          _equals("Disabled")),
+    "storage.reserved_storage_on": Check("Reserved storage", "(Get-WindowsReservedStorageState -ErrorAction SilentlyContinue).ReservedStorageState",
+                                         _equals("Enabled")),
+    "storage.last_access_off": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisableLastAccessUpdate",
+                                         "Last-access time updates", lambda value: value.isdigit() and int(value) & 1 == 1),
+    "services.search_manual": Check("Windows Search start type", _SVC_START.format("WSearch"), _equals("Manual")),
+    "services.sysmain_manual": Check("SysMain start type", _SVC_START.format("SysMain"), _equals("Manual")),
+    "performance.hags_on": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", "GPU scheduling", _equals("2")),
+    "performance.game_mode_on": _registry(r"HKCU:\Software\Microsoft\GameBar", "AutoGameModeEnabled", "Game Mode", _equals("1")),
+    "performance.fast_startup_off": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled", "Fast Startup",
+                                              _equals("0")),
+    "performance.fast_startup_on": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled", "Fast Startup",
+                                             _equals("1")),
+    "updates.driver_updates_off": _registry(r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "ExcludeWUDriversInQualityUpdate",
+                                            "Driver updates from Windows Update", _equals("1")),
+    "updates.microsoft_update_on": Check("Microsoft Update service",
+                                         "if ((New-Object -ComObject Microsoft.Update.ServiceManager).Services | Where-Object { $_.ServiceID -eq "
+                                         "'7971f918-a847-4430-9279-4a52d1efe18d' }) { 'Registered' } else { 'Not registered' }", _equals("Registered")),
+    "network.prefer_ipv4": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents", "IPv6 preference",
+                                     _equals("32")),
+    "network.ipv6_default": _registry(r"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents", "IPv6 preference",
+                                      _equals("absent")),
+})
+
+# Cleanups are judged by the space they freed on C: (no PowerShell, read before and after the fix).
+SPACE_FIXES = frozenset({
+    "cleanup.temp", "cleanup.components", "cleanup.recycle_bin", "cleanup.dumps", "cleanup.shader_cache", "cleanup.teams_cache",
+    "cleanup.user_crash_dumps", "cleanup.office_cache", "cleanup.dev_caches", "cleanup.font_cache", "cleanup.java_cache",
+    "cleanup.chat_music_caches", "cleanup.game_launcher_caches", "cleanup.editor_caches", "cleanup.component_resetbase",
+    "cleanup.upgrade_leftovers", "cleanup.gpu_installer_leftovers", "cleanup.old_driver_packages", "storage.delivery_optimization",
+    "storage.browser_cache", "storage.wer", "storage.thumbnails", "storage.windows_logs", "storage.compact_os", "storage.clear_ie_cache",
+    "storage.delete_oldest_restore_point", "storage.disk_cleanup", "storage.delete_windows_old", "storage.hiberfile_reduced",
+    "performance.hibernation_off",
+})
+MIN_FREED = 1024 * 1024
+
+
+def free_space() -> int:
+    import shutil
+    try:
+        return shutil.disk_usage("C:\\").free
+    except OSError:
+        return -1
+
 
 def run_script(script: str, timeout: int = TIMEOUT) -> str:
     """The last line the check printed (read-only PowerShell, no window)."""
@@ -206,24 +266,32 @@ def verdict(check: Check, prima: Optional[str], dopo: Optional[str]) -> str:
 class Probe:
     """The check of one fix: read before it runs (on creation), finish() after."""
 
-    def __init__(self, action_id: str, runner: Optional[Callable[[str], str]] = None):
+    def __init__(self, action_id: str, runner: Optional[Callable[[str], str]] = None, space: Optional[Callable[[], int]] = None):
         self.check = CHECKS.get(action_id)
         self.runner = runner
         self.before = read(self.check, runner) if self.check else None
+        self.space = (space or free_space) if self.check is None and action_id in SPACE_FIXES else None
+        self.free_before = self.space() if self.space else None
 
     def finish(self, registry_changes: Optional[list] = None, registry_seen: int = 0) -> Optional[dict]:
         if self.check is not None:
             dopo = read(self.check, self.runner)
             return {"label": self.check.label, "before": self.before, "after": dopo, "verdict": verdict(self.check, self.before, dopo)}
+        if self.space is not None and self.free_before is not None and self.free_before >= 0:
+            dopo = self.space()
+            liberati = dopo - self.free_before
+            return {"label": "Free space on C:", "before": f"{self.free_before / 1024 ** 3:.2f} GB", "after": f"{dopo / 1024 ** 3:.2f} GB",
+                    "verdict": "freed" if liberati >= MIN_FREED else "nothing_freed"}
         if registry_seen:
             cambiati = len(registry_changes or [])
-            return {"label": "Registry values written by the fix", "before": f"{registry_seen} values read",
+            return {"label": "Values written by the fix", "before": f"{registry_seen} values read",
                     "after": f"{cambiati} changed", "verdict": "applied" if cambiati else "already_set"}
         return None
 
 
 LABELS = {"fixed": "Fixed", "already_ok": "Already fine", "not_fixed": "Not fixed", "worse": "Worse than before", "changed": "Changed",
-          "unchanged": "Nothing changed", "applied": "Applied", "already_set": "Already set", "unknown": "Not verified"}
+          "unchanged": "Nothing changed", "applied": "Applied", "already_set": "Already set", "freed": "Space freed",
+          "nothing_freed": "Nothing to free", "unknown": "Not verified"}
 
 
 def summary(risultato: dict) -> str:

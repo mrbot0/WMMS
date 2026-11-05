@@ -94,7 +94,7 @@ class Checks(unittest.TestCase):
         self.assertEqual(sonda.finish()["verdict"], "fixed")
 
     def test_probe_without_check_uses_the_registry_journal(self):
-        sonda = verify.Probe("cleanup.temp", runner=lambda s: self.fail("no check expected"))
+        sonda = verify.Probe("performance.visual_best", runner=lambda s: self.fail("no check expected"))
         self.assertIsNone(sonda.finish())
         self.assertEqual(sonda.finish([{"x": 1}], 2)["verdict"], "applied")
         self.assertEqual(sonda.finish([], 2)["verdict"], "already_set")
@@ -108,8 +108,11 @@ class Checks(unittest.TestCase):
                          f"[void][System.Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$x); "
                          f"if ($x) {{ $errori += '{action_id}' }}")
         righe.append("$errori -join ','")
-        uscita = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", "\n".join(righe)],
-                                capture_output=True, text=True, timeout=120)
+        with tempfile.TemporaryDirectory() as cartella:  # too long for one command line: a script file
+            script = Path(cartella) / "parse.ps1"
+            script.write_text("\n".join(righe), encoding="utf-8-sig")
+            uscita = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+                                    capture_output=True, text=True, timeout=120)
         self.assertEqual(uscita.stdout.strip(), "", uscita.stdout + uscita.stderr)
 
 

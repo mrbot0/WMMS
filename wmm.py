@@ -152,7 +152,9 @@ def run_schedule(schedule_id: int) -> int:
     from wmm.agent.jobs import JobManager
     from wmm.agent.scheduler import run_schedule as esegui
     from wmm.agent.store import Store
+    from wmm.agent import custom_tools
 
+    custom_tools.register(DATA_DIR)  # a schedule can run one of your own tools
     store = Store(DATA_DIR / "wmm.db")
     return esegui(schedule_id, store, JobManager(store, core.machine_id()))
 

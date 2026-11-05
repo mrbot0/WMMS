@@ -36,7 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..agent import (actions, advisor, apps, autostart, restore, collectors, core, events, hardware, health, inventory, live, processes, registry,
                      routines, scheduler, scripts, shutdown)
-from ..agent import verify
+from ..agent import custom_tools, verify
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 from .errors import ApiError  # noqa: F401 - part of this module's interface
@@ -84,6 +84,7 @@ class Agent(AgentFeatures):
         self.hostname = socket.gethostname()
         self.jobs = JobManager(self.store, self.machine_id, preview)
         self.jobs.recover_interrupted()
+        custom_tools.register(self.data_dir)  # your own tools join the catalog (2.7)
         self.token = secrets.token_hex(16)
         self.port = 0
         self.python = sys.executable

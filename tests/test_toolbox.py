@@ -112,7 +112,9 @@ class Changes(unittest.TestCase):
 class Catalog(unittest.TestCase):
     def test_command_reports_run_with_a_fake_context(self):
         """Reports built on commands are captured by the fake context in preview."""
-        lenti = {"storage.top_folders", "storage.temp_report", "storage.downloads_report", "storage.system_files_report"}
+        # The watch reports (2.6, 2.7) scan the network, Bluetooth and disks themselves: tests/test_v26.py and test_v27.py cover them.
+        lenti = {"storage.top_folders", "storage.temp_report", "storage.downloads_report", "storage.system_files_report",
+                 *actions.WATCH_26, *actions.WATCH_27}
         for action_id in sorted(actions.REPORTS - lenti):
             ctx = FakeContext()
             ctx.anteprima = True

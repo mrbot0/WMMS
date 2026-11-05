@@ -2,6 +2,28 @@
 
 CHANGELOG = [
     {
+        "version": "2.7.0",
+        "date": "2026-11-05",
+        "title": "Guided diagnosis, your own tools and a console fully in Italian",
+        "highlights": [
+            "Guided diagnosis: next to each problem found by the symptom search, the console reads this PC and tells which fixes are really needed "
+            "(for example: network marked Public, discovery service stopped) and which are already fine. Nothing is changed until you choose.",
+            "Checks and undo on many more fixes: 82 fixes with a check of their own, the space freed by 30 cleanups, and the precise undo now also "
+            "covers power settings, the active power plan and the start type of services.",
+            "Your own tools in the Toolbox: a PowerShell script with area, risk, a check read before and after, and an undo script.",
+            "The whole console in Italian, not only the Toolbox: pages, help, settings, recommendations, playbooks, routines and script templates.",
+        ],
+        "changes": [
+            "Connection log: router, internet and DNS timed every few minutes, with the outages and their cause; an alert when the connection comes back.",
+            "Suspicious changes: startup programs, tasks, services, extensions, proxy, hosts, antivirus exclusions and administrators compared "
+            "with the previous check, with an alert.",
+            "Network devices against the CISA catalog of known exploited vulnerabilities, to know which firmware to update first.",
+            "Disk and battery trend: one reading a day and an estimate of when a disk wears out or the battery drops below 60%.",
+            "Remote runs on the PCs of the network: only reports or safe fixes, only where the PC's user allowed them, with signed requests.",
+            "Customer report with evidence: the before/after reading of every checked fix and what can still be undone.",
+        ],
+    },
+    {
         "version": "2.6.0",
         "date": "2026-11-04",
         "title": "Toolbox in Italian, search by symptom and fixes that check themselves",

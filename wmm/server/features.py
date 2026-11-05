@@ -16,7 +16,8 @@ import sys
 
 import wmm
 
-from ..agent import actions, advisor, apps, fleet, netscan, notify, radio, registry, restore, symptoms, updater, upnp
+from ..agent import (actions, advisor, apps, custom_tools, diagnose, drift, fleet, kev, netscan, notify, radio, registry, restore, symptoms,
+                     trends, updater, upnp, watch)
 from ..agent.jobs import RunInProgress
 from .errors import ApiError
 
@@ -184,6 +185,72 @@ class AgentFeatures:
             raise ApiError(500, "Nothing could be put back: " + "; ".join(esito["errors"][:3]))
         return esito
 
+    # ---------- 2.7: guided diagnosis, custom tools, connection log, suspicious changes, vulnerabilities, trends ----------
+
+    def symptom_diagnose(self, symptom_id: str) -> dict:
+        try:
+            return diagnose.diagnose(symptom_id)
+        except KeyError:
+            raise ApiError(404, "Unknown problem.") from None
+
+    def custom_tools_view(self) -> dict:
+        return custom_tools.public(self.data_dir)
+
+    def custom_tool_save(self, corpo: dict, tool_id=None) -> dict:
+        self._guard_changes()
+        try:
+            return custom_tools.save(self.data_dir, corpo, tool_id)
+        except KeyError:
+            raise ApiError(404, "Tool not found.") from None
+        except custom_tools.CustomToolError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def custom_tool_delete(self, tool_id: str) -> dict:
+        self._guard_changes()
+        try:
+            custom_tools.delete(self.data_dir, tool_id)
+        except KeyError:
+            raise ApiError(404, "Tool not found.") from None
+        return {"ok": True}
+
+    def connection_view(self) -> dict:
+        return watch.connection_history(self.data_dir)
+
+    def connection_sample(self) -> dict:
+        campione = watch.record_connection(self.data_dir)
+        return dict(watch.connection_history(self.data_dir), sample=campione, state=watch.classify(campione))
+
+    def drift_view(self) -> dict:
+        return drift.last(self.data_dir)
+
+    def drift_check(self) -> dict:
+        task_id = self.tasks.start("scan", "Suspicious changes", 1)
+        stato = "error"
+        try:
+            esito = drift.check(self.data_dir)
+            stato = "warning" if esito["total"] else "ok"
+            return dict(drift.last(self.data_dir), result=esito)
+        except (OSError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"The check failed: {errore}") from None
+        finally:
+            self.tasks.finish(task_id, stato)
+
+    def kev_view(self, refresh: bool = False) -> dict:
+        try:
+            return kev.check(self.data_dir, force=refresh)
+        except OSError as errore:
+            raise ApiError(502, str(errore)) from None
+
+    def trends_view(self) -> dict:
+        return trends.trends(self.data_dir)
+
+    def trends_record(self) -> dict:
+        try:
+            trends.record(self.data_dir)
+        except (OSError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"The disks could not be read: {errore}") from None
+        return trends.trends(self.data_dir)
+
     # ---------- the PCs of the network (read-only summaries) ----------
 
     @property
@@ -222,9 +289,33 @@ class AgentFeatures:
         if not stato["enabled"] or self.preview:
             return
         try:
-            self._fleet_server = fleet.summary_server(self.fleet, stato["port"], self.pc_summary)
+            self._fleet_server = fleet.summary_server(self.fleet, stato["port"], self.pc_summary,
+                                                      {"start": self._fleet_start, "status": self.jobs.status})
         except OSError as errore:
             sys.stderr.write(f"PC summary sharing could not start on port {stato['port']}: {errore}\n")
+
+    def _fleet_start(self, ids) -> str:
+        """A run asked by another console (already checked against what this PC allows): never asks, never risky."""
+        if any(actions.CATALOG[a].kind != "report" for a in ids) and not (self.admin or self.preview):
+            raise RuntimeError("this PC runs without administrator rights: only reports can run")
+        return self.jobs.start(list(ids), "fleet", False)
+
+    def fleet_run(self, pc_id: str, corpo: dict) -> dict:
+        self._guard_changes()
+        try:
+            return self.fleet.run_remote(pc_id, corpo.get("actions"))
+        except KeyError:
+            raise ApiError(404, "PC not found.") from None
+        except fleet.FleetError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def fleet_run_status(self, pc_id: str, job_id: str) -> dict:
+        try:
+            return self.fleet.run_status(pc_id, job_id)
+        except KeyError:
+            raise ApiError(404, "PC not found.") from None
+        except fleet.FleetError as errore:
+            raise ApiError(409, str(errore)) from None
 
     def fleet_view(self) -> dict:
         condivisione = dict(self.fleet.share(), running=getattr(self, "_fleet_server", None) is not None)
@@ -235,7 +326,7 @@ class AgentFeatures:
         if self.preview:
             raise ApiError(409, "Sharing cannot be turned on in preview mode.")
         try:
-            stato = self.fleet.set_share(corpo.get("enabled"), corpo.get("port"))
+            stato = self.fleet.set_share(corpo.get("enabled"), corpo.get("port"), corpo.get("remote_runs"))
         except fleet.FleetError as errore:
             raise ApiError(400, str(errore)) from None
         self.start_fleet_share()
@@ -448,6 +539,51 @@ class AgentFeatures:
 
 
 class HandlerFeatures:
+    def diagnose_post(self, query, symptom_id):
+        self._json(200, self.agent.symptom_diagnose(symptom_id))
+
+    def custom_tools_get(self, query):
+        self._json(200, self.agent.custom_tools_view())
+
+    def custom_tools_post(self, query):
+        self._json(201, self.agent.custom_tool_save(self._body()))
+
+    def custom_tool_put(self, query, tool_id):
+        self._json(200, self.agent.custom_tool_save(self._body(), tool_id))
+
+    def custom_tool_delete(self, query, tool_id):
+        self._json(200, self.agent.custom_tool_delete(tool_id))
+
+    def connection_get(self, query):
+        self._json(200, self.agent.connection_view())
+
+    def connection_post(self, query):
+        self._json(200, self.agent.connection_sample())
+
+    def drift_get(self, query):
+        self._json(200, self.agent.drift_view())
+
+    def drift_post(self, query):
+        self._json(200, self.agent.drift_check())
+
+    def kev_get(self, query):
+        self._json(200, self.agent.kev_view(False))
+
+    def kev_post(self, query):
+        self._json(200, self.agent.kev_view(True))
+
+    def trends_get(self, query):
+        self._json(200, self.agent.trends_view())
+
+    def trends_post(self, query):
+        self._json(200, self.agent.trends_record())
+
+    def fleet_run_post(self, query, pc_id):
+        self._json(202, self.agent.fleet_run(pc_id, self._body()))
+
+    def fleet_run_get(self, query, pc_id, job_id):
+        self._json(200, self.agent.fleet_run_status(pc_id, job_id))
+
     def symptoms_get(self, query):
         self._json(200, self.agent.symptom_search(query.get("q", "")))
 
@@ -557,6 +693,21 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("POST", r"/symptoms/([a-z_]{2,40})/diagnose", HandlerFeatures.diagnose_post),
+    ("GET", "/custom-tools", HandlerFeatures.custom_tools_get),
+    ("POST", "/custom-tools", HandlerFeatures.custom_tools_post),
+    ("PUT", r"/custom-tools/([0-9a-f]{8})", HandlerFeatures.custom_tool_put),
+    ("DELETE", r"/custom-tools/([0-9a-f]{8})", HandlerFeatures.custom_tool_delete),
+    ("GET", "/network/connection", HandlerFeatures.connection_get),
+    ("POST", "/network/connection", HandlerFeatures.connection_post),
+    ("GET", "/security/drift", HandlerFeatures.drift_get),
+    ("POST", "/security/drift", HandlerFeatures.drift_post),
+    ("GET", "/network/kev", HandlerFeatures.kev_get),
+    ("POST", "/network/kev", HandlerFeatures.kev_post),
+    ("GET", "/hardware/trends", HandlerFeatures.trends_get),
+    ("POST", "/hardware/trends", HandlerFeatures.trends_post),
+    ("POST", r"/fleet/pcs/([0-9a-f]{12})/run", HandlerFeatures.fleet_run_post),
+    ("GET", r"/fleet/pcs/([0-9a-f]{12})/runs/([0-9a-f]{32})", HandlerFeatures.fleet_run_get),
     ("GET", "/symptoms", HandlerFeatures.symptoms_get),
     ("POST", r"/history/runs/(\d{1,10})/undo", HandlerFeatures.run_undo_post),
     ("GET", "/network/wifi/history", HandlerFeatures.wifi_history_get),
