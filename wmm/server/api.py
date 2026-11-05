@@ -36,11 +36,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..agent import (actions, advisor, apps, autostart, restore, collectors, core, events, hardware, health, inventory, live, processes, registry,
                      routines, scheduler, scripts, shutdown)
-from ..agent import custom_tools, verify
+from ..agent import accounts, appsettings, custom_tools, verify
+from . import permissions
 from ..agent.jobs import ConfirmationRequired, JobManager, RunInProgress, TaskRegistry
 from ..agent.store import Store
 from .errors import ApiError  # noqa: F401 - part of this module's interface
 from .features import AgentFeatures, HandlerFeatures, FEATURE_ROUTES
+from .accounts_api import ACCOUNT_ROUTES, AccountsHandler
 
 WEB = Path(wmm.__file__).resolve().parent / "web"
 STATIC_FILES: Dict[str, Path] = {p.relative_to(WEB).as_posix(): p for p in WEB.rglob("*") if p.is_file() and p.name != "index.html"}
@@ -85,6 +87,8 @@ class Agent(AgentFeatures):
         self.jobs = JobManager(self.store, self.machine_id, preview)
         self.jobs.recover_interrupted()
         custom_tools.register(self.data_dir)  # your own tools join the catalog (2.7)
+        self.accounts = accounts.for_data_dir(self.data_dir)  # users, roles and the audit log (2.9)
+        appsettings.apply_proxy(self.data_dir)
         self.token = secrets.token_hex(16)
         self.port = 0
         self.python = sys.executable
@@ -120,7 +124,9 @@ class Agent(AgentFeatures):
     def info(self) -> dict:
         return {"name": APP_NAME, "version": VERSION, "machine_id": self.machine_id, "hostname": self.hostname,
                 "admin": self.admin, "preview": self.preview, "run_active": self.jobs.busy,
-                "actions": len(actions.CATALOG), "reports": len(actions.REPORTS),
+                "actions": len(actions.CATALOG), "reports": len(actions.REPORTS), "accounts": self.accounts.enabled,
+                "org_name": appsettings.load(self.data_dir)["org_name"],
+                "run_rules": {k: appsettings.load(self.data_dir)[k] for k in ("block_high_risk", "require_reason", "confirm_high_with_name")},
                 "uptime_seconds": int(time.time() - self.started), "python": sys.version.split()[0]}
 
     def _context(self) -> op.Contesto:
@@ -834,7 +840,7 @@ class Agent(AgentFeatures):
 Route = Tuple[str, "re.Pattern[str]", Callable]
 
 
-class Handler(HandlerFeatures, BaseHTTPRequestHandler):
+class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
     agent: Agent
     server_version = "WMM/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -924,6 +930,73 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
             if not hmac.compare_digest(token, self.agent.token):
                 raise ApiError(403, "Missing or invalid token.")
 
+    # ---------- accounts (2.9) ----------
+
+    user: Optional[dict] = None
+
+    def _authorize(self, funzione, gruppi) -> None:
+        """With accounts on: a valid session for every route but the sign-in ones, and the permissions the route needs."""
+        self.user = None
+        conti = self.agent.accounts
+        if not conti.enabled:
+            return
+        nome = funzione.__name__
+        if nome in permissions.PUBLIC:
+            return
+        utente = conti.session(self.headers.get("X-WMM-Session", ""))
+        if utente is None:
+            raise ApiError(401, "Sign in to continue.")
+        self.user = utente
+        if utente["limited"] and nome not in permissions.LIMITED_OK:
+            raise ApiError(403, "Change your password or set up two-step verification first.")
+        mancanti = [p for p in permissions.required(nome, self.command, tuple(gruppi)) if p not in utente["permissions"]]
+        if mancanti:
+            conti.audit(utente["username"], "denied", self.path[:200], ", ".join(mancanti), ok=False)
+            raise ApiError(403, "Your role does not allow this (" + ", ".join(mancanti) + ").")
+
+    def _audit_write(self, funzione, ok: bool) -> None:
+        if self.user is not None and self.command not in ("GET", "HEAD") and not funzione.__name__.startswith("auth_"):
+            self.agent.accounts.audit(self.user["username"], "api." + funzione.__name__, self.path[:200], "", ok=ok)
+
+    def _check_role_tools(self, ids) -> list:
+        """The signed-in user's role may run every one of these tools (area and risk)."""
+        noti = [actions.CATALOG[a] for a in ids if isinstance(a, str) and a in actions.CATALOG]
+        if self.user is not None:
+            vietati = [a.title for a in noti if not accounts.can_run(self.user, a)]
+            if vietati:
+                self.agent.accounts.audit(self.user["username"], "denied", "run", ", ".join(vietati)[:500], ok=False)
+                raise ApiError(403, "Your role does not allow running: " + ", ".join(vietati[:5]) + ("…" if len(vietati) > 5 else "") + ".")
+        return noti
+
+    def _check_schedule_tools(self, riferimento) -> None:
+        """A schedule runs its tools later as SYSTEM: whoever creates, changes or starts it must be allowed to run them now."""
+        if self.user is None or not isinstance(riferimento, str):
+            return
+        try:
+            ids = routines.expand(riferimento)
+        except KeyError:
+            return  # unknown action: create_schedule answers 400
+        self._check_role_tools(ids)
+
+    def _check_tools(self, ids, corpo: Optional[dict] = None) -> None:
+        """The role may run each tool (area and risk), and the run rules of Settings › Runs (2.9)."""
+        if not isinstance(ids, list):
+            return
+        regole = appsettings.load(self.agent.data_dir)
+        noti = self._check_role_tools(ids)
+        if regole["block_high_risk"] and any(a.risk == "high" and a.kind != "report" for a in noti):
+            raise ApiError(409, "High-risk tools are blocked on this PC (Settings › Runs).")
+        corpo = corpo or {}
+        if regole["require_reason"] and any(a.kind != "report" for a in noti):
+            motivo = str(corpo.get("reason") or "").strip()
+            if len(motivo) < 3:
+                raise ApiError(400, "Write the reason or ticket number for these changes (Settings › Runs).")
+            if self.user is not None or self.agent.accounts.enabled is False:
+                self.agent.accounts.audit((self.user or {}).get("username", "local"), "run.reason", ", ".join(a.id for a in noti)[:200], motivo[:300])
+        if regole["confirm_high_with_name"] and any(a.risk == "high" and a.kind != "report" for a in noti):
+            if str(corpo.get("confirm_name") or "").strip().lower() != self.agent.hostname.lower():
+                raise ApiError(400, f"Type the name of this PC ({self.agent.hostname}) to confirm high-risk tools.")
+
     def _dispatch(self) -> None:
         self._started = time.perf_counter()
         try:
@@ -938,7 +1011,13 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
                         continue
                     trovato = schema.fullmatch(percorso)
                     if trovato:
-                        funzione(self, query, *trovato.groups())
+                        self._authorize(funzione, trovato.groups())
+                        try:
+                            funzione(self, query, *trovato.groups())
+                        except ApiError as errore:
+                            self._audit_write(funzione, errore.status < 400)
+                            raise
+                        self._audit_write(funzione, True)
                         return
                 raise ApiError(404, "Not found.")
             if self.command not in ("GET", "HEAD"):
@@ -1005,7 +1084,8 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
                   if all(not query.get(campo) or getattr(a, campo) == query[campo] for campo in ("area", "kind", "risk"))
                   and (not testo or testo in f"{a.id} {a.title} {a.description}".lower())]
         # "check": the before/after check that tells whether a fix worked (wmm/agent/verify.py), when it has one.
-        self._json(200, {"actions": [dict(a.as_dict(), check=verify.CHECKS[a.id].label if a.id in verify.CHECKS else "") for a in elenco],
+        self._json(200, {"actions": [dict(a.as_dict(), check=verify.CHECKS[a.id].label if a.id in verify.CHECKS else "",
+                                          allowed=self.user is None or accounts.can_run(self.user, a)) for a in elenco],
                          "total": len(actions.CATALOG)})
 
     def changelog(self, query):
@@ -1013,6 +1093,7 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
 
     def start_run(self, query):
         corpo = self._body()
+        self._check_tools(corpo.get("actions"), corpo)
         job_id = self.agent.start_run(corpo.get("actions"), bool(corpo.get("confirmed")))
         self._json(202, {"id": job_id})
 
@@ -1024,6 +1105,7 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
         ids = [a.id for a in actions.safe(area)]
         if not ids:
             raise ApiError(400, "There are no safe actions in this area.")
+        self._check_tools(ids, corpo)
         self._json(202, {"id": self.agent.start_run(ids, False, origin="auto"), "actions": ids})
 
     def current_run(self, query):
@@ -1239,13 +1321,19 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
         self._json(200, {"schedules": self.agent.schedules(), "installation": self.agent.installation()})
 
     def create_schedule(self, query):
-        self._json(201, {"id": self.agent.create_schedule(self._body())})
+        corpo = self._body()
+        self._check_schedule_tools(corpo.get("action_id"))
+        self._json(201, {"id": self.agent.create_schedule(corpo)})
 
     def list_routines(self, query):
         self._json(200, self.agent.routines_catalog())
 
     def update_schedule(self, query, schedule_id):
-        self.agent.update_schedule(int(schedule_id), self._body())
+        corpo = self._body()
+        if set(corpo) - {"enabled"}:  # only on and off: the action of a schedule never changes after it is created
+            raise ApiError(400, "Only 'enabled' can be changed: delete the schedule and create a new one.")
+        self._check_schedule_tools((self.agent.store.schedule(int(schedule_id)) or {}).get("action_id"))
+        self.agent.update_schedule(int(schedule_id), corpo)
         self._json(200, {"ok": True})
 
     def delete_schedule(self, query, schedule_id):
@@ -1257,6 +1345,7 @@ class Handler(HandlerFeatures, BaseHTTPRequestHandler):
         self._json(200, {"ok": True})
 
     def test_schedule(self, query, schedule_id):
+        self._check_schedule_tools((self.agent.store.schedule(int(schedule_id)) or {}).get("action_id"))
         self._json(200, self.agent.test_schedule(int(schedule_id)))
 
 
@@ -1325,7 +1414,7 @@ ROUTES: List[Route] = [
     _route("DELETE", r"/schedules/(\d+)", Handler.delete_schedule),
     _route("POST", r"/schedules/(\d+)/resync", Handler.resync_schedule),
     _route("POST", r"/schedules/(\d+)/test", Handler.test_schedule),
-] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
+] + [_route(m, s, f) for m, s, f in ACCOUNT_ROUTES] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
 
 
 DISCONNECTED = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, TimeoutError)

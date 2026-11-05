@@ -383,6 +383,39 @@
     [/^Health: all checks passed$/, "Salute: tutti i controlli superati"],
     [/^Last scan (.+)$/, function (m, when) { return "Ultima scansione " + (translate(when) || when); }], [/^(\d+) improvement\(s\)$/, "$1 miglioramenti"],
     [/^(\d+)–(\d+) of (\d+)(.*)$/, function (m, a, b, c, rest) { return a + "–" + b + " di " + c + rest.replace("filtered from", "filtrati da"); }],
+    // 2.9 accounts, users and roles, settings
+    [/^Test (email|telegram|webhook)$/, "Prova $1"],
+    [/^(.+): (Reports \(read-only\)|Safe fixes|Moderate fixes|High-risk fixes)$/, function (m, a, l) { return (translate(a) || a) + ": " + (translate(l) || l); }],
+    [/^User name (\S+) · role (.+) · (\d+) permissions$/, function (m, u, r, n) { return "Nome utente " + u + " · ruolo " + (translate(r) || r) + " · " + n + " permessi"; }],
+    [/^Changed (.+?)( · expires (.+))?$/, function (m, a, e, b) { return "Cambiata " + (a === "never" ? "mai" : translate(a) || a) + (e ? " · scade " + (translate(b) || b) : ""); }],
+    [/^Channels set up: (.+)$/, function (m, a) { return "Canali configurati: " + (a === "none" ? "nessuno" : a); }],
+    [/^(\d+) users · (\d+) pages · (\d+) tool permissions · (\d+) in all$/, "$1 utenti · $2 pagine · $3 permessi sugli strumenti · $4 in tutto"],
+    [/^(\d+) selected$/, "$1 selezionati"], [/^(\d+) of (\d+) entries$/, "$1 voci su $2"], [/^(\d+) permissions of (\d+)$/, "$1 permessi su $2"],
+    [/^Only (.+)$/, function (m, a) { return "Solo " + (translate(a) || a); }], [/^(\d+) permissions in common\.$/, "$1 permessi in comune."],
+    [/^Temporary password of (.+)$/, "Password temporanea di $1"], [/^(.+) \(cannot be changed\)$/, function (m, a) { return (translate(a) || a) + " (non modificabile)"; }],
+    [/^(Copy|Delete|Edit|Members of|Reset) (.+)$/, function (m, v, a) {
+      var t = { "Copy": "Copia", "Delete": "Elimina", "Edit": "Modifica", "Members of": "Membri di", "Reset": "Ripristina" }[v];
+      return t + " " + (translate(a) || a); }],
+    [/^(\d+) users have this role: they move to$/, "$1 utenti hanno questo ruolo: passano a"],
+    [/^(\d+) created, (\d+) skipped\.$/, "$1 creati, $2 saltati."], [/^(\d+) users · (\d+) roles$/, "$1 utenti · $2 ruoli"],
+    [/^(\d+) active$/, "$1 attivi"], [/^(\d+) locked by wrong passwords$/, "$1 bloccati per password sbagliate"], [/^of (\d+) users$/, "su $1 utenti"],
+    [/^last 24 hours · (\d+) open sessions$/, "ultime 24 ore · $1 sessioni aperte"],
+    [/^(\d+) done(?:, (\d+) not changed: (.+)|\.)$/, function (m, n, k, e) { return n + " fatti" + (k ? ", " + k + " non modificati: " + (translate(e) || e) : "."); }],
+    [/^Accounts are on: you are signed in as (.+)\.$/, "Account attivi: hai effettuato l'accesso come $1."], [/^Bot: (.+)$/, "Bot: $1"],
+    [/^Not sent: quiet hours$/, "Non inviato: ore di silenzio"], [/^Restored: (.+)\.$/, "Ripristinato: $1."], [/^(\d+) other sessions signed out\.$/, "$1 altre sessioni chiuse."],
+    [/^Your role does not allow this \((.+)\)\.$/, "Il tuo ruolo non lo consente ($1)."],
+    [/^Your role does not allow running: (.+)\.$/, function (m, a) { return "Il tuo ruolo non consente di eseguire: " + a.split(", ").map(function (x) { return translate(x) || x; }).join(", ") + "."; }],
+    [/^The (new )?password does not follow the rules: (.+)\.$/, function (m, n, a) {
+      var parti = a.split(/, (?=at least|without|different)/).map(function (x) {
+        return x.replace(/^at least (\d+) characters$/, "almeno $1 caratteri").replace(/^at least (\d+) of lowercase, uppercase, digits, symbols$/, "almeno $1 tra minuscole, maiuscole, cifre, simboli")
+          .replace(/^without the user name$/, "senza il nome utente").replace(/^different from your last passwords$/, "diversa dalle ultime password");
+      });
+      return (n ? "La nuova password non rispetta le regole: " : "La password non rispetta le regole: ") + parti.join(", ") + ".";
+    }],
+    [/^Too many wrong passwords: try again after (\d\d:\d\d)\.$/, "Troppe password sbagliate: riprova dopo le $1."],
+    [/^At least (\d+) characters and (\d+) of: lowercase, uppercase, digits, symbols\.$/, "Almeno $1 caratteri e $2 tra: minuscole, maiuscole, cifre, simboli."],
+    [/^Type the name of this PC \((.+)\) to confirm$/, "Scrivi il nome di questo PC ($1) per confermare"],
+    [/^Type the name of this PC \((.+)\) to confirm high-risk tools\.$/, "Scrivi il nome di questo PC ($1) per confermare gli strumenti ad alto rischio."],
     // 2.8 cards
     [/^(.+) \((report|fix)\)$/, function (m, a, k) { var t = translate(a); return t == null ? m : t + (k === "report" ? " (rapporto)" : " (correzione)"); }],
     [/^(\d+) blue screens, (\d+) in the last 30 days$/, "$1 schermate blu, $2 negli ultimi 30 giorni"],

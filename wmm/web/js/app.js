@@ -46,10 +46,12 @@
     document.getElementById("nav").innerHTML = NAV.map(function (group) {
       // The category title opens its hub page; the chevron folds its pages away (remembered).
       var hub = "cat-" + group[2], isFolded = folded.indexOf(group[2]) >= 0 && group[1].every(function (i) { return i[0] !== page; });
+      var items = group[1].filter(function (i) { return Auth.canSee(i[0]); });
+      if (!items.length) return "";
       return '<div class="nav-group' + (page === hub ? " active" : "") + '"><a href="#/' + hub + '" class="nav-group-link"' + (page === hub ? ' aria-current="page"' : "") +
         ' title="Open ' + esc(group[0]) + '">' + esc(group[0]) + '</a><button type="button" class="nav-fold" data-fold="' + group[2] + '" aria-expanded="' + !isFolded +
         '" aria-label="' + (isFolded ? "Show" : "Hide") + " the pages of " + esc(group[0]) + '">' + UI.icon("chevron") + "</button></div>" +
-        (isFolded ? "" : group[1].map(function (item) {
+        (isFolded ? "" : items.map(function (item) {
         var score = state.scores[item[0]];
         var chip = item[0] in state.scores
           ? '<span class="nav-score ' + (score == null ? "none" : UI.tone(score)) + '" title="Score">' + (score == null ? "–" : score) + "</span>" : "";
@@ -74,7 +76,7 @@
   function renderChrome() {
     var info = state.info;
     if (!info) return;
-    document.getElementById("topbar-meta").innerHTML =
+    document.getElementById("topbar-meta").innerHTML = Auth.chip() +
       '<span class="meta-item device-name" title="Machine ID: ' + esc(info.machine_id) + '"><span class="meta-label">Device</span>' + esc(info.hostname) + "</span>" +
       '<span class="pill ' + (info.preview ? "pill-info" : info.admin ? "pill-ok" : "pill-warning") + '">' +
       (info.preview ? "Preview mode" : info.admin ? "Administrator" : "Read-only") + "</span>";
@@ -133,6 +135,11 @@
 
   function render() {
     var name = current();
+    if (!Auth.canSee(name)) {  // a page the role does not see (2.9): the first one it does
+      var primo = null;
+      NAV.forEach(function (g) { g[1].forEach(function (i) { if (!primo && Auth.canSee(i[0])) primo = i[0]; }); });
+      if (primo && primo !== name) { location.hash = "#/" + primo; return; }
+    }
     var page = window.Pages[name];
     var token = ++state.rendering;
     state.leave.splice(0).forEach(function (fn) { try { fn(); } catch (e) { /* page already gone */ } });
@@ -421,14 +428,16 @@
     // Safe actions start at once; anything else, or a batch, is confirmed with its steps.
     var ask = risky.length || list.length > 2 || Components.store("confirmSafe") ? confirmRun(list, risky) : Promise.resolve(true);
     var minutes = list.reduce(function (s, a) { return s + (a.minutes || 0); }, 0);
-    return ask.then(function (ok) { return ok && batteryCheck(minutes); }).then(function (ok) { return ok && longRunCheck(minutes); }).then(function (ok) {
+    var extra = {};
+    return Auth.runExtras(list, state.info).then(function (x) { extra = x; return ask; })
+      .then(function (ok) { return ok && batteryCheck(minutes); }).then(function (ok) { return ok && longRunCheck(minutes); }).then(function (ok) {
       if (!ok) return null;
-      return API.post("/runs", { actions: ids, confirmed: risky.length > 0 }).then(function (r) {
+      return API.post("/runs", Object.assign({ actions: ids, confirmed: risky.length > 0 }, extra)).then(function (r) {
         state.job = { active: true, done: 0, total: ids.length, results: [], log: [], current: null };
         follow(r.id, areasOf(ids));
         return r.id;
       });
-    }).catch(function (error) { UI.toast(error.message, "error"); });
+    }).catch(function (error) { if (error.message !== "cancelled") UI.toast(error.message, "error"); });
   }
 
   /* Settings › Maintenance: a run of 10 minutes or more on a laptop running on battery asks first. */
@@ -475,11 +484,15 @@
   }
 
   function runSafe(area) {
-    return API.post("/runs/safe", area ? { area: area } : {}).then(function (r) {
+    var safe = Object.keys(state.actions).map(function (k) { return state.actions[k]; })
+      .filter(function (a) { return a.risk === "safe" && a.kind !== "report" && (!area || a.area === area); });
+    return Auth.runExtras(safe, state.info).then(function (extra) {
+      return API.post("/runs/safe", Object.assign(area ? { area: area } : {}, extra));
+    }).then(function (r) {
       UI.toast("Running " + r.actions.length + " safe action(s).", "info");
       state.job = { active: true, done: 0, total: r.actions.length, results: [], log: [], current: null };
       follow(r.id, areasOf(r.actions));
-    }).catch(function (error) { UI.toast(error.message, "error"); });
+    }).catch(function (error) { if (error.message !== "cancelled") UI.toast(error.message, "error"); });
   }
 
   function schedule(actionId) {
@@ -1037,7 +1050,7 @@
       function () { state.connected = false; state.latency = null; renderStatus(); });
   }, 20000);
 
-  Promise.all([API.get("/agent/info"), API.get("/actions")]).then(function (results) {
+  Auth.ready().then(function () { return Promise.all([API.get("/agent/info"), API.get("/actions")]); }).then(function (results) {
     state.info = results[0];
     results[1].actions.forEach(function (a) { state.actions[a.id] = a; });
     renderChrome();
@@ -1054,6 +1067,13 @@
       ).then(function (v) { if (v === "yes") Guides.tour(0); else Components.store("tourDone", true); });
     });
     API.get("/playbooks").then(function (p) { state.playbooks = p.playbooks; }, function () { /* palette works without them */ });
+    // Settings › App and connections (2.9): look for a new version when the console opens.
+    if (Auth.can("view.settings")) API.get("/app-settings").then(function (a) {
+      if (!a.values.update_check_on_start) return null;
+      return API.get("/update/check").then(function (r) {
+        if (r.available) Components.notifications.add("Version " + r.latest + " is available", "Settings › This agent › Program updates", "info");
+      });
+    }).catch(function () { /* offline or not allowed: nothing to say */ });
     refreshScores().then(autoScan);
     API.get("/history?limit=8").then(function (h) { state.recentRuns = h.runs; }, function () { /* palette works without them */ });
     API.get("/health").then(function (h) { state.health = h; renderStatus(); }, function () { /* shown in Settings */ });

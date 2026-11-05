@@ -29,6 +29,12 @@ EVENTS = {
     "connection_down": "The internet connection dropped",
     "early_warning": "Signs that a part of the PC may fail soon",
 }
+EVENTS_IT = {
+    "run_failed": "Un'esecuzione pianificata non è riuscita", "disk_low": "Il disco di sistema è quasi pieno",
+    "unsafe_apps": "Trovati nuovi programmi non sicuri", "new_device": "Un nuovo dispositivo è entrato nella rete",
+    "bt_follower": "Un tracker Bluetooth sconosciuto continua a comparire", "config_changed": "Modifiche sospette ad avvio, attività o estensioni",
+    "connection_down": "La connessione a internet è caduta", "early_warning": "Segni che una parte del PC potrebbe guastarsi presto",
+}
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {
     "telegram_token": 200, "telegram_chat": 64, "smtp_host": 200, "smtp_port": 5, "smtp_user": 200, "smtp_password": 200,
@@ -101,7 +107,7 @@ class Notifier:
         vista.update({f"has_{k}": bool(dati.get(k)) for k in SECRETS})
         vista["events"] = [e for e in dati.get("events", list(EVENTS)) if e in EVENTS]
         vista["event_titles"] = EVENTS
-        vista["channels"] = self.channels(dati)
+        vista["channels"] = self.all_channels()
         return vista
 
     def save(self, valori: dict) -> dict:
@@ -147,15 +153,58 @@ class Notifier:
 
     # ---------- sending ----------
 
-    def send(self, titolo: str, testo: str) -> Dict[str, str]:
-        """Sends to every configured channel; returns channel -> "ok" or the error."""
+    @property
+    def data_dir(self) -> Path:
+        return self.path.parent
+
+    def all_channels(self) -> List[str]:
+        """E-mail and Telegram from these settings, the webhook from the app settings (2.9)."""
+        from . import appsettings
+        canali = self.channels(self._read())
+        if appsettings.load(self.data_dir)["webhook_url"]:
+            canali.append("webhook")
+        return canali
+
+    def _role_contacts(self) -> tuple:
+        """E-mail addresses and Telegram chats of the active users of the roles chosen in Settings › Alerts."""
+        from . import appsettings
+        ruoli = set(appsettings.load(self.data_dir)["alert_roles"])
+        if not ruoli or not (self.data_dir / "accounts.db").exists():
+            return [], []
+        try:
+            from .accounts import for_data_dir
+            utenti = [u for u in for_data_dir(self.data_dir).users() if u["role_id"] in ruoli and u["status"] == "active"]
+        except Exception:  # noqa: BLE001 - alerts still go to the main recipients
+            return [], []
+        return [u["email"] for u in utenti if u["email"]], [u["telegram"] for u in utenti if u["telegram"]]
+
+    def send(self, titolo: str, testo: str, solo: Optional[List[str]] = None, evento: str = "") -> Dict[str, str]:
+        """Sends to every configured channel (or only to `solo`); returns channel -> "ok" or the error."""
+        from . import appsettings
         dati = self._read()
+        app = appsettings.load(self.data_dir)
         esiti: Dict[str, str] = {}
+        if app["alert_prefix"]:
+            titolo = f"[{app['alert_prefix']}] {titolo}"
         corpo = f"{titolo}\n\n{testo}\n\n— Windows Maintenance Manager {wmm.VERSION}"
-        if "telegram" in self.channels(dati):
-            esiti["telegram"] = self._telegram(unprotect(dati["telegram_token"]), dati["telegram_chat"], corpo)
-        if "email" in self.channels(dati):
+        canali = [c for c in self.all_channels() if solo is None or c in solo]
+        email_extra, chat_extra = self._role_contacts() if solo is None else ([], [])
+        if "telegram" in canali:
+            if not appsettings.allowed(self.data_dir, "telegram"):
+                esiti["telegram"] = "turned off (Settings › Connections)"
+            else:
+                token = unprotect(dati["telegram_token"])
+                esiti["telegram"] = self._telegram(token, dati["telegram_chat"], corpo)
+                for chat in sorted(set(chat_extra) - {dati["telegram_chat"]}):
+                    self._telegram(token, chat, corpo)
+        if "email" in canali:
+            if email_extra:
+                dati = dict(dati, email_to=", ".join(dict.fromkeys([dati["email_to"]] + email_extra)))
             esiti["email"] = self._email(dati, titolo, corpo)
+        if "webhook" in canali:
+            esiti["webhook"] = appsettings.webhook_send(app["webhook_url"], app["webhook_kind"], titolo, testo) \
+                if appsettings.allowed(self.data_dir, "webhook") else "turned off (Settings › Connections)"
+        appsettings.log_alert(self.data_dir, evento or "manual", titolo, esiti)
         return esiti
 
     @staticmethod
@@ -196,15 +245,24 @@ class Notifier:
 
     def event(self, chiave: str, dettaglio: str, quando: Optional[float] = None, gruppo: str = "") -> Dict[str, str]:
         """An alert for one event, unless it is turned off or the same alert went out in the last 24 hours."""
+        from . import appsettings
         dati = self._read()
-        if chiave not in EVENTS or chiave not in dati.get("events", list(EVENTS)) or not self.channels(dati):
+        if chiave not in EVENTS or chiave not in dati.get("events", list(EVENTS)) or not self.all_channels():
             return {}
+        app = appsettings.load(self.data_dir)
         adesso = quando or time.time()
         nome = f"{chiave}:{gruppo}"
         ultimo = dati.get("sent", {}).get(nome)
-        if ultimo is not None and adesso - float(ultimo) < REPEAT_SECONDS:
+        if ultimo is not None and adesso - float(ultimo) < app["alert_repeat_hours"] * 3600:
             return {}
-        esiti = self.send(f"{EVENTS[chiave]} on {socket.gethostname()}", dettaglio)
+        it = app["alert_lang"] == "it"
+        pc = app["pc_label"] or socket.gethostname()
+        titolo = f"{EVENTS_IT.get(chiave, EVENTS[chiave])} su {pc}" if it else f"{EVENTS[chiave]} on {pc}"
+        if appsettings.in_quiet(app["alert_quiet"], adesso):
+            appsettings.log_alert(self.data_dir, chiave, titolo, {}, "quiet hours")
+            return {}
+        canali = app["alert_routes"].get(chiave)
+        esiti = self.send(titolo, dettaglio, solo=canali if canali is not None else None, evento=chiave)
         if any(v == "ok" for v in esiti.values()):
             dati = self._read()
             dati.setdefault("sent", {})[nome] = adesso

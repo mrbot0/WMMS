@@ -56,6 +56,9 @@ def catalog(data_dir: Path, fetch: Optional[Callable[[], bytes]] = None, force: 
             pass
 
     def scarica() -> bytes:
+        from . import appsettings
+        if not appsettings.allowed(data_dir, "kev"):
+            raise OSError("the CISA catalog download is turned off (Settings › Connections)")
         richiesta = urllib.request.Request(FEED, headers={"User-Agent": "WindowsMaintenanceManager"})
         with urllib.request.urlopen(richiesta, timeout=30) as risposta:  # noqa: S310 (fixed https URL)
             return risposta.read(MAX_BYTES)

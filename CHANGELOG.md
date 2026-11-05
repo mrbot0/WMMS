@@ -3,6 +3,43 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.9.0 — 2026-11-05
+
+**Accounts, roles and permissions, and much richer settings.**
+
+### Users and roles (40 functions, page `#/users`, `wmm/agent/accounts.py`, `wmm/server/accounts_api.py`)
+
+Users: 1 list with search, 2 filter by role, 3 filter by state, 4 create (own or temporary password), 5 edit, 6 delete, 7 copy (role, access
+hours, expiry, language, new temporary password), 8 enable / disable, 9 temporary password, 10 force a new password at the next sign-in,
+11 unlock after wrong passwords, 12 reset two-step verification, 13 sign out everywhere, 14 access hours per weekday (also across midnight),
+15 account expiry, 16 alert contacts (e-mail, Telegram) per user, 17 language per user, 18 notes, 19 details with open sessions,
+20 sign-in history, 21 activity from the audit log, 22 bulk enable / disable / role / unlock / expiry / sign out / delete, 23 CSV export,
+24 CSV import with temporary passwords. Roles: 25 list with members count, 26 create from a template or another role, 27 edit,
+28 permission matrix of pages (what the role sees), 29 tools per area and risk (report, safe, moderate, high), 30 capabilities (schedules,
+scripts, registry, processes, services, apps, other PCs, phone, assistant, alerts, settings, backup, users, roles, sessions, audit),
+31 copy, 32 compare two roles, 33 delete with reassignment of the members, 34 reset a built-in role, 35 export as JSON, 36 import,
+37 two-step verification required per role, 38 members of a role, 39 open sessions of everyone with sign-out, 40 audit log with filters,
+paging, CSV export and pruning.
+
+Five built-in roles (Administrator, Technician, Operator, Viewer, Auditor); Administrator always has every permission and at least one
+active user keeps the right to manage users and roles. Passwords: scrypt hashes, policy, history; sessions: SHA-256 hashes of random
+tokens with idle and absolute timeouts; two-step: TOTP (RFC 6238) with the secret encrypted by DPAPI and codes never accepted twice.
+Every API route has a permission (`wmm/server/permissions.py`): an unlisted write needs an administrator. Runs are checked tool by tool.
+
+### Settings (40 functions, `wmm/web/js/settings29.js`, `wmm/agent/appsettings.py`)
+
+My account: 1 profile, 2 change password, 3 two-step set-up and removal, 4 my sessions and sign-out of the others, 5 sign out.
+Accounts and security: 6 turn accounts on (first administrator) and off, 7 password length and characters, 8 password history,
+9 password expiry, 10 lockout after wrong passwords, 11 idle timeout, 12 maximum session length, 13 one session per user,
+14 two-step for administrators, 15 audit retention. E-mail, Telegram, webhook: 16 SMTP presets for 10 providers, 17 Telegram bot check,
+18 Telegram chat detection, 19 a test per channel, 20 webhook for Teams, Slack, Discord or JSON, 21 channels per alert, 22 repeat interval,
+23 quiet hours, 24 alerts in Italian, 25 subject prefix, 26 alerts to the users of chosen roles, 27 history of sent alerts.
+App and connections: 28 organization name, 29 PC name in alerts, 30 console port, 31 language of new users, 32 update check at start,
+33 proxy with exceptions, 34 offline mode and a switch per service, 35 allowed networks for the phone console and the PC sharing.
+Runs and safety: 36 maintenance window for scheduled fixes, 37 lock on high-risk tools, 38 reason or ticket before changes,
+39 confirmation with the PC name. Data and backup: 40 retention per kind of data, database check and compaction, backup and restore of
+the configuration (no secrets), reset per group, diagnostic file, and who changed the settings.
+
 ## 2.8.0 — 2026-11-05
 
 **Blue screens explained, a way back to a good day and the console on your phone.**

@@ -42,10 +42,12 @@
     title: "Settings",
     sections: SECTIONS,
     render: function (el, App) {
-      return Promise.all([API.get("/settings"), API.get("/schedules"), API.get("/health"), API.get("/agent/autostart")]).then(function (r) {
+      return Promise.all([API.get("/settings"), API.get("/schedules").catch(function () { return { installation: {} }; }),
+        API.get("/health").catch(function () { return { checks: [], summary: { ok: 0, warning: 0, error: 0 } }; }), API.get("/agent/autostart").catch(function () { return {}; })]).then(function (r) {
         var s = r[0], inst = r[1].installation || {}, info = App.state.info, hc = r[2], auto = r[3];
         var active = (/[?&]s=(\w+)/.exec(location.hash) || [])[1] || store("settingsSection") || "general";
-        if (!SECTIONS.some(function (x) { return x[0] === active; })) active = "general";
+        var sezioni = SECTIONS.concat(window.Settings29 ? Settings29.sections() : []);  // 2.9: account, security, channels, app, runs, data
+        if (!sezioni.some(function (x) { return x[0] === active; })) active = "general";
         App.setSubtitle("Preferences of this console and of this PC");
         var theme = Components.theme.get(), dashHidden = store("dashHidden") || [];
         var quiet = Object.assign({ on: false, from: "22:00", to: "07:00" }, store("quietHours") || {});
@@ -209,13 +211,14 @@
               '<button class="btn btn-sm" type="button" id="health-again">' + UI.icon("refresh") + "Run again</button>")
         };
 
+        if (window.Settings29) Settings29.sections().forEach(function (x) { body[x[0]] = Settings29.body(x[0]); });
         el.innerHTML = UI.pageHeader("Settings", "Pick a section on the left; every change is saved at once", "") +
           '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">' +
           '<label class="dt-search settings-search">' + UI.icon("search") + '<span class="sr-only">Search settings</span><input type="search" id="settings-q" placeholder="Search settings…"></label>' +
-          '<p class="muted small settings-noresult" hidden>No setting matches.</p>' + SECTIONS.map(function (x) {
+          '<p class="muted small settings-noresult" hidden>No setting matches.</p>' + sezioni.map(function (x) {
             return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
               UI.icon(x[2]) + '<span><strong>' + esc(x[1]) + '</strong><span class="cell-sub">' + esc(x[3]) + "</span></span></button>";
-          }).join("") + "</nav>" + '<div class="settings-panels">' + SECTIONS.map(function (x) {
+          }).join("") + "</nav>" + '<div class="settings-panels">' + sezioni.map(function (x) {
             var reset = SECTION_KEYS[x[0]] ? '<div class="section-reset"><button type="button" class="btn btn-sm btn-ghost" data-reset-section="' + x[0] + '" data-title="' + esc(x[1]) + '">' +
               UI.icon("refresh") + "Reset this section</button></div>" : "";
             return '<section class="settings-panel stack" data-panel="' + x[0] + '"' + (x[0] === active ? "" : " hidden") + ">" + body[x[0]] + reset + "</section>";
@@ -283,6 +286,7 @@
         /* ---------- switches ---------- */
         var on = function (id, fn) { el.querySelector("#" + id).addEventListener("change", function (e) { fn(e.target.checked, e.target); }); };
         if (window.AlertsPanel) AlertsPanel.mount(el.querySelector("#remote-alerts"));
+        if (window.Settings29) Settings29.mount(el);
         if (window.Insights28) Insights28.digest(el.querySelector("#remote-digest"));
         if (window.UpdatesPanel) UpdatesPanel.mount(el.querySelector("#program-updates"));
         on("contrast", function (v) { store("contrast", v); App.applyLook(); });

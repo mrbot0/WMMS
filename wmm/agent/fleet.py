@@ -330,7 +330,16 @@ def summary_server(fleet: Fleet, porta: int, riassunto: Callable[[], dict], runs
             h = self.headers
             return fleet.accepts_signed(self.command, self.path, h.get(TIME_HEADER, ""), h.get(NONCE_HEADER, ""), corpo, h.get(SIG_HEADER, ""))
 
+        def _allowed_network(self) -> bool:
+            from . import appsettings  # Settings › App and connections › Allowed networks (2.9)
+            if appsettings.lan_allowed(fleet.path.parent, self.client_address[0]):
+                return True
+            self._answer(403, {"error": "This network is not allowed."})
+            return False
+
         def do_GET(self):  # noqa: N802 - name required by BaseHTTPRequestHandler
+            if not self._allowed_network():
+                return
             if self.path.startswith(RUN_PATH + "/") and runs is not None:
                 if fleet.share()["remote_runs"] == "off" or not self._signed(b""):
                     self._answer(403, {"error": "Remote runs are not allowed on this PC, or the signature is wrong."})
@@ -353,6 +362,8 @@ def summary_server(fleet: Fleet, porta: int, riassunto: Callable[[], dict], runs
                 self._answer(403, {"error": "Wrong key or signature."})
 
         def do_POST(self):  # noqa: N802
+            if not self._allowed_network():
+                return
             if self.path != RUN_PATH or runs is None:
                 self._answer(405, {"error": "Read-only."})
                 return

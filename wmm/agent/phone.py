@@ -192,7 +192,8 @@ def phone_server(telefoni: Phones, porta: int, riassunto: Callable[[], dict], pr
                 ip = ipaddress.ip_address(self.client_address[0])
             except ValueError:
                 return False
-            return ip.is_private or ip.is_loopback or ip.is_link_local
+            from . import appsettings  # Settings › App and connections › Allowed networks (2.9)
+            return (ip.is_private or ip.is_loopback or ip.is_link_local) and appsettings.lan_allowed(telefoni.path.parent, str(ip))
 
         def _device(self, corpo: bytes) -> Optional[str]:
             h = self.headers
