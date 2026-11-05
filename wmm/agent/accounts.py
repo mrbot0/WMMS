@@ -386,14 +386,18 @@ class Accounts:
         return self.create_role({"name": nome or f"{ruolo['name']} (copy)", "description": ruolo["description"], "color": ruolo["color"],
                                  "permissions": ruolo["permissions"], "require_2fa": ruolo["require_2fa"]}, by, actor)
 
-    def delete_role(self, role_id: str, reassign: Optional[str] = None, by: str = "") -> dict:
+    def delete_role(self, role_id: str, reassign: Optional[str] = None, by: str = "", actor: Optional[dict] = None) -> dict:
         ruolo = self.get_role(role_id)
         if ruolo["builtin"]:
             raise AccountError("Built-in roles cannot be deleted: change them or reset them.", 409)
+        if actor is not None and actor.get("role_id") == role_id:
+            raise AccountError("You cannot delete your own role.", 403)
         if ruolo["users"]:
             if not reassign or reassign == role_id:
                 raise AccountError(f"{ruolo['users']} users have this role: choose the role they move to.", 409)
             nuovo = self.get_role(reassign)
+            check_grant(actor, nuovo["permissions"])  # moving people is granting them the new role
+            check_grant(actor, ruolo["permissions"])  # and only for roles not above the actor
             with self._db() as db:
                 db.execute("UPDATE users SET role_id = ?, updated = ? WHERE role_id = ?", (nuovo["id"], now_iso(), role_id))
         with self._db() as db:

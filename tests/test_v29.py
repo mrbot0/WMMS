@@ -331,6 +331,19 @@ class SecurityReview(Temp):
             self.acc.create_role({"name": "Sneaky", "permissions": ["registry.edit"]}, actor=hr)
         self.assertEqual(self.acc.create_user({"username": "intern", "role_id": ruolo["id"]}, actor=hr)["role_id"], ruolo["id"])
 
+    def test_deleting_a_role_cannot_move_people_above_the_actor(self):
+        self.acc.create_user({"username": "hr", "role_id": "technician", "password": "Human!Res2026"})
+        persone = self.acc.create_role({"name": "People", "permissions": ["view.dashboard", "view.users", "users.view", "users.manage", "roles.manage"]})
+        piccolo = self.acc.create_role({"name": "Small", "permissions": ["view.dashboard"]})
+        self.acc.create_user({"username": "temp1", "role_id": piccolo["id"]})
+        self.acc.update_user(self.acc.users(q="hr")[0]["id"], {"role_id": persone["id"]})
+        hr = self.acc.session(self.acc.login("hr", "Human!Res2026")["token"])
+        with self.assertRaises(A.AccountError):
+            self.acc.delete_role(piccolo["id"], reassign="admin", actor=hr)
+        with self.assertRaises(A.AccountError):
+            self.acc.delete_role(persone["id"], reassign="viewer", actor=hr)  # your own role
+        self.assertEqual(self.acc.delete_role(piccolo["id"], reassign=persone["id"], actor=hr)["moved"], 1)
+
     def test_backup_restore_respects_permissions(self):
         lettore = {"permissions": ["settings.edit"]}
         esito = appsettings.import_config(self.dir, {"format": "wmm-config/1", "app_settings": {"org_name": "ACME"},

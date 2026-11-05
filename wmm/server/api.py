@@ -1329,8 +1329,11 @@ class Handler(AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
         self._json(200, self.agent.routines_catalog())
 
     def update_schedule(self, query, schedule_id):
+        corpo = self._body()
+        if set(corpo) - {"enabled"}:  # only on and off: the action of a schedule never changes after it is created
+            raise ApiError(400, "Only 'enabled' can be changed: delete the schedule and create a new one.")
         self._check_schedule_tools((self.agent.store.schedule(int(schedule_id)) or {}).get("action_id"))
-        self.agent.update_schedule(int(schedule_id), self._body())
+        self.agent.update_schedule(int(schedule_id), corpo)
         self._json(200, {"ok": True})
 
     def delete_schedule(self, query, schedule_id):

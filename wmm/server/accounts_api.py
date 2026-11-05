@@ -187,7 +187,7 @@ class AccountsHandler:
         self._json(200, self._call(self._acc.update_role, role_id, self._body(), self._by(), self.user))
 
     def role_delete(self, query, role_id):
-        self._json(200, self._call(self._acc.delete_role, role_id, query.get("reassign") or None, self._by()))
+        self._json(200, self._call(self._acc.delete_role, role_id, query.get("reassign") or None, self._by(), self.user))
 
     def role_copy(self, query, role_id):
         self._json(201, self._call(self._acc.copy_role, role_id, str(self._body().get("name", "")), self._by(), self.user))
