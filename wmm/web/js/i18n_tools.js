@@ -906,5 +906,10 @@ window.I18N_TOOLS = {
 "Compliance with the business workstation baseline": "Conformità al profilo della postazione aziendale",
 "Reads every check of the business workstation baseline and gives the percentage that complies, with the checks to fix.": "Legge ogni controllo del profilo della postazione aziendale e dà la percentuale conforme, con i controlli da correggere.",
 "Windows Update compliance": "Conformità di Windows Update",
-"Pending updates with their severity, the age of the last installed update and the update policy in force.": "Aggiornamenti in attesa con la loro gravità, l'età dell'ultimo aggiornamento installato e il criterio di aggiornamento in vigore."
+"Pending updates with their severity, the age of the last installed update and the update policy in force.": "Aggiornamenti in attesa con la loro gravità, l'età dell'ultimo aggiornamento installato e il criterio di aggiornamento in vigore.",
+"Update programs with winget (with exceptions)": "Aggiorna i programmi con winget (con eccezioni)",
+"Updates every desktop program winget knows, except those listed in Settings › Automation (for example a program whose new version breaks something). Schedule it every night or when the PC is idle.": "Aggiorna ogni programma desktop che winget conosce, tranne quelli elencati in Impostazioni › Automazione (per esempio un programma la cui nuova versione rompe qualcosa). Pianificalo ogni notte o quando il PC è inattivo.",
+"Programs that are open may be closed while they update.": "I programmi aperti potrebbero essere chiusi durante l'aggiornamento.",
+"Copy your files to a disk or NAS": "Copia i tuoi file su un disco o un NAS",
+"Copies Documents, Desktop and Pictures (or the folders chosen in Settings › Backup of your files) to another disk or a NAS. Only new and changed files are copied; nothing is deleted at the destination. Schedule it every day.": "Copia Documenti, Desktop e Immagini (o le cartelle scelte in Impostazioni › Backup dei tuoi file) su un altro disco o un NAS. Vengono copiati solo i file nuovi e modificati; nella destinazione non si cancella nulla. Pianificalo ogni giorno."
 };

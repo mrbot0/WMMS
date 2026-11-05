@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import baselines, boot, canary, crashes, digest, drift, early_warning, kev, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
+from . import baselines, boot, canary, crashes, digest, drift, early_warning, kev, plus212, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -33,7 +33,7 @@ class Action:
         return data
 
 
-_ACTIONS = (
+_ACTIONS: Tuple[Action, ...] = (
     Action("cleanup.temp", "cleanup", "Temporary files and caches",
            "Removes temporary files older than 3 days, shader caches, Windows Update download cache and Delivery Optimization cache.",
            "safe", 3, tools.clean_temp),
@@ -1126,6 +1126,16 @@ _ACTIONS += (
     Action("updates.update_compliance", "updates", "Windows Update compliance",
            "Pending updates with their severity, the age of the last installed update and the update policy in force.", "safe", 1,
            updatepolicy.compliance_report),
+)
+# ---------- 2.12 ----------
+_ACTIONS += (
+    Action("updates.winget_nightly", "updates", "Update programs with winget (with exceptions)",
+           "Updates every desktop program winget knows, except those listed in Settings › Automation (for example a program whose new version "
+           "breaks something). Schedule it every night or when the PC is idle.", "moderate", 15, plus212.winget_nightly,
+           "Programs that are open may be closed while they update."),
+    Action("storage.user_backup", "storage", "Copy your files to a disk or NAS",
+           "Copies Documents, Desktop and Pictures (or the folders chosen in Settings › Backup of your files) to another disk or a NAS. Only new and "
+           "changed files are copied; nothing is deleted at the destination. Schedule it every day.", "safe", 10, plus212.user_backup),
 )
 WATCH_210 = ("security.canary_watch", "security.compliance_report", "updates.update_compliance")
 WATCH_28 = ("integrity.bsod_explained", "startup.slow_boot", "integrity.early_warning", "security.suspicious_programs", "integrity.periodic_report")

@@ -37,6 +37,8 @@ DEFAULTS: Dict[str, object] = {
     # alerts
     "alert_lang": "en", "alert_prefix": "", "alert_repeat_hours": 24, "alert_quiet": {"enabled": False, "from": "22:00", "to": "07:00"},
     "alert_routes": {}, "alert_roles": [], "webhook_url": "", "webhook_kind": "generic",
+    # automation (2.12)
+    "automation_rules": [], "goals": [], "winget_exclusions": [], "file_backup": {"target": "", "folders": ["Documents", "Desktop", "Pictures"]},
 }
 SECTIONS = {
     "app": ["org_name", "pc_label", "console_port", "default_user_lang", "update_check_on_start"],
@@ -46,6 +48,7 @@ SECTIONS = {
     "security": ["https_lan", "encrypt_data"],
     "data": ["retention"],
     "alerts": ["alert_lang", "alert_prefix", "alert_repeat_hours", "alert_quiet", "alert_routes", "alert_roles", "webhook_url", "webhook_kind"],
+    "automation": ["automation_rules", "goals", "winget_exclusions", "file_backup"],
 }
 SERVICES = ("update_check", "kev", "virustotal", "assistant", "telegram", "webhook")
 CHANNELS = ("email", "telegram", "webhook")
@@ -105,6 +108,20 @@ def _window(v, campo: str) -> dict:
 def validate(chiave: str, v, accounts=None):
     if chiave not in DEFAULTS:
         raise SettingsError(f"Unknown setting: {chiave}")
+    if chiave in SECTIONS["automation"]:  # 2.12
+        from . import actions, notify, plus212
+        try:
+            if chiave == "automation_rules":
+                return plus212.clean_rules(v, actions.CATALOG, notify.EVENTS)
+            if chiave == "goals":
+                return plus212.clean_goals(v)
+            if chiave == "file_backup":
+                return plus212.backup_settings_clean(v if isinstance(v, dict) else {})
+        except ValueError as e:
+            raise SettingsError(str(e)) from None
+        if not isinstance(v, list) or len(v) > 200 or any(not isinstance(x, str) or not re.fullmatch(r"[\w.\-+]{2,100}", x) for x in v):
+            raise SettingsError("winget IDs, one per line (for example 7zip.7zip).")
+        return sorted(set(v))
     base = DEFAULTS[chiave]
     if isinstance(base, bool):
         if not isinstance(v, bool):

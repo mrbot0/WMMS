@@ -31,6 +31,7 @@ EVENTS = {
     "early_warning": "Signs that a part of the PC may fail soon",
     "ransomware_canary": "Decoy files were touched: possible ransomware",
     "auto_rollback": "A fix made things worse and was undone",
+    "goal_missed": "A goal of this PC is not met",
 }
 EVENTS_IT = {
     "run_failed": "Un'esecuzione pianificata non è riuscita", "disk_low": "Il disco di sistema è quasi pieno",
@@ -39,6 +40,7 @@ EVENTS_IT = {
     "connection_down": "La connessione a internet è caduta", "early_warning": "Segni che una parte del PC potrebbe guastarsi presto",
     "ransomware_canary": "File trappola toccati: possibile ransomware",
     "auto_rollback": "Una correzione ha peggiorato le cose ed è stata annullata",
+    "goal_missed": "Un obiettivo di questo PC non è rispettato",
 }
 SECRETS = ("telegram_token", "smtp_password")
 FIELDS = {
@@ -252,6 +254,12 @@ class Notifier:
         """An alert for one event, unless it is turned off or the same alert went out in the last 24 hours."""
         from . import appsettings
         dati = self._read()
+        if chiave in EVENTS:  # rules "when this happens, run a tool" (2.12) work also without alert channels
+            try:
+                from . import plus212
+                plus212.enqueue(self.data_dir, chiave)
+            except Exception:  # noqa: BLE001 - alerts never fail because of a rule
+                pass
         if chiave not in EVENTS or chiave not in dati.get("events", list(EVENTS)) or not self.all_channels():
             return {}
         app = appsettings.load(self.data_dir)

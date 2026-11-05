@@ -1,6 +1,6 @@
 # Windows Maintenance Manager — Manuale dell'amministratore
 
-Versione 2.11. Questo manuale spiega come installare l'app in azienda, accendere gli account e i ruoli, collegare l'accesso aziendale (Microsoft Entra ID o Active Directory), usare il server centrale (anche con più clienti) e spostarlo su un altro PC.
+Versione 2.12. Questo manuale spiega come installare l'app in azienda, accendere gli account e i ruoli, collegare l'accesso aziendale (Microsoft Entra ID o Active Directory), usare il server centrale (anche con più clienti) e spostarlo su un altro PC.
 
 ## 1. Requisiti
 
@@ -21,7 +21,7 @@ Ogni release su GitHub contiene `WindowsMaintenanceManager-<versione>.msi`. È c
 Installazione silenziosa:
 
 ```
-msiexec /i WindowsMaintenanceManager-2.11.0.msi /qn CONFIG="\\server\share\wmm-config.json" BACKGROUND=1
+msiexec /i WindowsMaintenanceManager-2.12.0.msi /qn CONFIG="\\server\share\wmm-config.json" BACKGROUND=1
 ```
 
 | Proprietà | Significato |
@@ -154,7 +154,23 @@ I database `dati\wmm.db`, `dati\accounts.db` e `dati\central.db` hanno una versi
 
 Un database scritto da una versione più recente dell'app non viene modificato. Le versioni e le copie si vedono in Impostazioni › Dati.
 
-## 10. Dove sono i dati
+## 10. Novità 2.12 per l'amministratore
+
+- **Impostazioni › Panoramica**: lo stato di account, avvisi, installazione, regole delle esecuzioni, cifratura, aggiornamenti, backup e automazione, con il link a ogni sezione.
+- **Automazione**:
+  - regole "quando succede questo, avvia uno strumento": solo strumenti sicuri, al massimo una volta ogni 30 minuti;
+  - obiettivi con l'avviso *Obiettivo non rispettato*;
+  - programmi che winget non deve aggiornare.
+- **Backup dei tuoi file**: copia su un altro disco o su un NAS (strumento *Copia i tuoi file su un disco o un NAS*, da pianificare ogni giorno). Non cancella mai nulla nella destinazione.
+- **Utenti e ruoli**:
+  - ruoli temporanei che tornano da soli al ruolo precedente;
+  - **revisione degli accessi**, registrata nel registro di controllo con "Segna come rivisto".
+- **Centro aziendale**:
+  - **campagne** con scadenza e avanzamento, con le stesse regole dei lavori (rischio, approvazioni, motivo);
+  - i PC che richiedono attenzione per primi.
+- **Pianificazioni quando il PC è inattivo**: si avviano dopo 10 minuti senza uso, o dopo l'attesa scelta.
+
+## 11. Dove sono i dati
 
 | Cosa | Dove |
 |---|---|

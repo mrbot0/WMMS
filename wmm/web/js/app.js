@@ -41,12 +41,28 @@
     return "";
   }
 
+  // 2.12 simple mode: the pages for experts stay out of the menu (they still open from a link or the search).
+  var EXPERT = ["events", "processes", "registry", "netscan", "scripts", "fleet", "enterprise", "users", "playbooks"];
+  function simpleMode() { return !!Components.store("simpleMode"); }
+  function quickNav(page) {
+    var pinned = (Components.store("pinnedPages") || []).filter(function (p) { return window.Pages[p] && Auth.canSee(p); });
+    var recent = (Components.store("recentPages") || []).filter(function (p) { return window.Pages[p] && Auth.canSee(p) && pinned.indexOf(p) < 0 && p !== page; }).slice(0, 3);
+    if (!pinned.length && !recent.length) return "";
+    var item = function (p, mark) {
+      return '<a href="#/' + p + '" class="nav-item nav-quick' + (p === page ? " active" : "") + '"' + (p === page ? ' aria-current="page"' : "") + ' title="' + esc(pageTitle(p)) + '">' +
+        UI.icon(p) + '<span class="nav-label">' + esc(pageTitle(p)) + "</span>" + (mark ? '<span class="nav-pin" aria-hidden="true">★</span>' : "") + "</a>";
+    };
+    return '<div class="nav-group nav-group-quick"><span class="nav-group-link">' + (pinned.length ? "Pinned and recent" : "Recent") + "</span></div>" +
+      pinned.map(function (p) { return item(p, true); }).join("") + recent.map(function (p) { return item(p, false); }).join("");
+  }
+
   function renderNav() {
     var page = current(), folded = Components.store("navFolded") || [];
-    document.getElementById("nav").innerHTML = NAV.map(function (group) {
+    document.body.classList.toggle("simple-mode", simpleMode());
+    document.getElementById("nav").innerHTML = quickNav(page) + NAV.map(function (group) {
       // The category title opens its hub page; the chevron folds its pages away (remembered).
       var hub = "cat-" + group[2], isFolded = folded.indexOf(group[2]) >= 0 && group[1].every(function (i) { return i[0] !== page; });
-      var items = group[1].filter(function (i) { return Auth.canSee(i[0]); });
+      var items = group[1].filter(function (i) { return Auth.canSee(i[0]) && (!simpleMode() || EXPERT.indexOf(i[0]) < 0 || i[0] === page); });
       if (!items.length) return "";
       return '<div class="nav-group' + (page === hub ? " active" : "") + '"><a href="#/' + hub + '" class="nav-group-link"' + (page === hub ? ' aria-current="page"' : "") +
         ' title="Open ' + esc(group[0]) + '">' + esc(group[0]) + '</a><button type="button" class="nav-fold" data-fold="' + group[2] + '" aria-expanded="' + !isFolded +
@@ -170,6 +186,7 @@
       // First visit: a short "how this page works" tip; at the bottom, the neighbours in the same category.
       var tip = Guides.tip(name);
       if (tip) content.insertAdjacentHTML("afterbegin", tip);
+      if (window.Plus212) Plus212.decorate(name, content, App);
       content.insertAdjacentHTML("beforeend", Hubs.pager(name));
       Components.countUp(content);
       if (arriving) {

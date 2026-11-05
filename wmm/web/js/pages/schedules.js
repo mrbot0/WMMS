@@ -3,7 +3,7 @@
   "use strict";
   window.Pages = window.Pages || {};
   var esc = UI.esc;
-  var KIND = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly", startup: "At startup", logon: "At sign-in" };
+  var KIND = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly", startup: "At startup", logon: "At sign-in", idle: "When the PC is idle" };
   var SYNC = { ok: ["ok", "In sync"], missing: ["error", "Task missing"], path_changed: ["warning", "Program moved"] };
   var GROUP_ICON = { "At startup": "power", "At sign-in": "user", "Every day": "clock", "Every week": "calendar", "Every month": "calendar", "Playbooks": "playbooks" };
   var when = UI.scheduleText;
@@ -79,11 +79,11 @@
   function agenda(list, scripts) {
     var from = new Date(), to = new Date(from.getTime() + AGENDA_DAYS * 86400e3), rows = [], events = 0;
     list.filter(function (s) { return s.enabled; }).forEach(function (s) {
-      if (s.kind === "startup" || s.kind === "logon") { events++; return; }
+      if (s.kind === "startup" || s.kind === "logon" || s.kind === "idle") { events++; return; }
       occurrences(s, from, to).forEach(function (t) { rows.push({ t: t, title: s.title }); });
     });
     scripts.filter(function (s) { return s.schedule; }).forEach(function (s) {
-      if (s.schedule.kind === "startup" || s.schedule.kind === "logon") { events++; return; }
+      if (s.schedule.kind === "startup" || s.schedule.kind === "logon" || s.schedule.kind === "idle") { events++; return; }
       occurrences(s.schedule, from, to).forEach(function (t) { rows.push({ t: t, title: s.name + " (script)" }); });
     });
     rows.sort(function (a, b) { return a.t - b.t; });
@@ -219,7 +219,7 @@
         var next = enabled.map(function (s) { return s.next_run; }).filter(Boolean).sort()[0];
         var issues = list.filter(function (s) { return s.sync !== "ok"; }).length;
         var routineCount = list.filter(function (s) { return s.routine; }).length;
-        var onEvent = enabled.filter(function (s) { return s.kind === "startup" || s.kind === "logon"; }).length;
+        var onEvent = enabled.filter(function (s) { return s.kind === "startup" || s.kind === "logon" || s.kind === "idle"; }).length;
         App.setSubtitle("Actions and routines that run automatically, even when the console is closed");
 
         var kpis = '<div class="grid grid-4">' +
@@ -241,7 +241,7 @@
               '<label class="switch" title="Enable or disable"><input type="checkbox" data-toggle="' + s.id + '"' + (s.enabled ? " checked" : "") + "><span></span></label>",
               '<div class="cell-title">' + (s.routine ? UI.icon("playbooks") : "") + esc(s.title) + '</div><div class="cell-sub">' + esc(sub) + " · " + esc(KIND[s.kind] || s.kind) + "</div>",
               UI.riskBadge(s.risk), esc(when(s)),
-              s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">' + (s.kind === "startup" ? "Next startup" : s.kind === "logon" ? "Next sign-in" : "—") + "</span>",
+              s.next_run ? esc(UI.formatDate(s.next_run)) : '<span class="cell-sub">' + (s.kind === "startup" ? "Next startup" : s.kind === "logon" ? "Next sign-in" : s.kind === "idle" ? "When the PC is idle" : "—") + "</span>",
               s.last_run ? UI.statusBadge(s.last_status) + ' <span class="cell-sub">' + esc(UI.relative(s.last_run)) + "</span>" : '<span class="cell-sub">Not run yet</span>',
               // What Windows itself says: the result of the last run of the task, which is the real proof it works.
               '<span class="badge badge-status-' + sync[0] + '">' + esc(sync[1]) + "</span>" + (s.task && s.sync === "ok"

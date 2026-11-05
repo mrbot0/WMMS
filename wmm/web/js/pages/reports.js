@@ -40,6 +40,7 @@
           '<div class="phrases" aria-label="Common phrases">' + PHRASES.map(function (p, i) {
             return '<button type="button" class="btn btn-sm btn-ghost" data-phrase="' + i + '" title="' + esc(p[1]) + '">+ ' + esc(p[0]) + "</button>";
           }).join("") + '</div><span class="muted small" id="notes-saved">The notes are kept in this browser until you clear them.</span>' +
+          '<div data-sections><span class="muted small">Sections: they appear after the first preview; untick those to leave out.</span></div>' +
           '<div class="page-actions">' +
           UI.button("Update preview", 'id="rep-preview"', "", "refresh") +
           UI.button("Download HTML", 'id="rep-html"', "btn-primary", "download") +
@@ -54,9 +55,14 @@
         "</div>" + UI.card("Preview", '<iframe class="report-frame" title="Report preview" sandbox="allow-same-origin"></iframe>') + "</div>";
 
       var form = el.querySelector("#report-form"), frame = el.querySelector("iframe");
+      el.querySelector("[data-sections]").addEventListener("change", function () {
+        var tolte = Array.prototype.filter.call(el.querySelectorAll("[data-sec]"), function (c) { return !c.checked; }).map(function (c) { return c.getAttribute("data-sec"); });
+        Components.store("reportHidden", tolte);
+        Report.build(form.scope.value, options()).then(function (html) { frame.srcdoc = html; });
+      });
       function options() {
         remember("technician", form.technician.value.trim());
-        return { technician: form.technician.value.trim(), notes: form.notes.value.trim(), since: form.since.value || null };
+        return { technician: form.technician.value.trim(), notes: form.notes.value.trim(), since: form.since.value || null, hide: Components.store("reportHidden") || [] };
       }
       function links() {
         var scope = form.scope.value;
@@ -67,7 +73,15 @@
       }
       function preview() {
         frame.srcdoc = '<p style="font-family:Segoe UI;padding:24px;color:#55606B">Building the report…</p>';
-        return Report.build(form.scope.value, options()).then(function (html) { frame.srcdoc = html; },
+        return Report.build(form.scope.value, Object.assign(options(), { hide: [] })).then(function (html) {
+          // 2.12: the sections of this report, each with a tick (unticked ones stay out of the preview and of the download).
+          var titoli = [], doc = new DOMParser().parseFromString(html, "text/html"), nascoste = Components.store("reportHidden") || [];
+          doc.querySelectorAll("section > h2").forEach(function (h) { var t = h.textContent.trim(); if (t && titoli.indexOf(t) < 0) titoli.push(t); });
+          var box = el.querySelector("[data-sections]");
+          box.innerHTML = titoli.length ? '<div class="check-list report-sections"><span class="muted small">Sections in the report</span>' + titoli.map(function (t) {
+            return '<label class="check"><input type="checkbox" data-sec="' + esc(t) + '"' + (nascoste.indexOf(t) < 0 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + "</div>" : "";
+          return Report.build(form.scope.value, options());
+        }).then(function (html) { frame.srcdoc = html; },
           function (e) { frame.srcdoc = '<p style="font-family:Segoe UI;padding:24px;color:#C42B1C">' + esc(e.message) + "</p>"; });
       }
       form.scope.addEventListener("change", function () { links(); preview(); });

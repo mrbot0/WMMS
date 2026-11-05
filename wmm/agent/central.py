@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS rings (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE
   feature_days INTEGER NOT NULL DEFAULT 0, target_version TEXT NOT NULL DEFAULT '', paused_until TEXT NOT NULL DEFAULT '', active_hours TEXT NOT NULL DEFAULT '8-18');
 CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, notes TEXT NOT NULL DEFAULT '', created TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tenant_access (username TEXT NOT NULL COLLATE NOCASE, tenant TEXT NOT NULL, PRIMARY KEY (username, tenant));
+CREATE TABLE IF NOT EXISTS campaigns (id TEXT PRIMARY KEY, name TEXT NOT NULL, batch TEXT NOT NULL, kind TEXT NOT NULL, deadline TEXT NOT NULL DEFAULT '',
+  created TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '');
 """
 # Versioned steps (2.11): never edit or reorder, only append. 2.10 is version 0; 2.11 adds the clients (tenants) of a
 # provider that manages the PCs of several companies: every PC and enrollment code belongs to one client, or to none.
@@ -426,6 +428,39 @@ class Server:
         with self._db() as db:
             visibili = None if scope is None else {x["id"] for x in self.agents(scope=scope)}
             return sum(db.execute("UPDATE agents SET ring = ? WHERE id = ?", (ident, a)).rowcount for a in agenti if visibili is None or a in visibili)
+
+    # ---------- campaigns (2.12) ----------
+
+    def create_campaign(self, nome: str, scadenza: str, destinatari: List[str], kind: str, payload: dict, by: str = "") -> dict:
+        """A job sent to many PCs with a name and a deadline, followed until every PC has done it."""
+        nome = str(nome or "").strip()
+        if not 2 <= len(nome) <= 80:
+            raise CentralError("Campaign name: 2-80 characters.")
+        if scadenza and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(scadenza)):
+            raise CentralError("Deadline as YYYY-MM-DD.")
+        lotto = self.queue(destinatari, kind, payload, by)
+        ident = "p" + secrets.token_hex(5)
+        with self._db() as db:
+            db.execute("INSERT INTO campaigns (id, name, batch, kind, deadline, created, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (ident, nome, lotto["batch"], kind, scadenza or "", now(), by))
+        return next(c for c in self.campaigns() if c["id"] == ident)
+
+    def campaigns(self, scope: Scope = None) -> List[dict]:
+        oggi = datetime.now().date().isoformat()
+        with self._db() as db:
+            righe = db.execute("SELECT * FROM campaigns ORDER BY created DESC LIMIT 100").fetchall()
+            stati = db.execute("SELECT j.batch, j.status, a.tenant FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE j.batch IN "
+                               "(SELECT batch FROM campaigns)").fetchall()
+        fuori = []
+        for c in righe:
+            mie = [s for s in stati if s["batch"] == c["batch"] and (scope is None or s["tenant"] in scope)]
+            if scope is not None and not mie:
+                continue
+            conta = {k: sum(1 for s in mie if s["status"] == k) for k in ("queued", "sent", "done", "error", "cancelled")}
+            totale = len(mie)
+            fuori.append(dict(c, total=totale, **conta, percent=round(100 * conta["done"] / totale) if totale else 0,
+                              overdue=bool(c["deadline"]) and c["deadline"] < oggi and conta["queued"] + conta["sent"] > 0))
+        return fuori
 
     # ---------- clients (tenants, 2.11) ----------
 

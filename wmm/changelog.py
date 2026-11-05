@@ -2,6 +2,22 @@
 
 CHANGELOG = [
     {
+        "version": "2.12.0",
+        "date": "2026-11-05",
+        "title": "Settings reorganized, a refreshed console and thirty everyday features",
+        "highlights": [
+            "Settings in six groups (Personal, Alerts, Maintenance, Security and access, Organization, System and data) with clearer names and an Overview that shows at a glance what is missing.",
+            "Why is the PC slow right now, when the disk will be full, a folder map, duplicate and forgotten files, a step-by-step internet check, listening ports and browser extensions explained.",
+            "Rules (when something happens, run a tool), goals with an alert, schedules when the PC is idle, nightly program updates with exceptions and a copy of your files to a disk or NAS.",
+            "Every recommendation explains why, what it changes and how to undo it; tables can select rows, choose columns and save views.",
+        ],
+        "changes": [
+            "Company: campaigns with a deadline on the central server, PCs that need attention first, temporary roles that end by themselves, access review, diagnostic package for the technician, inventory label with a QR code.",
+            "Updates: end of support of this Windows and the calendar of the updates; reports: choose the sections to include.",
+            "Console: pinned and recent pages in the menu, simple mode, a calmer and clearer look; the README explains what WMM is and does.",
+        ],
+    },
+    {
         "version": "2.11.0",
         "date": "2026-11-05",
         "title": "Several clients on the central server, server backup and move, versioned databases",
