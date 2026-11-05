@@ -320,11 +320,18 @@ class HandlerEnterprise:
     def central_jobs_post(self, query):
         corpo = self._body()
         tipo, carico = corpo.get("kind"), corpo.get("payload") or {}
-        if tipo == "actions":
-            self._check_role_tools(carico.get("actions") or [])
-        elif tipo == "winget" and "deploy.manage" not in (self.user or {"permissions": ["deploy.manage"]})["permissions"]:
+        if tipo in ("actions", "baseline"):
+            ids = list(carico.get("actions") or []) if tipo == "actions" else (list(carico.get("checks") or []) if carico.get("fix") else [])
+            if ids:
+                noti = self._check_role_tools(ids)
+                if governance.needs_approval(self.agent.data_dir, self.user, noti):
+                    raise ApiError(409, "These tools need the approval of a second person: someone who may skip approvals must send this job.")
+                self._check_tools(ids, corpo)  # high-risk lock, reason, confirmation with the PC name
+        if tipo == "policy":
+            carico = dict(carico, ring=self._wrap(updatepolicy.clean_ring, carico.get("ring") or {}))
+        if tipo == "winget" and "deploy.manage" not in (self.user or {"permissions": ["deploy.manage"]})["permissions"]:
             raise ApiError(403, "Your role does not allow installing software.")
-        elif tipo == "policy" and "updates.policy" not in (self.user or {"permissions": ["updates.policy"]})["permissions"]:
+        if tipo == "policy" and "updates.policy" not in (self.user or {"permissions": ["updates.policy"]})["permissions"]:
             raise ApiError(403, "Your role does not allow update policies.")
         if tipo == "winget" and not deploy.valid_id(str(carico.get("id", ""))):
             raise ApiError(400, "Unknown winget ID.")

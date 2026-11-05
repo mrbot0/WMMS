@@ -638,10 +638,10 @@ class Client:
         risposta = (req or request)(d["server"], d["port"], d["fingerprint"], API + "/heartbeat", corpo, notify.unprotect(d["secret"]), d["agent_id"])
         self._pending = []
         _client_write(self.data_dir, last_contact=now(), last_error="", **({"inventory_at": now()} if "inventory" in corpo else {}))
-        if risposta.get("ring"):
+        if risposta.get("ring") and s["level"] == "all":  # the same rule as a "policy" job
             try:
                 from . import updatepolicy
-                updatepolicy.apply_ring(risposta["ring"], preview=False)
+                updatepolicy.apply_ring(updatepolicy.clean_ring(risposta["ring"]), preview=False)
             except Exception:  # noqa: BLE001 - recorded at the next job
                 pass
         for lavoro in risposta.get("jobs", []):

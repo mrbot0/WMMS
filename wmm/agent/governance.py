@@ -256,7 +256,10 @@ def create_token(acc, user: dict, nome: str, scopes: Optional[List[str]] = None,
         raise GovernanceError("Give the token a name (2 to 60 characters).")
     if isinstance(giorni, bool) or not isinstance(giorni, int) or not 0 <= giorni <= 730:
         raise GovernanceError("Expiry: 0 (never) to 730 days.")
-    scopes = sorted(set(scopes or []))
+    if user.get("token"):
+        raise GovernanceError("A token cannot create tokens.", 403)
+    # No scope chosen means the permissions the user has now, written down: never more later.
+    scopes = sorted(set(scopes or user.get("permissions", ())))
     oltre = [p for p in scopes if p not in user.get("permissions", ())]
     if oltre:
         raise GovernanceError("A token cannot have permissions its user does not have: " + ", ".join(oltre[:5]), 403)

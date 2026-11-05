@@ -139,6 +139,37 @@ class CompanySignIn(Temp):
         self.assertEqual(sso.map_role(["BUILTIN\\Administrators", "Users"], {"Users": "viewer", "Administrators": "admin"}, ""), "viewer")
 
 
+class SecurityReview210(Temp):
+    def test_tokens_cannot_mint_tokens_and_scopes_are_fixed(self):
+        me = self.me()
+        t = governance.create_token(self.acc, me, "narrow", ["view.dashboard"])
+        with self.assertRaises(governance.GovernanceError):
+            governance.create_token(self.acc, governance.token_user(self.acc, t["token"]), "wide", [])
+        pieno = governance.create_token(self.acc, me, "all", [])
+        self.assertEqual(sorted(pieno["scopes"]), sorted(me["permissions"]))
+
+    def test_issuer_always_checked(self):
+        with self.assertRaises(sso.SsoError):
+            sso.save(self.dir, {"issuer": "https://login.microsoftonline.com/common/v2.0"}, ["admin"])
+        with self.assertRaises(sso.SsoError):
+            sso.save(self.dir, {"issuer": "https://login.microsoftonline.com/organizations/v2.0"}, ["admin"])
+
+    def test_ring_needs_level_everything(self):
+        chiamate = []
+        cartella = self.dir / "ag"
+        cartella.mkdir()
+        central._client_write(cartella, server="h", port=1, fingerprint="AA", agent_id="a1", secret=__import__("wmm.agent.notify", fromlist=["x"]).protect("s"), level="safe")
+        client = central.Client(cartella, lambda j: {}, lambda: {}, "PC", "M", "2.10.0")
+        risposta = {"jobs": [], "ring": {"name": "Pilot", "quality_days": 3, "feature_days": 0, "active_hours": "8-18"}}
+        with mock.patch.object(updatepolicy, "apply_ring", side_effect=lambda r, preview: chiamate.append(r)), \
+                mock.patch.object(central, "collect_inventory", return_value={}):
+            client.contact(req=lambda *a: risposta)
+            self.assertEqual(chiamate, [])
+            central.set_client(cartella, level="all")
+            client.contact(req=lambda *a: risposta)
+        self.assertEqual(chiamate[0]["name"], "Pilot")
+
+
 class Https(unittest.TestCase):
     def test_certificate_and_pinning(self):
         import http.server

@@ -953,7 +953,7 @@ class Handler(HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPReque
             utente = governance.token_user(conti, intestazione[7:].strip())
             if utente is None:
                 raise ApiError(401, "Invalid or expired API token.")
-            if nome.startswith("auth_") and nome != "auth_me":
+            if (nome.startswith("auth_") and nome != "auth_me") or nome in ("tokens_get", "token_create", "token_delete"):
                 raise ApiError(403, "API tokens cannot sign in, change passwords or manage tokens.")
         else:
             utente = conti.session(self.headers.get("X-WMM-Session", ""))

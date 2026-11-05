@@ -69,6 +69,8 @@ def save(data_dir, valori: dict, ruoli: List[str]) -> dict:
         elif k == "issuer":
             if v and not re.fullmatch(r"https://[^\s]{8,300}", str(v)):
                 raise SsoError("The issuer is an https:// address (for Entra ID: https://login.microsoftonline.com/<tenant>/v2.0).")
+            if v and re.search(r"/(common|organizations|consumers)(/|$)", str(v)):
+                raise SsoError("Use the issuer of your tenant (https://login.microsoftonline.com/<tenant ID>/v2.0), not common or organizations.")
         elif k == "client_id":
             if v and not re.fullmatch(r"[\w.\-]{4,200}", str(v)):
                 raise SsoError("The client ID is the application (client) ID of the registration.")
@@ -155,7 +157,7 @@ def finish(data_dir, stato: str, code: str, post=None, now: Optional[float] = No
     c = claims(str(risposta.get("id_token", "")))
     adesso = now or time.time()
     aud = c.get("aud")
-    if c.get("iss", "").rstrip("/") != s["issuer"].rstrip("/") and not s["issuer"].startswith("https://login.microsoftonline.com/common"):
+    if c.get("iss", "").rstrip("/") != s["issuer"].rstrip("/"):
         raise SsoError("The ID token comes from another issuer.", 401)
     if s["client_id"] not in (aud if isinstance(aud, list) else [aud]):
         raise SsoError("The ID token is for another application.", 401)
