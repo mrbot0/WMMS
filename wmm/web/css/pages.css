@@ -52,3 +52,15 @@ mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3p
 /* Network scanner: the interface picker next to each scan button */
 .ns-iface { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); max-width: 100%; }
 .ns-iface select { min-height: 32px; max-width: min(520px, 100%); padding: 4px 8px; }
+
+/* 2.8: blue screens, good configuration, assistant */
+.ins-block { border-top: 1px solid var(--border, #e3e6eb); padding-top: 10px; margin-top: 10px; }
+.ins-block:first-of-type { border-top: 0; margin-top: 0; }
+.ins-block h3 { margin: 0 0 4px; font-size: 14px; }
+.gc-ops { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; margin: 8px 0; }
+.check-row { display: flex; gap: 8px; align-items: flex-start; }
+.as-log { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow: auto; margin-bottom: 10px; }
+.as-msg { padding: 10px 12px; border-radius: 10px; max-width: 92%; }
+.as-user { align-self: flex-end; background: var(--accent-soft, rgba(47, 111, 222, .12)); white-space: pre-wrap; }
+.as-bot { align-self: flex-start; background: var(--surface-2, rgba(127, 127, 127, .08)); }
+.as-prop { margin-top: 8px; }

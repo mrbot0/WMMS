@@ -45,7 +45,8 @@
           '<div class="grid grid-3">' + UI.card("Publishers", pubChart) + UI.card("Installs per year", yearChart) + UI.card("Largest applications", biggest) + "</div>" +
           '<div class="grid">' + UI.card("Installed applications", '<div id="apps-table"></div>', "", "card-flush") + "</div>" +
           '<div class="grid">' + UI.card("Third-party scheduled tasks", '<div id="tasks-table"></div>', "", "card-flush") + "</div>" +
-          '<div class="grid grid-2">' + parts.trend + parts.runs + "</div>";
+          '<div class="grid grid-2">' + parts.trend + parts.runs + "</div>" + '<div class="grid" id="ins-boot" data-tab-group="overview"></div>';
+        Insights28.boot(el.querySelector("#ins-boot"), App);
 
         Components.dataTable(el.querySelector("#startup-table"), {
           rows: items, exportName: "wmm-startup", placeholder: "Search startup programs…", sort: "name", pageSize: 15,

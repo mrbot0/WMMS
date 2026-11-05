@@ -3,6 +3,45 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.8.0 — 2026-11-05
+
+**Blue screens explained, a way back to a good day and the console on your phone.**
+
+- **Blue screens explained** (`wmm/agent/crashes.py`, `integrity.bsod_explained`, `GET /api/v1/integrity/crashes`, Integrity page): the stop
+  code and parameters read from the header of each dump in `C:\Windows\Minidump` (`PAGEDU64`/`PAGEDUMP`), plus the bugchecks of the System
+  log whose dump was deleted; 26 common codes explained in Italian and English with what to do and the tools that help; the drivers
+  installed (UserPnp 20001/20003) in the week before the first crash of each kind are listed as suspects.
+- **Who slows the startup** (`wmm/agent/boot.py`, `startup.slow_boot`, `GET /api/v1/startup/boot`, Startup page): Diagnostics-Performance
+  events 100-103, boot time trend (earlier against recent half), culprits ranked by seconds lost, matched with the startup entries so they
+  can be removed from startup and put back (the existing toggle, recorded in History). Needs administrator rights to read the log.
+- **Signs of a coming failure** (`wmm/agent/early_warning.py`, `integrity.early_warning`, `GET /api/v1/integrity/early-warning`): WHEA,
+  disk 7/11/51/153, storport resets 129, NTFS 55, Kernel-Power 41 and bugchecks of the last 7 days against the 4 weeks before, plus the
+  disk and battery forecasts of the daily trend; new alert `early_warning`.
+- **Back to the last good configuration** (`wmm/agent/goodconfig.py`, `/api/v1/security/good-config`, Security page): every check of
+  Suspicious changes keeps a dated copy (`dati/drift_snapshots/`, 90 days). A plan compares a day with now; each operation has its exact
+  opposite (Run values, startup files moved to quarantine, service start types, tasks disabled, hosts lines, proxy values, antivirus
+  exclusions). Only the ticked operations run, after a restore point, in one PowerShell process that receives them as base64 JSON;
+  the opposites are kept in `dati/goodconfig_last.json` for "Undo the return". What cannot be rebuilt is listed for a manual check,
+  with the undoable fixes run since that day.
+- **Suspicious programs** (`wmm/agent/suspicious.py`, `security.suspicious_programs`, `/api/v1/security/suspicious`): running processes,
+  Run keys, startup folders (shortcut targets), services and non-Microsoft tasks; Authenticode status, SHA-256, and flags for invalid
+  signatures, Windows names outside Windows, temporary/download/public folders, double extensions and encoded scripts at startup.
+  Optional VirusTotal lookups of the hashes of flagged files (your key, DPAPI-encrypted; at most 4 a check; cached 7 days).
+- **Console from the phone** (`wmm/agent/phone.py`, `wmm/web/phone.html`, `wmm/web/js/phone.js`, PCs page): a second port (default
+  8767) that answers only local addresses; a one-time 16-character code (80 bits, 10 minutes) is the secret of the phone, never sent:
+  every request is signed with HMAC-SHA256 (SHA-256 implemented in the page, since `crypto.subtle` needs HTTPS), with timestamp,
+  nonce and replay protection. Summary, open problems, reports and safe fixes only. Phones can be removed; firewall rule for the local
+  subnet only.
+- **Several PCs at once** (`fleet.start_batch`, `fleet.batch_status`, `/api/v1/fleet/batch`): the same reports or safe fixes on this PC and
+  the chosen PCs in parallel, one table of results and checks; each PC still decides what it accepts.
+- **Two real PCs in the tests** (`tests/fleet_peer.py`): the other PC runs in its own Python process with its own data folder, key and
+  port; the tests read its summary, run and refuse tools, replay a captured request and run a batch over TCP.
+- **Periodic report** (`wmm/agent/digest.py`, `integrity.periodic_report`, Settings › Notifications): the period since the last delivered
+  report (at most a month), in Italian or English, with a preview; sent with the alert channels.
+- **Assistant** (`wmm/agent/assistant.py`, `/api/v1/assistant`, Toolbox): optional; the official `anthropic` package (installed on request)
+  and your own API key (DPAPI). Claude Opus 5.5 with six tools: search problems and tools, guided diagnosis, read-only reports, the PC
+  summary and fix proposals that come back as buttons. Fixes are never run by the assistant; report output is treated as data.
+
 ## 2.7.0 — 2026-11-05
 
 **Guided diagnosis, your own tools and a console fully in Italian.**

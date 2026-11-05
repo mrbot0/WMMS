@@ -1349,4 +1349,5 @@ def make_server(agent: Agent, port: int) -> ThreadingHTTPServer:
     agent.port = server.server_address[1]
     agent.server = server
     agent.start_fleet_share()  # the read-only PC summary for other consoles, when turned on
+    agent.start_phone_server()  # the console from a phone of the local network, when turned on (2.8)
     return server

@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import drift, kev, tools, tools_extra, tools_extra2, tools_extra3, trends, watch
+from . import boot, crashes, digest, drift, early_warning, kev, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -1096,6 +1096,27 @@ _ACTIONS += (
            "the battery will hold less than 60%.", "safe", 0.3, trends.health_trend),
 )
 WATCH_27 = ("network.connection_watch", "security.drift_watch", "network.kev_report", "storage.health_trend")
+
+# ---------- 2.8: blue screens, slow startup, failure signs, suspicious programs, periodic report ----------
+_ACTIONS += (
+    Action("integrity.bsod_explained", "integrity", "Blue screens explained",
+           "Reads the stop code of every blue screen from its dump and from the System log, explains it in plain words, and lists the "
+           "drivers installed in the week before the first crash: the first suspects.", "safe", 0.5, crashes.bsod_explained),
+    Action("startup.slow_boot", "startup", "Who slows the startup",
+           "Boot times over the last 90 days and the programs, drivers and services Windows measured as slowing it, ranked by the seconds "
+           "they cost. Startup programs can be turned off from the Startup page.", "safe", 0.3, boot.slow_boot),
+    Action("integrity.early_warning", "integrity", "Signs of a coming failure",
+           "Counts hardware errors, disk retries and resets, file system damage, sudden power losses and blue screens week by week, adds the "
+           "disk and battery forecasts, and sends an alert when a sign is growing. Schedule it every day.", "safe", 0.3, early_warning.early_warning),
+    Action("security.suspicious_programs", "security", "Suspicious programs: signature and location",
+           "Checks the signature and location of every program running or starting with Windows, and flags what malware does: invalid "
+           "signatures, Windows names outside Windows, temporary folders, double extensions, hidden scripts.", "safe", 1,
+           suspicious.suspicious_programs),
+    Action("integrity.periodic_report", "integrity", "Periodic report by e-mail or Telegram",
+           "Sends a summary of the period since the last report: scores, fixes and their checks, failures, alerts, outages, suspicious "
+           "changes, blue screens and forecasts. Schedule it every week or month.", "safe", 0.3, digest.periodic_report),
+)
+WATCH_28 = ("integrity.bsod_explained", "startup.slow_boot", "integrity.early_warning", "security.suspicious_programs", "integrity.periodic_report")
 EXTRA_REPORTS = REPORTS_13 | {
     "performance.energy_report", "performance.sleep_study", "performance.power_requests", "performance.wake_report", "performance.uptime_report",
     "performance.startup_impact", "updates.drivers_report", "updates.old_drivers_report", "updates.usb_report", "updates.runtimes_report",
@@ -1104,7 +1125,7 @@ EXTRA_REPORTS = REPORTS_13 | {
     "security.rdp_report", "security.defender_exclusions_report", "security.antivirus_report", "security.vbs_report", "security.users_report",
     "security.certificates_report", "integrity.unexpected_shutdowns", "integrity.disk_events", "integrity.whea_report", "integrity.chkdsk_result",
     "integrity.app_hangs", "services.failed_report", "storage.large_files", "storage.storage_sense_report", "storage.empty_folders", "storage.old_installers",
-    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26, *WATCH_27,
+    "security.secure_boot_2023", "security.browser_extensions", "network.mapped_drives", *WATCH_26, *WATCH_27, *WATCH_28,
 }
 
 # Read-only diagnostics: they change nothing, so "apply all safe actions" skips them.

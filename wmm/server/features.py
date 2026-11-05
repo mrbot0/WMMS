@@ -16,8 +16,8 @@ import sys
 
 import wmm
 
-from ..agent import (actions, advisor, apps, custom_tools, diagnose, drift, fleet, kev, netscan, notify, radio, registry, restore, symptoms,
-                     trends, updater, upnp, watch)
+from ..agent import (actions, advisor, apps, assistant, boot, crashes, custom_tools, diagnose, digest, drift, early_warning, fleet, goodconfig,
+                     kev, netscan, notify, phone, radio, registry, restore, suspicious, symptoms, trends, updater, upnp, watch)
 from ..agent.jobs import RunInProgress
 from .errors import ApiError
 
@@ -250,6 +250,254 @@ class AgentFeatures:
         except (OSError, subprocess.SubprocessError) as errore:
             raise ApiError(500, f"The disks could not be read: {errore}") from None
         return trends.trends(self.data_dir)
+
+    # ---------- 2.8: blue screens, slow startup, failure signs, good configuration, suspicious programs ----------
+
+    def _slow(self, titolo: str, funzione):
+        """A read that takes seconds, shown in the activity panel."""
+        task_id = self.tasks.start("scan", titolo, 1)
+        stato = "error"
+        try:
+            esito = funzione()
+            stato = "ok"
+            return esito
+        except (OSError, subprocess.SubprocessError) as errore:
+            raise ApiError(500, f"The check failed: {errore}") from None
+        finally:
+            self.tasks.finish(task_id, stato)
+
+    def crashes_view(self) -> dict:
+        return self._slow("Blue screens", crashes.analyze)
+
+    def boot_view(self) -> dict:
+        return self._slow("Startup times", lambda: boot.analyze(boot.read(), boot.startup_entries()))
+
+    def early_warning_view(self) -> dict:
+        return self._slow("Signs of a coming failure", lambda: early_warning.check(self.data_dir))
+
+    def goodconfig_view(self) -> dict:
+        return {"days": goodconfig.days(self.data_dir), "last": goodconfig.last(self.data_dir)}
+
+    def goodconfig_plan(self, giorno) -> dict:
+        try:
+            piano = self._slow("Comparing with the chosen day", lambda: goodconfig.plan(self.data_dir, giorno,
+                                                                                         runs=self.store.runs(self.machine_id, limit=2000)))
+        except goodconfig.GoodConfigError as errore:
+            raise ApiError(404, str(errore)) from None
+        self._goodconfig_plan = dict(piano, built=time.time())
+        return {k: v for k, v in piano.items() if k != "quarantine"}
+
+    def goodconfig_apply(self, corpo: dict) -> dict:
+        self._guard_changes()
+        piano = getattr(self, "_goodconfig_plan", None)
+        if not piano or piano["day"] != corpo.get("day") or time.time() - piano["built"] > 900:
+            raise ApiError(409, "Compare with the chosen day again first: the plan is older than 15 minutes.")
+        scelte = corpo.get("ops")
+        if not isinstance(scelte, list) or not all(isinstance(s, str) for s in scelte):
+            raise ApiError(400, "Tick at least one change.")
+        if self.preview:
+            scelti = [o for o in piano["ops"] if o["id"] in scelte]
+            return {"preview": True, "done": 0, "failed": 0, "results": [{"id": o["id"], "text": o["text"], "ok": True, "error": ""} for o in scelti]}
+        try:
+            punto = restore.ensure_point(f"Back to the configuration of {piano['day']}")
+        except Exception as errore:  # noqa: BLE001 - shown with the result: the opposites are kept anyway
+            punto = {"error": str(errore)}
+        try:
+            esito = goodconfig.apply(self.data_dir, piano, scelte)
+        except goodconfig.GoodConfigError as errore:
+            raise ApiError(400, str(errore)) from None
+        self._goodconfig_plan = None
+        run_id = self.store.open_run(self.machine_id, "security.goodconfig", "manual")
+        self.store.close_run(run_id, "ok" if not esito["failed"] else "warning",
+                             f"Back to {piano['day']}: {esito['done']} changes, {esito['failed']} failed", 0,
+                             "\n".join(("OK " if r["ok"] else "FAILED ") + r["text"] + (f" ({r['error']})" if r["error"] else "") for r in esito["results"]))
+        return dict(esito, restore_point=punto)
+
+    def goodconfig_revert(self) -> dict:
+        self._guard_changes()
+        if self.preview:
+            return {"preview": True, "done": 0, "failed": 0, "results": []}
+        try:
+            return goodconfig.revert(self.data_dir)
+        except goodconfig.GoodConfigError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def suspicious_view(self) -> dict:
+        return {"last": suspicious.last(self.data_dir), "settings": suspicious.settings(self.data_dir)}
+
+    def suspicious_check(self) -> dict:
+        return self._slow("Suspicious programs", lambda: suspicious.check(self.data_dir))
+
+    def suspicious_settings(self, corpo: dict) -> dict:
+        try:
+            return suspicious.save_settings(self.data_dir, corpo.get("virustotal_key", ""))
+        except ValueError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    # ---------- 2.8: periodic report and assistant ----------
+
+    def digest_view(self) -> dict:
+        return digest.preview(self.data_dir, self.store, self.machine_id, self.hostname)
+
+    def digest_settings(self, corpo: dict) -> dict:
+        try:
+            return digest.save_settings(self.data_dir, corpo.get("lang"))
+        except ValueError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def digest_send(self) -> dict:
+        if self.preview:
+            raise ApiError(409, "Nothing is sent in preview mode.")
+        esito = digest.send(self.data_dir, self.store, self.machine_id, self.hostname)
+        if not esito["channels"]:
+            raise ApiError(409, "No channel is set: Settings › Notifications.")
+        return esito
+
+    @property
+    def conversations(self) -> assistant.Conversations:
+        if getattr(self, "_conversations", None) is None:
+            self._conversations = assistant.Conversations()
+        return self._conversations
+
+    def assistant_view(self) -> dict:
+        return assistant.settings(self.data_dir)
+
+    def assistant_key(self, corpo: dict) -> dict:
+        try:
+            return assistant.save_key(self.data_dir, corpo.get("api_key", ""))
+        except assistant.AssistantError as errore:
+            raise ApiError(400, str(errore)) from None
+
+    def assistant_install(self) -> dict:
+        """Installs the official anthropic package for the Python that runs the console (pip, from PyPI)."""
+        if assistant.installed():
+            return assistant.settings(self.data_dir)
+
+        def installa():
+            return subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "anthropic"], capture_output=True,
+                                  text=True, timeout=600, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        finito = self._slow("Installing the assistant component", installa)
+        if finito.returncode != 0:
+            raise ApiError(500, "pip could not install it: " + (finito.stderr or finito.stdout).strip()[-300:])
+        import importlib
+        importlib.invalidate_caches()
+        return assistant.settings(self.data_dir)
+
+    def _assistant_report(self, action_id: str) -> dict:
+        job = self.jobs.run_sync([action_id], "assistant", False)
+        risultato = (job.get("results") or [{}])[0]
+        return {"log": job.get("log", []), "status": risultato.get("status"), "note": risultato.get("note", "")}
+
+    def _assistant_kit(self) -> assistant.Toolkit:
+        def riassunto():
+            return dict(self.pc_summary(), problems=[{k: r.get(k) for k in ("title", "area", "risk", "action_id")} for r in self.recommendations()[:20]])
+        return assistant.Toolkit(actions.CATALOG, self._assistant_report, riassunto, lambda s: diagnose.diagnose(s),
+                                 lambda q: symptoms.search(q, actions.CATALOG, 5))
+
+    def assistant_chat(self, corpo: dict) -> dict:
+        try:
+            return self.conversations.start(corpo.get("conversation"), corpo.get("message"), lambda: assistant.make_client(self.data_dir),
+                                            self._assistant_kit)
+        except assistant.AssistantError as errore:
+            raise ApiError(409, str(errore)) from None
+
+    def assistant_conversation(self, conv_id: str) -> dict:
+        try:
+            return self.conversations.view(conv_id)
+        except KeyError:
+            raise ApiError(404, "Conversation not found.") from None
+
+    # ---------- 2.8: the console from a phone ----------
+
+    @property
+    def phones(self) -> phone.Phones:
+        if getattr(self, "_phones", None) is None:
+            self._phones = phone.for_data_dir(self.data_dir)  # one object: it remembers the nonces already seen
+        return self._phones
+
+    def phone_view(self) -> dict:
+        return dict(self.phones.state(), running=getattr(self, "_phone_server", None) is not None)
+
+    def phone_configure(self, corpo: dict) -> dict:
+        self._guard_changes()
+        if self.preview and corpo.get("enabled"):
+            raise ApiError(409, "The phone console cannot be turned on in preview mode.")
+        try:
+            self.phones.configure(corpo.get("enabled"), corpo.get("port"))
+        except phone.PhoneError as errore:
+            raise ApiError(400, str(errore)) from None
+        self.start_phone_server()
+        return self.phone_view()
+
+    def phone_pair(self) -> dict:
+        self._guard_changes()
+        try:
+            codice = self.phones.new_code()
+        except phone.PhoneError as errore:
+            raise ApiError(409, str(errore)) from None
+        return dict(self.phone_view(), code=codice)
+
+    def phone_remove(self, device_id: str) -> dict:
+        self._guard_changes()
+        if not self.phones.remove(device_id):
+            raise ApiError(404, "Phone not found.")
+        return self.phone_view()
+
+    def phone_firewall(self) -> dict:
+        self._guard_changes()
+        if self.preview:
+            return {"preview": True}
+        try:
+            return fleet.firewall_rule(self.phones.state()["port"], phone.FIREWALL_RULE)
+        except OSError as errore:
+            raise ApiError(500, f"The firewall rule could not be added: {errore}") from None
+
+    def _phone_start(self, ids) -> str:
+        if any(actions.CATALOG[a].kind != "report" for a in ids) and not (self.admin or self.preview):
+            raise RuntimeError("this PC runs without administrator rights: only reports can run")
+        return self.jobs.start(list(ids), "phone", False)
+
+    def start_phone_server(self) -> None:
+        vecchio = getattr(self, "_phone_server", None)
+        if vecchio is not None:
+            vecchio.shutdown()
+            vecchio.server_close()
+            self._phone_server = None
+        stato = self.phones.state()
+        if not stato["enabled"] or self.preview:
+            return
+        try:
+            self._phone_server = phone.phone_server(self.phones, stato["port"], self.pc_summary, self.recommendations, self._phone_start,
+                                                    self.jobs.status)
+        except OSError as errore:
+            sys.stderr.write(f"The phone console could not start on port {stato['port']}: {errore}\n")
+
+    # ---------- 2.8: the same tools on several PCs ----------
+
+    def fleet_batch(self, corpo: dict) -> dict:
+        self._guard_changes()
+        ids = corpo.get("actions")
+        if isinstance(ids, list) and any(not isinstance(a, str) or not fleet.allowed("safe", actions.CATALOG.get(a)) for a in ids):
+            raise ApiError(400, "Only reports and safe fixes run on several PCs at once.")
+
+        def qui(elenco):
+            return self.start_run(elenco, False, origin="fleet")
+        try:
+            lotto = fleet.start_batch(self.fleet, corpo.get("pcs"), ids, qui)
+        except fleet.FleetError as errore:
+            raise ApiError(400, str(errore)) from None
+        if getattr(self, "_batches", None) is None:
+            self._batches = {}
+        self._batches[lotto["id"]] = lotto
+        for vecchio in list(self._batches)[:-20]:
+            self._batches.pop(vecchio, None)
+        return self.fleet_batch_status(lotto["id"])
+
+    def fleet_batch_status(self, batch_id: str) -> dict:
+        lotto = (getattr(self, "_batches", None) or {}).get(batch_id)
+        if lotto is None:
+            raise ApiError(404, "Batch not found.")
+        return fleet.batch_status(self.fleet, lotto, self.jobs.status)
 
     # ---------- the PCs of the network (read-only summaries) ----------
 
@@ -539,6 +787,82 @@ class AgentFeatures:
 
 
 class HandlerFeatures:
+    # 2.8
+    def crashes_get(self, query):
+        self._json(200, self.agent.crashes_view())
+
+    def boot_get(self, query):
+        self._json(200, self.agent.boot_view())
+
+    def early_warning_get(self, query):
+        self._json(200, self.agent.early_warning_view())
+
+    def goodconfig_get(self, query):
+        self._json(200, self.agent.goodconfig_view())
+
+    def goodconfig_plan_post(self, query):
+        self._json(200, self.agent.goodconfig_plan(self._body().get("day")))
+
+    def goodconfig_apply_post(self, query):
+        self._json(200, self.agent.goodconfig_apply(self._body()))
+
+    def goodconfig_revert_post(self, query):
+        self._json(200, self.agent.goodconfig_revert())
+
+    def suspicious_get(self, query):
+        self._json(200, self.agent.suspicious_view())
+
+    def suspicious_post(self, query):
+        self._json(200, self.agent.suspicious_check())
+
+    def suspicious_settings_put(self, query):
+        self._json(200, self.agent.suspicious_settings(self._body()))
+
+    def digest_get(self, query):
+        self._json(200, self.agent.digest_view())
+
+    def digest_put(self, query):
+        self._json(200, self.agent.digest_settings(self._body()))
+
+    def digest_send_post(self, query):
+        self._json(200, self.agent.digest_send())
+
+    def assistant_get(self, query):
+        self._json(200, self.agent.assistant_view())
+
+    def assistant_key_put(self, query):
+        self._json(200, self.agent.assistant_key(self._body()))
+
+    def assistant_install_post(self, query):
+        self._json(200, self.agent.assistant_install())
+
+    def assistant_chat_post(self, query):
+        self._json(202, self.agent.assistant_chat(self._body()))
+
+    def assistant_chat_get(self, query, conv_id):
+        self._json(200, self.agent.assistant_conversation(conv_id))
+
+    def phone_get(self, query):
+        self._json(200, self.agent.phone_view())
+
+    def phone_put(self, query):
+        self._json(200, self.agent.phone_configure(self._body()))
+
+    def phone_pair_post(self, query):
+        self._json(200, self.agent.phone_pair())
+
+    def phone_firewall_post(self, query):
+        self._json(200, self.agent.phone_firewall())
+
+    def phone_remove_delete(self, query, device_id):
+        self._json(200, self.agent.phone_remove(device_id))
+
+    def fleet_batch_post(self, query):
+        self._json(202, self.agent.fleet_batch(self._body()))
+
+    def fleet_batch_get(self, query, batch_id):
+        self._json(200, self.agent.fleet_batch_status(batch_id))
+
     def diagnose_post(self, query, symptom_id):
         self._json(200, self.agent.symptom_diagnose(symptom_id))
 
@@ -693,6 +1017,31 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("GET", "/integrity/crashes", HandlerFeatures.crashes_get),
+    ("GET", "/startup/boot", HandlerFeatures.boot_get),
+    ("GET", "/integrity/early-warning", HandlerFeatures.early_warning_get),
+    ("GET", "/security/good-config", HandlerFeatures.goodconfig_get),
+    ("POST", "/security/good-config/plan", HandlerFeatures.goodconfig_plan_post),
+    ("POST", "/security/good-config/apply", HandlerFeatures.goodconfig_apply_post),
+    ("POST", "/security/good-config/revert", HandlerFeatures.goodconfig_revert_post),
+    ("GET", "/security/suspicious", HandlerFeatures.suspicious_get),
+    ("POST", "/security/suspicious", HandlerFeatures.suspicious_post),
+    ("PUT", "/security/suspicious/settings", HandlerFeatures.suspicious_settings_put),
+    ("GET", "/digest", HandlerFeatures.digest_get),
+    ("PUT", "/digest", HandlerFeatures.digest_put),
+    ("POST", "/digest/send", HandlerFeatures.digest_send_post),
+    ("GET", "/assistant", HandlerFeatures.assistant_get),
+    ("PUT", "/assistant/key", HandlerFeatures.assistant_key_put),
+    ("POST", "/assistant/install", HandlerFeatures.assistant_install_post),
+    ("POST", "/assistant/chat", HandlerFeatures.assistant_chat_post),
+    ("GET", r"/assistant/chat/([0-9a-f]{16})", HandlerFeatures.assistant_chat_get),
+    ("GET", "/phone", HandlerFeatures.phone_get),
+    ("PUT", "/phone", HandlerFeatures.phone_put),
+    ("POST", "/phone/pair", HandlerFeatures.phone_pair_post),
+    ("POST", "/phone/firewall", HandlerFeatures.phone_firewall_post),
+    ("DELETE", r"/phone/devices/([0-9a-f]{16,32})", HandlerFeatures.phone_remove_delete),
+    ("POST", "/fleet/batch", HandlerFeatures.fleet_batch_post),
+    ("GET", r"/fleet/batch/([0-9a-f]{16})", HandlerFeatures.fleet_batch_get),
     ("POST", r"/symptoms/([a-z_]{2,40})/diagnose", HandlerFeatures.diagnose_post),
     ("GET", "/custom-tools", HandlerFeatures.custom_tools_get),
     ("POST", "/custom-tools", HandlerFeatures.custom_tools_post),
