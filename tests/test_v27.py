@@ -346,6 +346,21 @@ class RemoteRuns(unittest.TestCase):
         altra = fleet.signature(fleet.key_hash("wrong-key-wrong-key"), "POST", fleet.RUN_PATH, adesso, "k" * 16, b"{}")
         self.assertFalse(self.sharing.accepts_signed("POST", fleet.RUN_PATH, adesso, "k" * 16, b"{}", altra))
 
+    def test_summary_is_signed_and_the_clear_key_only_works_with_remote_runs_off(self):
+        import urllib.error
+        import urllib.request
+        self.assertEqual(fleet.fetch_summary("127.0.0.1", self.port, self.key)["hostname"], "A")
+        richiesta = urllib.request.Request(f"http://127.0.0.1:{self.port}{fleet.SUMMARY_PATH}", headers={fleet.KEY_HEADER: self.key})
+        with self.assertRaises(urllib.error.HTTPError):  # remote runs are on: a key seen on the network is not enough
+            urllib.request.urlopen(richiesta, timeout=5)
+        self.sharing.set_share(True, 8766, "off")
+        with urllib.request.urlopen(richiesta, timeout=5) as risposta:  # consoles before 2.7, read-only
+            self.assertEqual(risposta.status, 200)
+
+    def test_custom_tools_never_run_remotely(self):
+        finto = actions.Action("custom.abcd1234", "network", "Mine", "", "safe", 0.1, lambda ctx: None, "", "report")
+        self.assertFalse(fleet.allowed("safe", finto))
+
     def test_remote_results_are_cleaned(self):
         pulito = fleet.clean_run({"id": "x" * 100, "active": "yes", "results": [{"action_id": 5, "status": "ok", "verify": "bad", "extra": 1}] * 80})
         self.assertEqual(len(pulito["id"]), 40)

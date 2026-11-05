@@ -45,7 +45,8 @@ def signature(secret: str, metodo: str, percorso: str, istante: str, nonce: str,
 
 def allowed(level: str, action) -> bool:
     """What a remote console may run here: nothing, reports, or reports and safe fixes."""
-    if action is None or level not in ("reports", "safe"):
+    # Custom tools are excluded: their kind and risk are whatever their author typed.
+    if action is None or action.id.startswith("custom.") or level not in ("reports", "safe"):
         return False
     if action.kind == "report":
         return True
@@ -277,19 +278,11 @@ def clean_run(dati: dict) -> dict:
 
 
 def fetch_summary(indirizzo: str, porta: int, chiave: str) -> dict:
-    ip = lan_address(indirizzo)
-    if not chiave:
-        raise FleetError("the key could not be read: remove the PC and add it again")
-    richiesta = urllib.request.Request(f"http://{ip}:{int(porta)}{SUMMARY_PATH}", headers={KEY_HEADER: chiave})
+    """The summary of another PC, asked with a signed request: the key itself never travels on the network (2.7)."""
     try:
-        with urllib.request.urlopen(richiesta, timeout=TIMEOUT) as risposta:
-            dati = json.loads(risposta.read(64 * 1024).decode("utf-8"))
-    except urllib.error.HTTPError as errore:
-        raise FleetError("wrong key" if errore.code == 403 else f"HTTP {errore.code}") from None
-    except (OSError, ValueError) as errore:
-        raise FleetError(f"not reachable ({getattr(errore, 'reason', errore)})") from None
-    if not isinstance(dati, dict):
-        raise FleetError("not a summary")
+        dati = signed_request(indirizzo, porta, chiave, "GET", SUMMARY_PATH)
+    except FleetError as errore:
+        raise FleetError("wrong key" if "signature" in str(errore) or "403" in str(errore) else str(errore)) from None
     return clean_summary(dati)
 
 
@@ -349,10 +342,15 @@ def summary_server(fleet: Fleet, porta: int, riassunto: Callable[[], dict], runs
                 return
             if self.path != SUMMARY_PATH:
                 self._answer(404, {"error": "Not found."})
-            elif not fleet.accepts(self.headers.get(KEY_HEADER, "")):
-                self._answer(403, {"error": "Wrong key."})
-            else:
+                return
+            # Signed requests (2.7 consoles). The old header with the key in clear is still accepted from consoles before 2.7,
+            # but only while remote runs are off: a key seen on the network must never be enough to run tools here.
+            firmata = bool(self.headers.get(SIG_HEADER)) and self._signed(b"")
+            vecchia = fleet.share()["remote_runs"] == "off" and fleet.accepts(self.headers.get(KEY_HEADER, ""))
+            if firmata or vecchia:
                 self._answer(200, riassunto())
+            else:
+                self._answer(403, {"error": "Wrong key or signature."})
 
         def do_POST(self):  # noqa: N802
             if self.path != RUN_PATH or runs is None:
