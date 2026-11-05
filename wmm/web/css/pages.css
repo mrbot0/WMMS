@@ -64,3 +64,31 @@ mark.dt-hit { background: var(--warning-soft); color: inherit; border-radius: 3p
 .as-user { align-self: flex-end; background: var(--accent-soft, rgba(47, 111, 222, .12)); white-space: pre-wrap; }
 .as-bot { align-self: flex-start; background: var(--surface-2, rgba(127, 127, 127, .08)); }
 .as-prop { margin-top: 8px; }
+
+/* 2.9: sign-in, user menu, users and roles */
+.auth-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: var(--bg, #0f1218); padding: 16px; }
+.auth-card { width: min(440px, 100%); background: var(--surface, #fff); border: 1px solid var(--border, #e3e6eb); border-radius: 14px; padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .25); max-height: 92vh; overflow: auto; }
+.auth-brand { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.auth-brand svg { width: 32px; height: 32px; color: var(--accent, #2f6fde); }
+.auth-card .form button[type=submit] { width: 100%; }
+.user-chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border, #e3e6eb); background: transparent; color: inherit;
+  border-radius: 999px; padding: 3px 10px; cursor: pointer; margin-right: 8px; font: inherit; }
+.user-chip svg { width: 16px; height: 16px; }
+.user-chip-name { font-weight: 600; }
+.role-badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; background: rgba(127, 127, 127, .15); }
+.role-red { background: rgba(220, 53, 69, .15); color: #d9465a; } .role-blue { background: rgba(47, 111, 222, .15); color: #4a86e8; }
+.role-green { background: rgba(31, 138, 76, .15); color: #2ea562; } .role-purple { background: rgba(128, 90, 213, .15); color: #9a76e0; }
+.role-orange { background: rgba(230, 126, 34, .15); color: #e08a3a; } .role-teal { background: rgba(23, 162, 184, .15); color: #23a5ba; }
+.role-pink { background: rgba(232, 62, 140, .15); color: #e05596; } .role-gray { color: inherit; }
+.modal.modal-wide { width: min(980px, 96vw); max-width: 96vw; }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; }
+.perm-matrix { width: 100%; } .perm-matrix td, .perm-matrix th { text-align: center; padding: 4px 6px; } .perm-matrix tbody th { text-align: left; }
+.day-pick { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.bulk-bar { display: flex; gap: 10px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; background: rgba(47, 111, 222, .1); }
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.role-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent, #2f6fde); cursor: pointer; font: inherit; text-align: left; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.toolbar .grow, .grow { flex: 1; }
+.role-form fieldset { border: 1px solid var(--border, #e3e6eb); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }

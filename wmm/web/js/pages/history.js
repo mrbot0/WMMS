@@ -102,8 +102,8 @@
           '</select></label></div><div id="cmp-table"></div>';
 
         el.innerHTML = UI.pageHeader("History", "Retained locally in dati\\wmm.db",
-          '<a class="btn" href="' + API.url("/export/" + (filters.area || "all") + ".csv") + '" download>' + UI.icon("download") + "Export CSV</a>" +
-          '<a class="btn" href="' + API.url("/export/" + (filters.area || "all") + ".json") + '" download>' + UI.icon("download") + "Export JSON</a>") +
+          '<button type="button" class="btn" data-api-download="/export/' + esc(filters.area || "all") + '.csv">' + UI.icon("download") + "Export CSV</button>" +
+          '<button type="button" class="btn" data-api-download="/export/' + esc(filters.area || "all") + '.json">' + UI.icon("download") + "Export JSON</button>") +
           '<div class="grid">' + UI.card("Filters", '<div class="filters"><label>Area<select data-filter="area"><option value="">All areas</option>' + UI.AREAS.map(function (a) {
             return '<option value="' + a + '"' + (filters.area === a ? " selected" : "") + ">" + esc(UI.AREA_LABEL[a]) + "</option>";
           }).join("") + '</select></label><label>Period<select data-filter="days">' + [["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["", "All time"]].map(function (o) {

@@ -14,6 +14,13 @@
   }
   var BASE = "/api/v1";
   var GET_TIMEOUT_MS = 5 * 60 * 1000;
+  // With accounts on (2.9) every request also carries the session of the signed-in user (kept for this tab).
+  var SESSION = "";
+  try { SESSION = sessionStorage.getItem("wmm.session") || ""; } catch (e) { /* storage unavailable */ }
+  function setSession(value) {
+    SESSION = value || "";
+    try { if (SESSION) sessionStorage.setItem("wmm.session", SESSION); else sessionStorage.removeItem("wmm.session"); } catch (e) { /* storage unavailable */ }
+  }
   function setToken(value) {
     TOKEN = value || "";
     try { if (TOKEN) sessionStorage.setItem("wmm.token", TOKEN); else sessionStorage.removeItem("wmm.token"); } catch (e) { /* storage unavailable */ }
@@ -22,6 +29,7 @@
   function request(method, path, body) {
     var options = { method: method, headers: { "Accept": "application/json" }, credentials: "same-origin" };
     if (method !== "GET") options.headers["X-WMM-Token"] = TOKEN;
+    if (SESSION) options.headers["X-WMM-Session"] = SESSION;
     if (body !== undefined) {
       options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
@@ -41,7 +49,9 @@
         if (!response.ok) {
           var message = (data && data.error) || ("Request failed (" + response.status + ")");
           // Permission problems open a guided dialog (request access / restart as administrator).
-          if (response.status === 403 && /token/i.test(message)) {
+          if (response.status === 401 && !/\/auth\//.test(path)) {
+            window.dispatchEvent(new CustomEvent("wmm-signin"));
+          } else if (response.status === 403 && /token/i.test(message)) {
             setToken("");
             message = "This window is not connected to the agent. Use Request access to connect it.";
             window.dispatchEvent(new CustomEvent("wmm-unauthorized"));
@@ -71,6 +81,14 @@
     });
   }
 
+  // Buttons with data-api-download="/path" download through API.download (2.9: the session travels with it).
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-api-download]");
+    if (!b) return;
+    e.preventDefault();
+    var path = b.getAttribute("data-api-download");
+    window.API.download(path, "wmm" + path.replace(/[^\w.]+/g, "-")).catch(function (err) { if (window.UI) UI.toast(err.message, "error"); });
+  });
   window.API = {
     get: function (path) { return request("GET", path); },
     post: function (path, body) { return request("POST", path, body === undefined ? {} : body); },
@@ -79,6 +97,23 @@
     del: function (path) { return request("DELETE", path); },
     url: function (path) { return BASE + path; },
     hasToken: function () { return !!TOKEN; },
+    setSession: setSession,
+    // A file from the agent, with the session (a plain link would not carry it).
+    download: function (path, name) {
+      var headers = { "Accept": "*/*" };
+      if (SESSION) headers["X-WMM-Session"] = SESSION;
+      return fetch(BASE + path, { headers: headers, credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || ("Download failed (" + r.status + ")")); });
+        return r.blob();
+      }).then(function (blob) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      });
+    },
     setToken: setToken
   };
 })();

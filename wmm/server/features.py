@@ -16,7 +16,7 @@ import sys
 
 import wmm
 
-from ..agent import (actions, advisor, apps, assistant, boot, crashes, custom_tools, diagnose, digest, drift, early_warning, fleet, goodconfig,
+from ..agent import (accounts, actions, advisor, apps, appsettings, assistant, boot, crashes, custom_tools, diagnose, digest, drift, early_warning, fleet, goodconfig,
                      kev, netscan, notify, phone, radio, registry, restore, suspicious, symptoms, trends, updater, upnp, watch)
 from ..agent.jobs import RunInProgress
 from .errors import ApiError
@@ -394,10 +394,14 @@ class AgentFeatures:
         return assistant.Toolkit(actions.CATALOG, self._assistant_report, riassunto, lambda s: diagnose.diagnose(s),
                                  lambda q: symptoms.search(q, actions.CATALOG, 5))
 
-    def assistant_chat(self, corpo: dict) -> dict:
+    def assistant_chat(self, corpo: dict, user=None) -> dict:
+        def kit():  # the assistant reads only with the tools the signed-in user may run (2.9)
+            k = self._assistant_kit()
+            if user is not None:
+                k.catalog = {i: a for i, a in actions.CATALOG.items() if accounts.can_run(user, a)}
+            return k
         try:
-            return self.conversations.start(corpo.get("conversation"), corpo.get("message"), lambda: assistant.make_client(self.data_dir),
-                                            self._assistant_kit)
+            return self.conversations.start(corpo.get("conversation"), corpo.get("message"), lambda: assistant.make_client(self.data_dir), kit)
         except assistant.AssistantError as errore:
             raise ApiError(409, str(errore)) from None
 
@@ -605,6 +609,8 @@ class AgentFeatures:
     # ---------- program updates (GitHub releases) ----------
 
     def update_check(self) -> dict:
+        if not appsettings.allowed(self.data_dir, "update_check"):
+            raise ApiError(409, "Update checks are turned off (Settings › Connections).")
         try:
             return updater.check()
         except updater.UpdateError as errore:
@@ -837,7 +843,7 @@ class HandlerFeatures:
         self._json(200, self.agent.assistant_install())
 
     def assistant_chat_post(self, query):
-        self._json(202, self.agent.assistant_chat(self._body()))
+        self._json(202, self.agent.assistant_chat(self._body(), self.user))
 
     def assistant_chat_get(self, query, conv_id):
         self._json(200, self.agent.assistant_conversation(conv_id))
@@ -858,7 +864,9 @@ class HandlerFeatures:
         self._json(200, self.agent.phone_remove(device_id))
 
     def fleet_batch_post(self, query):
-        self._json(202, self.agent.fleet_batch(self._body()))
+        corpo = self._body()
+        self._check_tools(corpo.get("actions"), corpo)
+        self._json(202, self.agent.fleet_batch(corpo))
 
     def fleet_batch_get(self, query, batch_id):
         self._json(200, self.agent.fleet_batch_status(batch_id))
@@ -903,7 +911,9 @@ class HandlerFeatures:
         self._json(200, self.agent.trends_record())
 
     def fleet_run_post(self, query, pc_id):
-        self._json(202, self.agent.fleet_run(pc_id, self._body()))
+        corpo = self._body()
+        self._check_tools(corpo.get("actions"), corpo)
+        self._json(202, self.agent.fleet_run(pc_id, corpo))
 
     def fleet_run_get(self, query, pc_id, job_id):
         self._json(200, self.agent.fleet_run_status(pc_id, job_id))

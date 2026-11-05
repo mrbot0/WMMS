@@ -194,7 +194,8 @@ def vt_lookup(chiave: str, sha256: str, opener=None) -> dict:
 def add_reputation(data_dir: Path, righe: List[dict], lookup=None, now: Optional[float] = None) -> int:
     """VirusTotal answers for the high and medium rows: from the cache when fresh, else at most VT_PER_CHECK lookups."""
     dati = _read(data_dir)
-    chiave = notify.unprotect(dati.get("vt_key", "")) if dati.get("vt_key") else ""
+    from . import appsettings
+    chiave = notify.unprotect(dati.get("vt_key", "")) if dati.get("vt_key") and appsettings.allowed(data_dir, "virustotal") else ""
     cache = dati.setdefault("cache", {})
     adesso = now or time.time()
     chiesti = 0

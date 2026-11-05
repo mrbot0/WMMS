@@ -2,6 +2,26 @@
 
 CHANGELOG = [
     {
+        "version": "2.9.0",
+        "date": "2026-11-05",
+        "title": "Accounts, roles and permissions, and much richer settings",
+        "highlights": [
+            "Accounts: turn them on in Settings › Accounts and security by creating the first administrator. From then on everyone signs in "
+            "with a user name and password (and a 6-digit code with two-step verification), and every request is checked against their role.",
+            "Users and roles, a page of its own: users with access hours, expiry, temporary passwords, lockout, sessions and bulk actions; "
+            "roles that decide which pages are seen, which tools may run in every area and up to which risk, and what may be managed.",
+            "Audit log of every sign-in, refusal and change, with filters and CSV export.",
+            "Six new sections in Settings: My account, Accounts and security, E-mail/Telegram/webhook, App and connections, Runs and safety, Data and backup.",
+        ],
+        "changes": [
+            "Alerts: SMTP presets, Telegram bot check and chat detection, a webhook for Teams, Slack or Discord, a test per channel, routing per "
+            "alert, repeat interval, quiet hours, Italian alerts, a subject prefix, alerts to the users of chosen roles, and the history of what was sent.",
+            "Connections: a proxy for the internet, offline mode or a switch per service, and the networks allowed to reach the phone console and the PC sharing.",
+            "Runs: a maintenance window for scheduled fixes, a lock on high-risk tools, a reason or ticket number before changes, and confirmation with the PC name.",
+            "Data: retention per kind of data, database check and compaction, configuration backup and restore, reset per group and a diagnostic file for support.",
+        ],
+    },
+    {
         "version": "2.8.0",
         "date": "2026-11-05",
         "title": "Blue screens explained, a way back to a good day and the console on your phone",

@@ -106,6 +106,9 @@ def save_key(data_dir: Path, chiave) -> dict:
 
 
 def make_client(data_dir: Path):
+    from . import appsettings
+    if not appsettings.allowed(data_dir, "assistant"):
+        raise AssistantError("The assistant is turned off (Settings › Connections).")
     chiave = notify.unprotect(_read(data_dir).get("api_key", ""))
     if not chiave:
         raise AssistantError("Set your Anthropic API key first.")

@@ -383,6 +383,16 @@ def run_schedule(schedule_id: int, store: Store, jobs) -> int:
     except KeyError:
         store.update_schedule(schedule_id, last_status="error", last_run=now())
         return 2
+    # Settings › Runs (2.9): fixes run only inside the maintenance window and never high-risk ones when they are blocked;
+    # read-only reports always run.
+    from . import actions as _azioni, appsettings
+    regole = appsettings.load(store.path.parent)
+    fuori = not appsettings.in_window(regole["maint_window"])
+    tenuti = [a for a in da_eseguire if _azioni.CATALOG[a].kind == "report" or not (fuori or (regole["block_high_risk"] and _azioni.CATALOG[a].risk == "high"))]
+    if not tenuti:
+        store.update_schedule(schedule_id, last_status="skipped", last_run=now())
+        return 0
+    da_eseguire = tenuti
     for tentativo in range(BUSY_RETRIES + 1):
         try:
             stato = jobs.run_sync(da_eseguire, "schedule", confirmed=schedule["confirmed"])

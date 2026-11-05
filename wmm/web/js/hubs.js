@@ -37,7 +37,8 @@
         ["reports", "Reports", "Branded reports for the customer, as PDF, HTML, CSV or JSON."]] },
     { id: "help", title: "Help & settings", icon: "support", text: "User guide, troubleshooting, appearance, installation and start-up options.",
       pages: [["support", "Support", "User guide, FAQ, troubleshooting and diagnostics for support."],
-        ["settings", "Settings", "Report branding, appearance, guides, start-up and installation."]] }
+        ["settings", "Settings", "Report branding, appearance, guides, start-up and installation."],
+        ["users", "Users and roles", "Accounts, roles and permissions, sessions and the audit log."]] }
   ];
 
   function byId(id) { return CATEGORIES.filter(function (c) { return c.id === id; })[0] || null; }

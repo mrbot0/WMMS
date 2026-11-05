@@ -33,7 +33,7 @@ DATA_DIR = ROOT / "dati"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"{APP_NAME} {VERSION}")
-    parser.add_argument("--port", type=int, default=8765, help="local port of the web console")
+    parser.add_argument("--port", type=int, default=0, help="local port of the web console (default: Settings › App, else 8765)")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     parser.add_argument("--preview", action="store_true", help="read-only mode: actions are simulated")
     parser.add_argument("--run-schedule", type=int, metavar="ID", help="run a scheduled action and exit")
@@ -216,6 +216,9 @@ def main(argomenti: Optional[Sequence[str]] = None) -> int:
         inoltrati = list(argomenti) if argomenti is not None else sys.argv[1:]
         interprete = windowless_python(preferito) if opzioni.hidden else preferito
         return subprocess.call([interprete, str(Path(__file__).resolve()), *inoltrati], env=dict(os.environ, **{runtime.HANDOVER_ENV: "1"}))
+    if not opzioni.port:  # Settings › App › Console port (2.9), else the usual 8765
+        from wmm.agent import appsettings
+        opzioni.port = appsettings.load(DATA_DIR)["console_port"] or 8765
     if opzioni.wait_port:
         wait_for_port(opzioni.port)
     if opzioni.install:
