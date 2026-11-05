@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from ottimizza_pc import Esito, Stato
 
+from . import securestore
 from . import notify
 
 MAX_DAYS = 31
@@ -41,7 +42,7 @@ def _path(data_dir: Path) -> Path:
 
 def settings(data_dir: Path) -> dict:
     try:
-        dati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(_path(data_dir)))
     except (OSError, ValueError):
         dati = {}
     return {"lang": dati.get("lang") if dati.get("lang") in TEXT else "it", "last_sent": dati.get("last_sent")}
@@ -52,7 +53,7 @@ def save_settings(data_dir: Path, lang) -> dict:
         raise ValueError("Language: it or en.")
     dati = settings(data_dir)
     dati["lang"] = lang
-    _path(data_dir).write_text(json.dumps(dati), encoding="utf-8")
+    securestore.write_text(_path(data_dir), json.dumps(dati), encoding="utf-8")
     return dati
 
 
@@ -162,7 +163,7 @@ def send(data_dir: Path, store=None, machine_id: Optional[str] = None, host: str
     esiti = (sender or notificatore.send)(titolo, testo)
     if any(v == "ok" for v in esiti.values()):
         impostazioni["last_sent"] = dati["end"]
-        _path(data_dir).write_text(json.dumps(impostazioni), encoding="utf-8")
+        securestore.write_text(_path(data_dir), json.dumps(impostazioni), encoding="utf-8")
     return {"title": titolo, "text": testo, "channels": esiti, "sent": any(v == "ok" for v in esiti.values())}
 
 

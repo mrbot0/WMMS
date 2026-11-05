@@ -16,6 +16,7 @@ from typing import Callable, Dict, List, Optional
 
 from ottimizza_pc import Esito, Stato
 
+from . import securestore
 from . import notify
 from .crashes import as_list, run_json
 
@@ -147,7 +148,7 @@ def _path(data_dir: Path) -> Path:
 
 def _read(data_dir: Path) -> dict:
     try:
-        dati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+        dati = json.loads(securestore.read_text(_path(data_dir)))
         return dati if isinstance(dati, dict) else {}
     except (OSError, ValueError):
         return {}
@@ -155,7 +156,7 @@ def _read(data_dir: Path) -> dict:
 
 def _write(data_dir: Path, dati: dict) -> None:
     _path(data_dir).parent.mkdir(parents=True, exist_ok=True)
-    _path(data_dir).write_text(json.dumps(dati, ensure_ascii=False), encoding="utf-8")
+    securestore.write_text(_path(data_dir), json.dumps(dati, ensure_ascii=False), encoding="utf-8")
 
 
 def settings(data_dir: Path) -> dict:

@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from . import securestore
 from .netscan import VENDORS
 from .tools import powershell_command
 
@@ -502,14 +503,14 @@ class RadioScanner:
     @staticmethod
     def _read(percorso: Path) -> Optional[dict]:
         try:
-            return json.loads(percorso.read_text(encoding="utf-8"))
+            return json.loads(securestore.read_text(percorso))
         except (OSError, ValueError):
             return None
 
     @staticmethod
     def _save(percorso: Path, dati: dict) -> dict:
         percorso.parent.mkdir(parents=True, exist_ok=True)
-        percorso.write_text(json.dumps(dati), encoding="utf-8")
+        securestore.write_text(percorso, json.dumps(dati), encoding="utf-8")
         return dati
 
     def last_wifi(self) -> Optional[dict]:

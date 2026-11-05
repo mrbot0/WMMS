@@ -900,5 +900,11 @@ window.I18N_TOOLS = {
 "Suspicious programs: signature and location": "Programmi sospetti: firma e posizione",
 "Checks the signature and location of every program running or starting with Windows, and flags what malware does: invalid signatures, Windows names outside Windows, temporary folders, double extensions, hidden scripts.": "Controlla firma e posizione di ogni programma in esecuzione o che parte con Windows e segnala ciò che fanno i malware: firme non valide, nomi di Windows fuori da Windows, cartelle temporanee, doppie estensioni, script nascosti.",
 "Periodic report by e-mail or Telegram": "Rapporto periodico via e-mail o Telegram",
-"Sends a summary of the period since the last report: scores, fixes and their checks, failures, alerts, outages, suspicious changes, blue screens and forecasts. Schedule it every week or month.": "Invia un riepilogo del periodo dall'ultimo rapporto: punteggi, correzioni e verifiche, errori, avvisi, cadute, modifiche sospette, schermate blu e previsioni. Pianificalo ogni settimana o mese."
+"Sends a summary of the period since the last report: scores, fixes and their checks, failures, alerts, outages, suspicious changes, blue screens and forecasts. Schedule it every week or month.": "Invia un riepilogo del periodo dall'ultimo rapporto: punteggi, correzioni e verifiche, errori, avvisi, cadute, modifiche sospette, schermate blu e previsioni. Pianificalo ogni settimana o mese.",
+"Ransomware: check the decoy files": "Ransomware: controlla i file trappola",
+"Checks the decoy files placed in Documents, Desktop and Pictures and sends an alert at once if one was changed or deleted. Schedule it every 15 minutes.": "Controlla i file trappola messi in Documenti, Desktop e Immagini e manda subito un avviso se uno è stato modificato o eliminato. Pianificalo ogni 15 minuti.",
+"Compliance with the business workstation baseline": "Conformità al profilo della postazione aziendale",
+"Reads every check of the business workstation baseline and gives the percentage that complies, with the checks to fix.": "Legge ogni controllo del profilo della postazione aziendale e dà la percentuale conforme, con i controlli da correggere.",
+"Windows Update compliance": "Conformità di Windows Update",
+"Pending updates with their severity, the age of the last installed update and the update policy in force.": "Aggiornamenti in attesa con la loro gravità, l'età dell'ultimo aggiornamento installato e il criterio di aggiornamento in vigore."
 };

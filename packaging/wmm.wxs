@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MSI package of Windows Maintenance Manager (WiX Toolset v4/v5). Built by tools\build_msi.ps1, which harvests the
+     program files into WmmFiles.wxs. Per-machine, into Program Files, with the protected folder permissions the
+     schedules need. Silent installation for Group Policy or Intune:
+       msiexec /i WindowsMaintenanceManager.msi /qn CONFIG="\\server\share\wmm-config.json" BACKGROUND=1
+     CONFIG: a configuration backup (Settings › Data and backup), optionally with "central_code" to enroll with the
+     central server. BACKGROUND=1 installs the background agent task. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Windows Maintenance Manager" Manufacturer="Windows Maintenance Manager" Version="$(var.Version)"
+           UpgradeCode="6F2B8C51-3B1E-4C59-9D0A-2E7A1C4F8B10" Scope="perMachine" InstallerVersion="500">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Windows Maintenance Manager is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="CONFIG" Secure="yes" />
+    <Property Id="BACKGROUND" Secure="yes" />
+    <Property Id="PYTHONEXE" Secure="yes">
+      <RegistrySearch Root="HKLM" Key="SOFTWARE\Python\PythonCore\3.12\InstallPath" Name="ExecutablePath" Type="raw" />
+    </Property>
+    <Launch Condition="PYTHONEXE" Message="Python 3.12 for all users is required (python.org installer, 'Install for all users')." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Windows Maintenance Manager" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Windows Maintenance Manager" Level="1">
+      <ComponentGroupRef Id="WmmFiles" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenu" Guid="*">
+        <Shortcut Id="ConsoleShortcut" Name="Windows Maintenance Manager" Target="[PYTHONEXE]" Arguments="-I &quot;[INSTALLFOLDER]wmm.py&quot;"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKLM" Key="SOFTWARE\Windows Maintenance Manager" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <CustomAction Id="ApplyConfig" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="&quot;[PYTHONEXE]&quot; -I &quot;[INSTALLFOLDER]wmm.py&quot; --apply-config &quot;[CONFIG]&quot;" />
+    <CustomAction Id="InstallBackground" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="no" Return="ignore"
+                  ExeCommand="&quot;[PYTHONEXE]&quot; -I &quot;[INSTALLFOLDER]wmm.py&quot; --install-background" />
+    <CustomAction Id="RemoveBackground" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="no" Return="ignore"
+                  ExeCommand="schtasks /Delete /TN &quot;\Windows Maintenance Manager\Background agent&quot; /F" />
+    <InstallExecuteSequence>
+      <Custom Action="ApplyConfig" After="InstallFiles" Condition="CONFIG AND NOT REMOVE" />
+      <Custom Action="InstallBackground" After="ApplyConfig" Condition="BACKGROUND=&quot;1&quot; AND NOT REMOVE" />
+      <Custom Action="RemoveBackground" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

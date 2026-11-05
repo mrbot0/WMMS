@@ -283,6 +283,24 @@ class JobManager:
         """The before check of a fix (a hook, so tests replace the PowerShell reads)."""
         return verify.Probe(action_id)
 
+    def _auto_rollback(self, job: Job, action, verifica: Optional[dict], modifiche: list) -> bool:
+        """Settings › Runs › Undo by itself (2.10): a fix whose check says "worse" is put back at once, with an alert."""
+        if not verifica or verifica.get("verdict") != "worse" or not modifiche or self.preview:
+            return False
+        from . import appsettings, notify
+        cartella = self.store.path.parent
+        if not appsettings.load(cartella).get("auto_rollback"):
+            return False
+        try:
+            fatti, errori = undo.restore(modifiche)
+        except Exception as errore:  # noqa: BLE001 - the run result stays as it is
+            job.write(f"Automatic undo failed: {errore}")
+            return False
+        job.write(f"The check says worse: {fatti} values put back automatically" + (f", {len(errori)} could not be" if errori else "") + ".")
+        notify.safe_event(cartella, "auto_rollback", f"{action.title} made things worse ({verifica.get('before')} → {verifica.get('after')}) "
+                          f"and was undone automatically ({fatti} values).", gruppo=action.id)
+        return fatti > 0
+
     @staticmethod
     def _after_fix(job: Job, controllo, giornale, esito: Esito) -> Tuple[list, Optional[dict]]:
         """What the fix changed in the registry (kept for the undo) and its before/after verdict."""
@@ -370,11 +388,14 @@ class JobManager:
         stato = STATUS[esito.stato]
         job.write(f"Result: {stato} {esito.nota}".rstrip())
         modifiche, verifica = self._after_fix(job, controllo, giornale, esito)
+        annullato = self._auto_rollback(job, action, verifica, modifiche)
         risultato = {"action_id": action.id, "status": stato, "note": esito.nota,
                      "seconds": round(time.monotonic() - partenza, 1), "bytes_freed": liberati, "run_id": run_id,
                      "verify": verifica, "undo_count": len(modifiche)}
         job.results.append(risultato)
         try:
             self.store.close_run(run_id, stato, esito.nota, liberati, "\n".join(job.log[inizio_log:]), verifica, modifiche)
+            if annullato:
+                self.store.mark_undone(run_id)
         except sqlite3.Error as errore:
             job.write(f"Warning: the result could not be saved to history ({errore})")

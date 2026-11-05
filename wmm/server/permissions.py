@@ -99,3 +99,10 @@ def required(nome: str, metodo: str, gruppi: tuple) -> List[str]:
             regola = regola(gruppi)
         return [regola] if isinstance(regola, str) else list(regola)
     return [] if metodo in ("GET", "HEAD") else list(ADMIN)
+
+
+# 2.10: the routes of wmm/server/enterprise_api.py
+from .enterprise_api import PUBLIC as _ENTERPRISE_PUBLIC, RULES as _ENTERPRISE_RULES  # noqa: E402
+
+RULES.update(_ENTERPRISE_RULES)
+PUBLIC |= _ENTERPRISE_PUBLIC

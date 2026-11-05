@@ -2,6 +2,26 @@
 
 CHANGELOG = [
     {
+        "version": "2.10.0",
+        "date": "2026-11-05",
+        "title": "Company centre: central server, company sign-in, approvals and compliance",
+        "highlights": [
+            "Central server: every PC of the company contacts one server over HTTPS (also from other offices), sends its summary and inventory "
+            "and runs the jobs queued for it, within what that PC allows.",
+            "Groups, assets and inventory: groups of PCs, asset tag, owner, location, warranty and licenses, hardware and software of every PC, CSV export.",
+            "Software from a company catalog with winget, Windows Update rings, compliance baselines with a percentage and the fixes.",
+            "Company sign-in with Microsoft Entra ID (OpenID Connect) or Windows and Active Directory accounts, approval by a second person, "
+            "API tokens and a PowerShell module.",
+        ],
+        "changes": [
+            "Security: HTTPS on the local network with a certificate made on this PC, encrypted data files, ransomware decoy files and "
+            "controlled folder access, a tamper-evident audit log forwarded to syslog or the Windows log.",
+            "Reliability: a background agent that runs as SYSTEM from boot, automatic undo of a fix that made things worse, tests on GitHub at every change, "
+            "an MSI package for Group Policy or Intune.",
+            "Operations: incidents to take charge of with escalation, tickets in Jira, ServiceNow or GLPI, and a monthly executive report as PDF.",
+        ],
+    },
+    {
         "version": "2.9.0",
         "date": "2026-11-05",
         "title": "Accounts, roles and permissions, and much richer settings",

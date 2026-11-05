@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import wmm
+from . import securestore
 
 DEFAULTS: Dict[str, object] = {
     # app
@@ -29,7 +30,8 @@ DEFAULTS: Dict[str, object] = {
     "allow_assistant": True, "allow_telegram": True, "allow_webhook": True, "lan_allow": "",
     # runs
     "maint_window": {"enabled": False, "days": [0, 1, 2, 3, 4, 5, 6], "from": "22:00", "to": "06:00"},
-    "block_high_risk": False, "require_reason": False, "confirm_high_with_name": False,
+    "block_high_risk": False, "require_reason": False, "confirm_high_with_name": False, "approval_levels": [], "auto_rollback": False,
+    "https_lan": False, "encrypt_data": False,
     # data
     "retention": {"history_days": 0, "connection_days": 90, "snapshots_days": 90, "notify_log_days": 90},
     # alerts
@@ -40,7 +42,8 @@ SECTIONS = {
     "app": ["org_name", "pc_label", "console_port", "default_user_lang", "update_check_on_start"],
     "connections": ["proxy_url", "proxy_bypass", "offline", "allow_update_check", "allow_kev", "allow_virustotal", "allow_assistant", "allow_telegram",
                     "allow_webhook", "lan_allow"],
-    "runs": ["maint_window", "block_high_risk", "require_reason", "confirm_high_with_name"],
+    "runs": ["maint_window", "block_high_risk", "require_reason", "confirm_high_with_name", "approval_levels", "auto_rollback"],
+    "security": ["https_lan", "encrypt_data"],
     "data": ["retention"],
     "alerts": ["alert_lang", "alert_prefix", "alert_repeat_hours", "alert_quiet", "alert_routes", "alert_roles", "webhook_url", "webhook_kind"],
 }
@@ -73,7 +76,7 @@ def _path(data_dir: Path) -> Path:
 
 def load(data_dir: Path) -> dict:
     try:
-        salvati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+        salvati = json.loads(securestore.read_text(_path(data_dir)))
         salvati = salvati if isinstance(salvati, dict) else {}
     except (OSError, ValueError):
         salvati = {}
@@ -160,6 +163,10 @@ def validate(chiave: str, v, accounts=None):
                 any(not isinstance(c, list) or any(x not in CHANNELS for x in c) for c in v.values()):
             raise SettingsError("Routing: for each event, a list of channels (email, telegram, webhook).")
         return {e: sorted(set(c)) for e, c in v.items()}
+    if chiave == "approval_levels":
+        if not isinstance(v, list) or any(x not in ("moderate", "high") for x in v):
+            raise SettingsError("Approval: a list with moderate and/or high.")
+        return sorted(set(v))
     if chiave == "alert_roles":
         if not isinstance(v, list) or not all(isinstance(r, str) for r in v):
             raise SettingsError("Roles: a list.")
@@ -185,13 +192,13 @@ def save(data_dir: Path, valori: dict, accounts=None) -> dict:
     puliti = {k: validate(k, v, accounts) for k, v in valori.items()}
     with _LOCK:
         try:
-            salvati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+            salvati = json.loads(securestore.read_text(_path(data_dir)))
             salvati = salvati if isinstance(salvati, dict) else {}
         except (OSError, ValueError):
             salvati = {}
         salvati.update(puliti)
         _path(data_dir).parent.mkdir(parents=True, exist_ok=True)
-        _path(data_dir).write_text(json.dumps(salvati, indent=1, ensure_ascii=False), encoding="utf-8")
+        securestore.write_text(_path(data_dir), json.dumps(salvati, indent=1, ensure_ascii=False), encoding="utf-8")
     if {"proxy_url", "proxy_bypass"} & set(puliti):
         apply_proxy(data_dir)
     return load(data_dir)
@@ -203,12 +210,12 @@ def reset(data_dir: Path, sezione: str) -> dict:
     chiavi = [k for s in SECTIONS.values() for k in s] if sezione == "all" else SECTIONS[sezione]
     with _LOCK:
         try:
-            salvati = json.loads(_path(data_dir).read_text(encoding="utf-8"))
+            salvati = json.loads(securestore.read_text(_path(data_dir)))
         except (OSError, ValueError):
             salvati = {}
         for k in chiavi:
             salvati.pop(k, None)
-        _path(data_dir).write_text(json.dumps(salvati, indent=1, ensure_ascii=False), encoding="utf-8")
+        securestore.write_text(_path(data_dir), json.dumps(salvati, indent=1, ensure_ascii=False), encoding="utf-8")
     apply_proxy(data_dir)
     return load(data_dir)
 
@@ -276,19 +283,19 @@ def _log_path(data_dir: Path) -> Path:
 def log_alert(data_dir: Path, evento: str, titolo: str, esiti: Dict[str, str], saltato: str = "") -> None:
     with _LOCK:
         try:
-            voci = json.loads(_log_path(data_dir).read_text(encoding="utf-8"))
+            voci = json.loads(securestore.read_text(_log_path(data_dir)))
         except (OSError, ValueError):
             voci = []
         voci.append({"at": datetime.now().isoformat(timespec="seconds"), "event": evento, "title": titolo[:200], "results": esiti, "skipped": saltato})
         try:
-            _log_path(data_dir).write_text(json.dumps(voci[-500:], ensure_ascii=False), encoding="utf-8")
+            securestore.write_text(_log_path(data_dir), json.dumps(voci[-500:], ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass
 
 
 def alert_log(data_dir: Path) -> List[dict]:
     try:
-        return list(reversed(json.loads(_log_path(data_dir).read_text(encoding="utf-8"))))
+        return list(reversed(json.loads(securestore.read_text(_log_path(data_dir)))))
     except (OSError, ValueError):
         return []
 
@@ -449,11 +456,11 @@ def retention_run(data_dir: Path, store=None, machine_id: str = "", accounts=Non
     if r["connection_days"]:
         p = Path(data_dir) / "connection_history.json"
         try:
-            dati = json.loads(p.read_text(encoding="utf-8"))
+            dati = json.loads(securestore.read_text(p))
             limite = (adesso - timedelta(days=r["connection_days"])).isoformat(timespec="seconds")
             prima = len(dati.get("samples", []))
             dati["samples"] = [c for c in dati.get("samples", []) if str(c.get("t", "")) >= limite]
-            p.write_text(json.dumps(dati), encoding="utf-8")
+            securestore.write_text(p, json.dumps(dati), encoding="utf-8")
             fatto["connection"] = prima - len(dati["samples"])
         except (OSError, ValueError):
             pass
@@ -473,7 +480,7 @@ def retention_run(data_dir: Path, store=None, machine_id: str = "", accounts=Non
         voci = list(reversed(alert_log(data_dir)))
         rimaste = [v for v in voci if v.get("at", "") >= limite]
         if len(rimaste) != len(voci):
-            _log_path(data_dir).write_text(json.dumps(rimaste, ensure_ascii=False), encoding="utf-8")
+            securestore.write_text(_log_path(data_dir), json.dumps(rimaste, ensure_ascii=False), encoding="utf-8")
         fatto["alerts"] = len(voci) - len(rimaste)
     if accounts is not None:
         fatto["audit"] = accounts.audit_prune()

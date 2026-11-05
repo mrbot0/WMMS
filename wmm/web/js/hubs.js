@@ -32,6 +32,7 @@
         ["playbooks", "Playbooks", "Ready-made sequences: quick tune-up, full maintenance, repair, hardening."],
         ["schedules", "Schedules", "Maintenance that runs on its own through Windows Task Scheduler."],
         ["fleet", "PCs", "The health of the other PCs of the network, read-only, side by side."],
+        ["enterprise", "Company centre", "Central server, inventory, software, updates, compliance, approvals and incidents."],
         ["scripts", "Scripts", "Your .bat scripts run now or at a set time, ready-made scripts and the shutdown timer."],
         ["history", "History", "Every run with its result, freed space and log."],
         ["reports", "Reports", "Branded reports for the customer, as PDF, HTML, CSV or JSON."]] },

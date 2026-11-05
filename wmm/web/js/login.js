@@ -44,13 +44,28 @@
         '<label class="auth-code" hidden>Code from the authenticator app<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="\\d{6}"></label>' +
         '<p class="auth-error callout callout-warning" hidden></p>' +
         '<button class="btn btn-primary" type="submit">Sign in</button></form>' +
+        '<div class="auth-sso" hidden><p class="muted small" style="text-align:center">or</p>' +
+        '<button type="button" class="btn" data-oidc hidden style="width:100%">Sign in with the company account</button>' +
+        '<label class="check" data-winbox hidden><input type="checkbox" data-win> Windows or domain account (DOMAIN\\user)</label></div>' +
         '<p class="muted small">Forgot the password? An administrator can give you a temporary one.</p>');
       var form = box.querySelector("[data-login]");
+      API.get("/auth/sso").then(function (s) {
+        if (!s.oidc && !s.windows) return;
+        box.querySelector(".auth-sso").hidden = false;
+        box.querySelector("[data-oidc]").hidden = !s.oidc;
+        box.querySelector("[data-winbox]").hidden = !s.windows;
+      }, function () { /* the screen works with passwords alone */ });
+      box.addEventListener("click", function (e) {
+        if (!e.target.closest("[data-oidc]")) return;
+        API.get("/auth/oidc/start").then(function (r) { location.href = r.url; }, function (er) { error(box, er.message); });
+      });
       form.addEventListener("submit", function () {
         var b = form.querySelector("button");
         b.disabled = true;
         error(box, "");
-        API.post("/auth/login", { username: form.username.value, password: form.password.value, code: form.code.value }).then(function (r) {
+        var windows = box.querySelector("[data-win]") && box.querySelector("[data-win]").checked;
+        (windows ? API.post("/auth/windows", { username: form.username.value, password: form.password.value })
+          : API.post("/auth/login", { username: form.username.value, password: form.password.value, code: form.code.value })).then(function (r) {
           API.setSession(r.token);
           return afterLogin(r, state);
         }).then(resolve, function (e) {

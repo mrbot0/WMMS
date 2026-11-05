@@ -33,7 +33,7 @@ PAGES = [
     ("security", "Security"), ("updates", "Updates & Drivers"), ("network", "Network"), ("hardware", "Hardware"), ("events", "Event Viewer"),
     ("processes", "Task Manager"), ("registry", "Registry"), ("netscan", "Network scanner"), ("toolbox", "Toolbox"), ("activity", "Activity"),
     ("playbooks", "Playbooks"), ("schedules", "Schedules"), ("fleet", "PCs"), ("scripts", "Scripts"), ("history", "History"), ("reports", "Reports"),
-    ("support", "Support"), ("settings", "Settings"), ("users", "Users and roles"),
+    ("support", "Support"), ("settings", "Settings"), ("users", "Users and roles"), ("enterprise", "Company centre"),
 ]
 AREAS = [("cleanup", "Cleanup"), ("integrity", "System Integrity"), ("services", "Services"), ("performance", "Performance"), ("storage", "Storage"),
          ("network", "Network"), ("startup", "Startup & Apps"), ("security", "Security"), ("updates", "Updates & Drivers")]
@@ -69,6 +69,16 @@ CAPABILITIES = [
     ("roles.manage", "Users", "Create, change and delete roles"),
     ("sessions.manage", "Users", "Sign out other users"),
     ("audit.view", "Users", "Read and export the audit log"),
+    # 2.10
+    ("approvals.decide", "Users", "Approve or reject runs that need a second person"),
+    ("approvals.bypass", "Operations", "Run tools that need approval without asking"),
+    ("api.tokens", "Users", "Create API tokens for scripts"),
+    ("central.manage", "Network", "Manage the central server and its PCs"),
+    ("deploy.manage", "Operations", "Install and update software on the PCs"),
+    ("updates.policy", "Operations", "Set the Windows Update rings"),
+    ("compliance.manage", "System", "Create baselines and fix what does not comply"),
+    ("incidents.manage", "Operations", "Take charge of alerts and close them"),
+    ("integrations.manage", "Settings", "Ticketing, SIEM and HTTPS"),
 ]
 
 
@@ -197,7 +207,7 @@ CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UN
   must_change INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL, updated TEXT NOT NULL, last_login TEXT, failed INTEGER NOT NULL DEFAULT 0,
   locked_until REAL NOT NULL DEFAULT 0, password_changed TEXT NOT NULL, totp_secret TEXT NOT NULL DEFAULT '', totp_on INTEGER NOT NULL DEFAULT 0,
   totp_last INTEGER NOT NULL DEFAULT -1, totp_pending TEXT NOT NULL DEFAULT '', expires TEXT NOT NULL DEFAULT '', hours TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
-  lang TEXT NOT NULL DEFAULT '', history TEXT NOT NULL DEFAULT '[]');
+  lang TEXT NOT NULL DEFAULT '', history TEXT NOT NULL DEFAULT '[]', subject TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS roles (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, description TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT 'gray', permissions TEXT NOT NULL DEFAULT '[]', builtin INTEGER NOT NULL DEFAULT 0, require_2fa INTEGER NOT NULL DEFAULT 0,
   created TEXT NOT NULL, updated TEXT NOT NULL);
@@ -217,17 +227,22 @@ class Accounts:
         self.path = Path(path)
         self.clock = clock
         self._lock = threading.RLock()
+        self.audit_hooks = []  # called with every audit entry (SIEM forwarding, 2.10)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             db.executescript(SCHEMA)
             colonne = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
             if "totp_pending" not in colonne:  # databases created by the first 2.9 build
                 db.execute("ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''")
+            if "subject" not in colonne:  # 2.10: the company identity (Entra ID, Windows) a user is linked to
+                db.execute("ALTER TABLE users ADD COLUMN subject TEXT NOT NULL DEFAULT ''")
             for ident, r in BUILTIN.items():
                 db.execute("INSERT OR IGNORE INTO roles (id, name, description, color, permissions, builtin, created, updated) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
                            (ident, r["name"], r["description"], r["color"], json.dumps(r["permissions"]), now_iso(), now_iso()))
             # The administrator role always has every permission, also those added by a newer version.
             db.execute("UPDATE roles SET permissions = ? WHERE id = ?", (json.dumps(sorted(ALL)), ADMIN_ROLE))
+        from . import governance
+        governance.setup(self)  # approvals, API tokens and the audit chain (2.10)
 
     @contextlib.contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
@@ -773,6 +788,54 @@ class Accounts:
         self.audit(r["username"], "login.ok", "", ip)
         return {"token": token, "user": self.get_user(r["id"]), "must_change": limitata, "must_enroll_2fa": serve_2fa}
 
+    def has_username(self, nome: str) -> bool:
+        with self._db() as db:
+            return db.execute("SELECT 1 FROM users WHERE username = ?", (str(nome or "").strip(),)).fetchone() is not None
+
+    def login_external(self, identita: dict, ip: str = "", agent: str = "", metodo: str = "sso", auto_create: bool = True) -> dict:
+        """A sign-in already checked by the company identity provider or by Windows: linked by its subject, never by name."""
+        if not self.enabled:
+            raise AccountError("Accounts are off.", 409)
+        with self._db() as db:
+            r = db.execute("SELECT id FROM users WHERE subject = ? AND subject != ''", (identita["subject"],)).fetchone()
+        if r is None:
+            if not identita.get("role"):
+                self.audit(identita["username"], "login.denied", "", f"{metodo}: no role for this account", ok=False)
+                raise AccountError("Your company account has no role in this console: ask an administrator.", 403)
+            if not auto_create:
+                raise AccountError("Your company account is not linked to a user of this console.", 403)
+            nome, n = identita["username"], 1
+            while self.has_username(nome):
+                n += 1
+                nome = f"{identita['username'][:28]}{n}"
+            nuovo = self.create_user({"username": nome, "display": identita.get("display", ""), "email": identita.get("email", ""),
+                                      "role_id": identita["role"], "password": secrets.token_urlsafe(32) + "aA1!"}, by=metodo)
+            with self._db() as db:
+                db.execute("UPDATE users SET subject = ?, must_change = 0 WHERE id = ?", (identita["subject"], nuovo["id"]))
+            user_id = nuovo["id"]
+        else:
+            user_id = r["id"]
+            attuale = self.get_user(user_id)
+            if identita.get("role") and identita["role"] != attuale["role_id"]:
+                try:  # the role follows the groups of the company account
+                    self.update_user(user_id, {"role_id": identita["role"]}, by=metodo)
+                except AccountError:
+                    pass
+        u = self.get_user(user_id)
+        adesso = self.clock()
+        if not u["active"] or u["expired"] or not self._within_hours(u["hours"], adesso):
+            self.audit(u["username"], "login.denied", "", f"{metodo}: {u['status']}", ok=False)
+            raise AccountError("This account cannot sign in now (disabled, expired or outside its hours).", 403)
+        token = secrets.token_hex(24)
+        with self._db() as db:
+            if self.policy()["single_session"]:
+                db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            db.execute("INSERT INTO sessions (id, user_id, created, last_seen, ip, agent, limited) VALUES (?, ?, ?, ?, ?, ?, 0)",
+                       (_hash_token(token), user_id, adesso, adesso, ip[:64], agent[:200]))
+            db.execute("UPDATE users SET failed = 0, locked_until = 0, last_login = ? WHERE id = ?", (now_iso(adesso), user_id))
+        self.audit(u["username"], "login.ok", "", f"{metodo} {ip}")
+        return {"token": token, "user": self.get_user(user_id), "must_change": False, "must_enroll_2fa": False}
+
     def session(self, token: str) -> Optional[dict]:
         """The user of a session token, with the permissions of the role; None when unknown, idle too long or too old."""
         if not token or not re.fullmatch(r"[0-9a-f]{48}", token):
@@ -902,12 +965,24 @@ class Accounts:
     # ---------- audit ----------
 
     def audit(self, user: str, action: str, target: str = "", detail: str = "", ok: bool = True) -> None:
+        """One entry, chained to the previous one by its SHA-256 (2.10), then handed to the hooks (SIEM)."""
+        from .governance import entry_hash
+        voce = {"at": now_iso(self.clock()), "user": str(user or "")[:64], "action": action[:64], "target": str(target)[:200],
+                "detail": str(detail)[:2000], "ok": 1 if ok else 0}
         try:
             with self._db() as db:
-                db.execute("INSERT INTO audit (at, user, action, target, detail, ok) VALUES (?, ?, ?, ?, ?, ?)",
-                           (now_iso(self.clock()), str(user or "")[:64], action[:64], str(target)[:200], str(detail)[:2000], 1 if ok else 0))
+                ultima = db.execute("SELECT hash FROM audit WHERE hash != '' ORDER BY id DESC LIMIT 1").fetchone()
+                prima = ultima["hash"] if ultima else ""
+                h = entry_hash(prima, voce["at"], voce["user"], voce["action"], voce["target"], voce["detail"], voce["ok"])
+                db.execute("INSERT INTO audit (at, user, action, target, detail, ok, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                           (voce["at"], voce["user"], voce["action"], voce["target"], voce["detail"], voce["ok"], prima, h))
         except sqlite3.Error:
-            pass  # the audit log never blocks the action it records
+            return  # the audit log never blocks the action it records
+        for hook in list(self.audit_hooks):
+            try:
+                hook(dict(voce, ok=bool(ok)))
+            except Exception:  # noqa: BLE001 - a hook never blocks the action either
+                pass
 
     def audit_list(self, user: str = "", action: str = "", since: str = "", until: str = "", q: str = "", failed: bool = False,
                    limit: int = 200, offset: int = 0) -> dict:
@@ -932,7 +1007,8 @@ class Accounts:
         dove = (" WHERE " + " AND ".join(condizioni)) if condizioni else ""
         with self._db() as db:
             totale = db.execute("SELECT COUNT(*) FROM audit" + dove, parametri).fetchone()[0]
-            righe = db.execute("SELECT * FROM audit" + dove + " ORDER BY id DESC LIMIT ? OFFSET ?", parametri + [max(1, min(limit, 2000)), max(0, offset)]).fetchall()
+            righe = db.execute("SELECT id, at, user, action, target, detail, ok FROM audit" + dove + " ORDER BY id DESC LIMIT ? OFFSET ?",
+                               parametri + [max(1, min(limit, 2000)), max(0, offset)]).fetchall()
         return {"total": total_or(totale), "entries": [dict(r, ok=bool(r["ok"])) for r in righe]}
 
     def audit_csv(self, **filtri) -> str:
@@ -950,7 +1026,8 @@ class Accounts:
 
     def login_history(self, username: str, limit: int = 50) -> List[dict]:
         with self._db() as db:
-            righe = db.execute("SELECT * FROM audit WHERE user = ? AND action LIKE 'login.%' ORDER BY id DESC LIMIT ?", (username, limit)).fetchall()
+            righe = db.execute("SELECT id, at, user, action, target, detail, ok FROM audit WHERE user = ? AND action LIKE 'login.%' ORDER BY id DESC LIMIT ?",
+                               (username, limit)).fetchall()
         return [dict(r, ok=bool(r["ok"])) for r in righe]
 
     def overview(self) -> dict:

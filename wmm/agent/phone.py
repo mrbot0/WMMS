@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from . import securestore
 from . import notify
 from .fleet import MAX_SKEW, allowed, clean_run, clean_summary, signature
 
@@ -59,14 +60,14 @@ class Phones:
 
     def _read(self) -> dict:
         try:
-            dati = json.loads(self.path.read_text(encoding="utf-8"))
+            dati = json.loads(securestore.read_text(self.path))
             return dati if isinstance(dati, dict) else {}
         except (OSError, ValueError):
             return {}
 
     def _write(self, dati: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(dati), encoding="utf-8")
+        securestore.write_text(self.path, json.dumps(dati), encoding="utf-8")
 
     def state(self) -> dict:
         dati = self._read()
@@ -272,5 +273,9 @@ def phone_server(telefoni: Phones, porta: int, riassunto: Callable[[], dict], pr
 
     server = ThreadingHTTPServer(("0.0.0.0", porta), Telefono)
     server.daemon_threads = True
+    from . import appsettings
+    if appsettings.load(telefoni.path.parent).get("https_lan"):  # Settings › Security › HTTPS on the local network (2.10)
+        from . import tlsutil
+        tlsutil.wrap(server, telefoni.path.parent)
     threading.Thread(target=server.serve_forever, name="wmm-phone", daemon=True).start()
     return server
