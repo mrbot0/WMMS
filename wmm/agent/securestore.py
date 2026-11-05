@@ -16,7 +16,7 @@ MAGIC = b"WMMENC1\n"
 FILES = ("network_scan.json", "wifi_scan.json", "wifi_history.json", "bluetooth_scan.json", "connection_history.json", "drift.json",
          "suspicious.json", "health_history.json", "notify_log.json", "fleet.json", "phone.json", "integrations.json", "upnp.json",
          "incidents.json", "goodconfig_last.json")
-_CACHE = {"t": 0.0, "on": False}
+_CACHE: dict = {"t": 0.0, "on": False}
 
 
 class _Blob(ctypes.Structure):

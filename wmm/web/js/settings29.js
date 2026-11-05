@@ -284,7 +284,12 @@
         UI.card("Data of this PC", '<p class="muted" style="margin-top:0">' + esc(info.folder + " · " + UI.formatBytes(info.total_bytes)) + "</p>" +
           UI.table([{ title: "File" }, { title: "Size" }, { title: "Changed" }], info.files.map(function (f) {
             return ['<span class="cell-mono">' + esc(f.name) + "</span>" + (f.files ? ' <span class="cell-sub">' + f.files + " files</span>" : ""), esc(UI.formatBytes(f.bytes)), esc(f.modified ? UI.formatDate(f.modified) : "—")];
-          })), ro ? "" : UI.button("Check the databases", 'data-db="integrity"', "btn-sm", "check") + UI.button("Compact", 'data-db="compact"', "btn-sm", "storage")) +
+          })) +
+          // 2.11: versioned databases, saved in dati\db-backups before every upgrade
+          ((info.databases || []).length ? UI.table([{ title: "Database" }, { title: "Version" }, { title: "Copies before upgrades" }], info.databases.map(function (d) {
+            return ['<span class="cell-mono">' + esc(d.name) + "</span>", esc(String(d.version) + (d.target != null && d.version > d.target ? " (newer than this app)" : "")),
+              d.backups.length ? '<span class="cell-mono">' + esc(d.backups[0]) + "</span>" + (d.backups.length > 1 ? ' <span class="cell-sub">+' + (d.backups.length - 1) + "</span>" : "") : "—"];
+          })) : ""), ro ? "" : UI.button("Check the databases", 'data-db="integrity"', "btn-sm", "check") + UI.button("Compact", 'data-db="compact"', "btn-sm", "storage")) +
         UI.card("Backup and restore", '<p class="muted" style="margin-top:0">The backup holds the settings of the app, alerts (without passwords or tokens), report branding, roles, account policies and your own tools. ' +
           "No history, users or secrets.</p>", (Auth.can("data.backup") ? UI.button("Download a backup", "data-backup", "btn-sm", "download") +
           UI.button("Restore from a backup", "data-restore", "btn-sm", "refresh") : "")) +

@@ -47,6 +47,12 @@ jobs:
           }
           ./tools/build_installer.ps1 -Release release -BaseUrl "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
           Compress-Archive -Path release/winget/* -DestinationPath release/winget-manifests.zip
+          # 2.11: the MSI for Group Policy and Intune (and for the updater of MSI installations), signed with the same certificate
+          dotnet tool install --global wix --version 5.0.2
+          ./tools/build_msi.ps1 -OutDir release
+          $msi = Get-ChildItem release -Filter *.msi | Select-Object -First 1
+          $hash = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLower()
+          Add-Content -Path release/SHA256SUMS.txt -Value "$hash  $($msi.Name)" -Encoding ascii
           if ($env:WMM_SIGN_PFX) { Remove-Item $env:WMM_SIGN_PFX -Force }
 
       - name: Publish the release
@@ -55,5 +61,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The in-app updater downloads WindowsMaintenanceManager-<version>.zip by name; the other files are for people and winget.
-          $files = @(Get-ChildItem release -Filter *.zip | ForEach-Object FullName) + @(Get-ChildItem release -Filter *-Setup-*.exe | ForEach-Object FullName)
+          $files = @(Get-ChildItem release -Filter *.zip | ForEach-Object FullName) + @(Get-ChildItem release -Filter *-Setup-*.exe | ForEach-Object FullName) +
+            @(Get-ChildItem release -Filter *.msi | ForEach-Object FullName)
           gh release create "${{ github.ref_name }}" $files release/SHA256SUMS.txt --title "Windows Maintenance Manager ${{ github.ref_name }}" --notes-file release/notes.md

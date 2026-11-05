@@ -13,7 +13,6 @@ dati\\central_client.json (server, fingerprint, agent id, secret encrypted with 
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import hmac
 import json
 import re
@@ -26,14 +25,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional
 
-from . import notify, securestore
+from . import migrations, notify, securestore
 from .fleet import MAX_SKEW, signature
 
 DEFAULT_PORT = 8770
 API = "/central/v1"
 SIG, TIME, NONCE, AGENT = "X-WMM-Sig", "X-WMM-Time", "X-WMM-Nonce", "X-WMM-Agent"
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-JOB_KINDS = ("actions", "winget", "policy", "baseline", "inventory")
+JOB_KINDS = ("actions", "winget", "policy", "baseline", "inventory", "relocate")
+HOST = re.compile(r"[A-Za-z0-9][\w.\-]{0,252}")
 LEVELS = ("reports", "safe", "all")
 OFFLINE_MINUTES = 30
 
@@ -54,7 +54,13 @@ CREATE TABLE IF NOT EXISTS assets (agent_id TEXT PRIMARY KEY, asset_tag TEXT NOT
 CREATE TABLE IF NOT EXISTS catalog (id TEXT PRIMARY KEY, winget_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', required INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS rings (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, quality_days INTEGER NOT NULL DEFAULT 0,
   feature_days INTEGER NOT NULL DEFAULT 0, target_version TEXT NOT NULL DEFAULT '', paused_until TEXT NOT NULL DEFAULT '', active_hours TEXT NOT NULL DEFAULT '8-18');
+CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, notes TEXT NOT NULL DEFAULT '', created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS tenant_access (username TEXT NOT NULL COLLATE NOCASE, tenant TEXT NOT NULL, PRIMARY KEY (username, tenant));
 """
+# Versioned steps (2.11): never edit or reorder, only append. 2.10 is version 0; 2.11 adds the clients (tenants) of a
+# provider that manages the PCs of several companies: every PC and enrollment code belongs to one client, or to none.
+MIGRATIONS = [migrations.add_column("agents", "tenant", "TEXT NOT NULL DEFAULT ''"), migrations.add_column("enroll", "tenant", "TEXT NOT NULL DEFAULT ''")]
+Scope = Optional[set]  # the clients a console user may see; None = all
 
 
 class CentralError(ValueError):
@@ -75,8 +81,7 @@ class Server:
         self.path = self.data_dir / "central.db"
         self._lock = threading.RLock()
         self._seen: Dict[str, float] = {}
-        with self._db() as db:
-            db.executescript(SCHEMA)
+        self.migration = migrations.upgrade(self.path, "central", SCHEMA, MIGRATIONS)
 
     @contextlib.contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
@@ -91,14 +96,16 @@ class Server:
 
     # ---------- enrollment ----------
 
-    def enrollment_code(self, host: str, porta: int, fingerprint: str, tags: Optional[List[str]] = None) -> dict:
+    def enrollment_code(self, host: str, porta: int, fingerprint: str, tags: Optional[List[str]] = None, tenant: str = "") -> dict:
         """One-time, 24 hours: wmm://host:port/ID-SECRET#FINGERPRINT. Only ID travels; SECRET signs the request."""
         ident = "".join(secrets.choice(ALPHABET) for _ in range(6))
         segreto = "".join(secrets.choice(ALPHABET) for _ in range(20))
         with self._db() as db:
             db.execute("DELETE FROM enroll WHERE expires < ?", (time.time(),))
-            db.execute("INSERT INTO enroll (id, secret, expires, tags) VALUES (?, ?, ?, ?)",
-                       (ident, notify.protect(segreto), time.time() + 86400, json.dumps(tags or [])))
+            if tenant and not db.execute("SELECT 1 FROM tenants WHERE id = ?", (tenant,)).fetchone():
+                raise CentralError("Unknown client.", 404)
+            db.execute("INSERT INTO enroll (id, secret, expires, tags, tenant) VALUES (?, ?, ?, ?, ?)",
+                       (ident, notify.protect(segreto), time.time() + 86400, json.dumps(tags or []), tenant))
         fp = fingerprint.replace(":", "")
         return {"code": f"wmm://{host}:{int(porta)}/{ident}-{segreto}#{fp}", "expires": (datetime.now() + timedelta(days=1)).isoformat(timespec="seconds")}
 
@@ -121,8 +128,8 @@ class Server:
                 agent_id = vecchio["id"]
                 db.execute("UPDATE agents SET secret = ?, hostname = ?, ip = ? WHERE id = ?", (notify.protect(agent_secret), hostname, ip, agent_id))
             else:
-                db.execute("INSERT INTO agents (id, hostname, machine_id, secret, tags, enrolled, ip) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                           (agent_id, hostname, machine, notify.protect(agent_secret), r["tags"], now(), ip))
+                db.execute("INSERT INTO agents (id, hostname, machine_id, secret, tags, enrolled, ip, tenant) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                           (agent_id, hostname, machine, notify.protect(agent_secret), r["tags"], now(), ip, r["tenant"]))
         return {"agent_id": agent_id, "secret": agent_secret}
 
     def _fresh(self, istante: str, nonce: str) -> bool:
@@ -158,7 +165,7 @@ class Server:
 
     def heartbeat(self, agent: dict, dati: dict, ip: str = "") -> dict:
         """Stores what the agent sent and hands it the jobs queued for it, with its update ring."""
-        risultati = dati.get("results") if isinstance(dati.get("results"), list) else []
+        risultati: list = dati["results"] if isinstance(dati.get("results"), list) else []
         with self._db() as db:
             campi = {"last_seen": now(), "ip": ip[:64], "version": str(dati.get("version", ""))[:20], "level": str(dati.get("level", ""))[:10]}
             if isinstance(dati.get("summary"), dict):
@@ -185,13 +192,18 @@ class Server:
 
     # ---------- management (from the console of the server PC) ----------
 
-    def agents(self, tag: str = "", q: str = "") -> List[dict]:
+    def agents(self, tag: str = "", q: str = "", scope: Scope = None, tenant: str = "") -> List[dict]:
         limite = (datetime.now() - timedelta(minutes=OFFLINE_MINUTES)).isoformat(timespec="seconds")
         with self._db() as db:
             righe = db.execute("SELECT a.*, s.asset_tag, s.owner, s.location, s.warranty_until FROM agents a LEFT JOIN assets s ON s.agent_id = a.id ORDER BY hostname").fetchall()
             in_coda = {r["agent_id"]: r["n"] for r in db.execute("SELECT agent_id, COUNT(*) AS n FROM jobs WHERE status IN ('queued', 'sent') GROUP BY agent_id")}
+        nomi = {t["id"]: t["name"] for t in self.tenants()}
         elenco = []
         for r in righe:
+            if scope is not None and r["tenant"] not in scope:
+                continue
+            if tenant and r["tenant"] != tenant:
+                continue
             tags = json.loads(r["tags"])
             if tag and tag not in tags:
                 continue
@@ -203,13 +215,14 @@ class Server:
                            "version": r["version"], "level": r["level"], "online": bool(r["last_seen"]) and r["last_seen"] >= limite,
                            "overall": s.get("overall"), "open_issues": s.get("open_issues"), "c_free_gb": s.get("c_free_gb"), "ring": r["ring"],
                            "compliance": comp.get("percent"), "queued": in_coda.get(r["id"], 0), "inventory_at": r["inventory_at"],
-                           "asset_tag": r["asset_tag"] or "", "owner": r["owner"] or "", "location": r["location"] or "", "warranty_until": r["warranty_until"] or ""})
+                           "asset_tag": r["asset_tag"] or "", "owner": r["owner"] or "", "location": r["location"] or "", "warranty_until": r["warranty_until"] or "",
+                           "tenant": r["tenant"], "tenant_name": nomi.get(r["tenant"], "")})
         return elenco
 
-    def agent(self, agent_id: str) -> dict:
+    def agent(self, agent_id: str, scope: Scope = None) -> dict:
         with self._db() as db:
             r = db.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
-            if r is None:
+            if r is None or (scope is not None and r["tenant"] not in scope):
                 raise CentralError("PC not found.", 404)
             a = db.execute("SELECT * FROM assets WHERE agent_id = ?", (agent_id,)).fetchone()
             jobs = db.execute("SELECT * FROM jobs WHERE agent_id = ? ORDER BY id DESC LIMIT 50", (agent_id,)).fetchall()
@@ -220,14 +233,16 @@ class Server:
         d["jobs"] = [self._job(j) for j in jobs]
         return d
 
-    def remove(self, agent_id: str) -> None:
+    def remove(self, agent_id: str, scope: Scope = None) -> None:
+        self.agent(agent_id, scope)
         with self._db() as db:
             if not db.execute("DELETE FROM agents WHERE id = ?", (agent_id,)).rowcount:
                 raise CentralError("PC not found.", 404)
             db.execute("DELETE FROM jobs WHERE agent_id = ?", (agent_id,))
             db.execute("DELETE FROM assets WHERE agent_id = ?", (agent_id,))
 
-    def set_tags(self, agent_id: str, tags) -> List[str]:
+    def set_tags(self, agent_id: str, tags, scope: Scope = None) -> List[str]:
+        self.agent(agent_id, scope)
         if not isinstance(tags, list) or len(tags) > 20 or any(not isinstance(t, str) or not re.fullmatch(r"[\w .\-]{1,40}", t) for t in tags):
             raise CentralError("Groups: up to 20 names of letters, digits, spaces, dots or dashes.")
         pulite = sorted({t.strip() for t in tags if t.strip()})
@@ -236,21 +251,21 @@ class Server:
                 raise CentralError("PC not found.", 404)
         return pulite
 
-    def set_asset(self, agent_id: str, dati: dict) -> dict:
+    def set_asset(self, agent_id: str, dati: dict, scope: Scope = None) -> dict:
         campi = {"asset_tag": 40, "owner": 80, "location": 80, "purchased": 10, "warranty_until": 10, "licenses": 1000, "notes": 1000}
         valori = {k: str(dati.get(k, "") or "")[:m] for k, m in campi.items()}
         for k in ("purchased", "warranty_until"):
             if valori[k] and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valori[k]):
                 raise CentralError("Dates as YYYY-MM-DD.")
-        self.agent(agent_id)
+        self.agent(agent_id, scope)
         with self._db() as db:
             db.execute("INSERT INTO assets (agent_id, " + ", ".join(campi) + ") VALUES (?" + ", ?" * len(campi) + ") ON CONFLICT(agent_id) DO UPDATE SET " +
                        ", ".join(f"{k} = excluded.{k}" for k in campi), (agent_id, *valori.values()))
         return valori
 
-    def groups(self) -> List[dict]:
+    def groups(self, scope: Scope = None) -> List[dict]:
         conti: Dict[str, int] = {}
-        for a in self.agents():
+        for a in self.agents(scope=scope):
             for t in a["tags"]:
                 conti[t] = conti.get(t, 0) + 1
         with self._db() as db:
@@ -282,15 +297,20 @@ class Server:
                 if nome in tags:
                     db.execute("UPDATE agents SET tags = ? WHERE id = ?", (json.dumps([t for t in tags if t != nome]), a["id"]))
 
-    def targets(self, agenti=None, gruppo: str = "") -> List[str]:
-        if gruppo:
-            return [a["id"] for a in self.agents(tag=gruppo)]
-        noti = {a["id"] for a in self.agents()}
+    def targets(self, agenti=None, gruppo: str = "", scope: Scope = None, tenant: str = "") -> List[str]:
+        if gruppo or tenant:
+            return [a["id"] for a in self.agents(tag=gruppo, scope=scope, tenant=tenant)]
+        noti = {a["id"] for a in self.agents(scope=scope)}
         return [a for a in (agenti or []) if a in noti]
 
     def queue(self, destinatari: List[str], kind: str, payload: dict, by: str = "") -> dict:
         if kind not in JOB_KINDS:
             raise CentralError("Unknown job kind.")
+        if kind == "relocate":
+            porta = payload.get("port")
+            if not HOST.fullmatch(str(payload.get("host", ""))) or isinstance(porta, bool) or not isinstance(porta, int) or not 1024 <= porta <= 65535:
+                raise CentralError("The new address: a name or IP and a port from 1024 to 65535.")
+            payload = {"host": str(payload["host"]), "port": porta}
         if not destinatari:
             raise CentralError("Choose at least one PC or a group.")
         lotto = secrets.token_hex(6)
@@ -306,46 +326,51 @@ class Server:
         d["payload"], d["result"] = json.loads(d["payload"]), json.loads(d["result"] or "{}")
         return d
 
-    def batch(self, lotto: str) -> List[dict]:
+    def batch(self, lotto: str, scope: Scope = None) -> List[dict]:
         with self._db() as db:
-            righe = db.execute("SELECT j.*, a.hostname FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE batch = ? ORDER BY a.hostname", (lotto,)).fetchall()
-        return [self._job(j) for j in righe]
+            righe = db.execute("SELECT j.*, a.hostname, a.tenant FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE batch = ? ORDER BY a.hostname", (lotto,)).fetchall()
+        return [self._job(j) for j in righe if scope is None or j["tenant"] in scope]
 
-    def recent_jobs(self, limite: int = 100) -> List[dict]:
+    def recent_jobs(self, limite: int = 100, scope: Scope = None) -> List[dict]:
         with self._db() as db:
-            righe = db.execute("SELECT j.*, a.hostname FROM jobs j JOIN agents a ON a.id = j.agent_id ORDER BY j.id DESC LIMIT ?", (limite,)).fetchall()
-        return [self._job(j) for j in righe]
+            righe = db.execute("SELECT j.*, a.hostname, a.tenant FROM jobs j JOIN agents a ON a.id = j.agent_id ORDER BY j.id DESC LIMIT ?",
+                               (limite if scope is None else 5000,)).fetchall()
+        return [self._job(j) for j in righe if scope is None or j["tenant"] in scope][:limite]
 
-    def cancel_job(self, job_id: int) -> None:
+    def cancel_job(self, job_id: int, scope: Scope = None) -> None:
         with self._db() as db:
+            j = db.execute("SELECT a.tenant FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE j.id = ?", (job_id,)).fetchone()
+            if j is None or (scope is not None and j["tenant"] not in scope):
+                raise CentralError("Job not found.", 404)
             if not db.execute("UPDATE jobs SET status = 'cancelled' WHERE id = ? AND status = 'queued'", (job_id,)).rowcount:
                 raise CentralError("Only queued jobs can be cancelled.", 409)
 
     # ---------- inventory ----------
 
-    def software_search(self, q: str) -> List[dict]:
+    def software_search(self, q: str, scope: Scope = None) -> List[dict]:
         testo = (q or "").lower().strip()
         trovati = []
-        for a in self.agents():
+        for a in self.agents(scope=scope):
             inv = self.agent(a["id"])["inventory"]
             for s in inv.get("software", []):
                 if not testo or testo in f"{s.get('name', '')} {s.get('publisher', '')}".lower():
                     trovati.append({"agent_id": a["id"], "hostname": a["hostname"], "name": s.get("name"), "version": s.get("version"), "publisher": s.get("publisher")})
         return trovati[:5000]
 
-    def inventory_csv(self) -> str:
+    def inventory_csv(self, scope: Scope = None) -> str:
         import csv
         import io
         uscita = io.StringIO()
         w = csv.writer(uscita)
         w.writerow(["hostname", "asset_tag", "owner", "location", "warranty_until", "manufacturer", "model", "serial", "cpu", "ram_gb", "os", "build",
-                    "disks", "last_seen", "groups"])
-        for a in self.agents():
+                    "disks", "last_seen", "groups", "client"])
+        for a in self.agents(scope=scope):
             d = self.agent(a["id"])
             hw = d["inventory"].get("hardware", {})
             w.writerow([a["hostname"], a["asset_tag"], a["owner"], a["location"], a["warranty_until"], hw.get("manufacturer", ""), hw.get("model", ""),
                         hw.get("serial", ""), hw.get("cpu", ""), hw.get("ram_gb", ""), hw.get("os", ""), hw.get("build", ""),
-                        "; ".join(f"{x.get('model', '')} {x.get('size_gb', '')} GB" for x in hw.get("disks", [])), a["last_seen"], " ".join(a["tags"])])
+                        "; ".join(f"{x.get('model', '')} {x.get('size_gb', '')} GB" for x in hw.get("disks", [])), a["last_seen"], " ".join(a["tags"]),
+                        a["tenant_name"]])
         return uscita.getvalue()
 
     # ---------- software catalog and update rings ----------
@@ -395,20 +420,86 @@ class Server:
             db.execute("DELETE FROM rings WHERE id = ?", (ident,))
             db.execute("UPDATE agents SET ring = '' WHERE ring = ?", (ident,))
 
-    def assign_ring(self, agenti: List[str], ident: str) -> int:
+    def assign_ring(self, agenti: List[str], ident: str, scope: Scope = None) -> int:
         if ident and ident not in {r["id"] for r in self.rings()}:
             raise CentralError("Unknown update ring.")
         with self._db() as db:
-            return sum(db.execute("UPDATE agents SET ring = ? WHERE id = ?", (ident, a)).rowcount for a in agenti)
+            visibili = None if scope is None else {x["id"] for x in self.agents(scope=scope)}
+            return sum(db.execute("UPDATE agents SET ring = ? WHERE id = ?", (ident, a)).rowcount for a in agenti if visibili is None or a in visibili)
 
-    def overview(self) -> dict:
-        a = self.agents()
+    # ---------- clients (tenants, 2.11) ----------
+
+    def tenants(self) -> List[dict]:
+        with self._db() as db:
+            righe = db.execute("SELECT * FROM tenants ORDER BY name").fetchall()
+            conti = {r["tenant"]: r["n"] for r in db.execute("SELECT tenant, COUNT(*) AS n FROM agents GROUP BY tenant")}
+            accessi: Dict[str, List[str]] = {}
+            for r in db.execute("SELECT username, tenant FROM tenant_access ORDER BY username"):
+                accessi.setdefault(r["tenant"], []).append(r["username"])
+        return [dict(r, agents=conti.get(r["id"], 0), users=accessi.get(r["id"], [])) for r in righe]
+
+    def save_tenant(self, dati: dict) -> dict:
+        nome = str(dati.get("name", "")).strip()
+        if not re.fullmatch(r"[\w .,&'\-]{2,60}", nome):
+            raise CentralError("Client name: 2-60 letters, digits, spaces and . , & ' -")
+        ident = str(dati.get("id", "") or "")
+        with self._db() as db:
+            try:
+                if ident:
+                    if not db.execute("UPDATE tenants SET name = ?, notes = ? WHERE id = ?", (nome, str(dati.get("notes", ""))[:500], ident)).rowcount:
+                        raise CentralError("Client not found.", 404)
+                else:
+                    ident = "k" + secrets.token_hex(5)
+                    db.execute("INSERT INTO tenants (id, name, notes, created) VALUES (?, ?, ?, ?)", (ident, nome, str(dati.get("notes", ""))[:500], now()))
+            except sqlite3.IntegrityError:
+                raise CentralError("A client with this name already exists.", 409) from None
+        return next(t for t in self.tenants() if t["id"] == ident)
+
+    def delete_tenant(self, ident: str) -> None:
+        with self._db() as db:
+            if db.execute("SELECT 1 FROM agents WHERE tenant = ?", (ident,)).fetchone():
+                raise CentralError("Move or remove the PCs of this client first.", 409)
+            # Not fail-open: dropping the last limit of a user would let them see every client.
+            if db.execute("SELECT 1 FROM tenant_access WHERE tenant = ?", (ident,)).fetchone():
+                raise CentralError("Remove the people limited to this client first (Who sees which clients).", 409)
+            if not db.execute("DELETE FROM tenants WHERE id = ?", (ident,)).rowcount:
+                raise CentralError("Client not found.", 404)
+            db.execute("DELETE FROM tenant_access WHERE tenant = ?", (ident,))
+
+    def move_to_tenant(self, agenti: List[str], ident: str) -> int:
+        with self._db() as db:
+            if ident and not db.execute("SELECT 1 FROM tenants WHERE id = ?", (ident,)).fetchone():
+                raise CentralError("Unknown client.", 404)
+            return sum(db.execute("UPDATE agents SET tenant = ? WHERE id = ?", (ident, a)).rowcount for a in agenti if isinstance(a, str))
+
+    def set_access(self, username: str, tenants: List[str]) -> List[str]:
+        """The clients a console user may see. No client = every client (the provider's own staff)."""
+        if not isinstance(tenants, list) or not all(isinstance(t, str) for t in tenants):
+            raise CentralError("A list of clients.")
+        noti = {t["id"] for t in self.tenants()}
+        if any(t not in noti for t in tenants):
+            raise CentralError("Unknown client.", 404)
+        with self._db() as db:
+            db.execute("DELETE FROM tenant_access WHERE username = ?", (username,))
+            for t in sorted(set(tenants)):
+                db.execute("INSERT INTO tenant_access (username, tenant) VALUES (?, ?)", (username, t))
+        return sorted(set(tenants))
+
+    def scope_for(self, username: Optional[str]) -> Scope:
+        if not username:
+            return None
+        with self._db() as db:
+            righe = db.execute("SELECT tenant FROM tenant_access WHERE username = ?", (username,)).fetchall()
+        return {r["tenant"] for r in righe} if righe else None
+
+    def overview(self, scope: Scope = None) -> dict:
+        a = self.agents(scope=scope)
         oggi = datetime.now().date().isoformat()
         return {"agents": len(a), "online": sum(x["online"] for x in a), "weak": sum(1 for x in a if (x["overall"] or 100) < 60),
                 "warranty_expired": sum(1 for x in a if x["warranty_until"] and x["warranty_until"] < oggi),
                 "compliance": round(sum(x["compliance"] for x in a if x["compliance"] is not None) / max(1, sum(1 for x in a if x["compliance"] is not None)), 1)
                 if any(x["compliance"] is not None for x in a) else None,
-                "queued": sum(x["queued"] for x in a), "groups": len(self.groups())}
+                "queued": sum(x["queued"] for x in a), "groups": len(self.groups()), "tenants": len(self.tenants())}
 
 
 def server_http(server: Server, porta: int, data_dir: Path, tls: bool = True) -> ThreadingHTTPServer:
@@ -645,6 +736,9 @@ class Client:
             except Exception:  # noqa: BLE001 - recorded at the next job
                 pass
         for lavoro in risposta.get("jobs", []):
+            if lavoro.get("kind") == "relocate":  # the server moves: same certificate, new address (2.11)
+                self._pending.append({"job_id": lavoro["job_id"], **self._relocate(lavoro.get("payload") or {})})
+                continue
             motivo = allowed_job(s["level"], lavoro)
             if motivo:
                 self._pending.append({"job_id": lavoro["job_id"], "status": "error", "result": {"error": motivo}})
@@ -654,3 +748,12 @@ class Client:
             except Exception as e:  # noqa: BLE001 - one failed job does not stop the others
                 self._pending.append({"job_id": lavoro["job_id"], "status": "error", "result": {"error": str(e)[:300]}})
         return risposta
+
+    def _relocate(self, carico: dict) -> dict:
+        """Calls the server at a new address from the next contact. The pinned fingerprint does not change, so only a
+        server that has the same certificate (restored from the backup) is accepted there."""
+        host, porta = str(carico.get("host", "")), carico.get("port")
+        if not HOST.fullmatch(host) or isinstance(porta, bool) or not isinstance(porta, int) or not 1024 <= porta <= 65535:
+            return {"status": "error", "result": {"error": "invalid new address"}}
+        _client_write(self.data_dir, server=host, port=porta, moved_at=now())
+        return {"status": "done", "result": {"server": host, "port": porta}}

@@ -3,9 +3,8 @@ wmm/server/permissions.py says which permission each route needs, and Handler._a
 from __future__ import annotations
 
 import json
-import re
 
-from ..agent import accounts, actions, appsettings, notify
+from ..agent import accounts, appsettings, notify
 from .errors import ApiError
 
 ID_USER = r"(u[0-9a-f]{12})"

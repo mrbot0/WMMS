@@ -162,7 +162,7 @@ def local_names() -> Tuple[List[str], List[str]]:
     ips = {"127.0.0.1"}
     try:
         for info in socket.getaddrinfo(nome, None, socket.AF_INET):
-            ips.add(info[4][0])
+            ips.add(str(info[4][0]))
     except OSError:
         pass
     return nomi, sorted(ips)

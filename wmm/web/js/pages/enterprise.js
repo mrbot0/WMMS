@@ -52,8 +52,11 @@
       UI.kpi("Need attention", Components.num(c.overview.weak), "health under 60", c.overview.weak ? "warning" : "ok") +
       UI.kpi("Compliance", c.overview.compliance == null ? "—" : c.overview.compliance + "%", "average of the baselines", "info") +
       UI.kpi("Warranty expired", Components.num(c.overview.warranty_expired), c.overview.queued + " jobs waiting", c.overview.warranty_expired ? "warning" : "ok") + "</div>" +
+      (c.tenants.length ? '<div class="toolbar"><label>Client <select data-tenant-filter><option value="">All clients</option>' + c.tenants.map(function (t) {
+        return '<option value="' + esc(t.id) + '"' + (t.id === c.tenantFilter ? " selected" : "") + ">" + esc(t.name + " (" + t.agents + ")") + "</option>"; }).join("") + "</select></label></div>" : "") +
       UI.table([{ title: "PC" }, { title: "Groups" }, { title: "Health" }, { title: "Compliance" }, { title: "Last contact" }, { title: "Asset" }, { title: "" }], c.agents.map(function (a) {
-        return ["<strong>" + esc(a.hostname) + '</strong><div class="cell-sub cell-mono">' + esc(a.ip + " · " + (a.version || "?")) + "</div>",
+        return ["<strong>" + esc(a.hostname) + '</strong><div class="cell-sub cell-mono">' + esc(a.ip + " · " + (a.version || "?")) + "</div>" +
+          (a.tenant_name ? '<div class="cell-sub">' + esc(a.tenant_name) + "</div>" : ""),
           a.tags.map(function (t) { return '<span class="badge">' + esc(t) + "</span>"; }).join(" ") || "—", score(a.overall),
           a.compliance == null ? "—" : esc(a.compliance + "%"), (a.online ? UI.statusIcon("ok") : UI.statusIcon("warning")) + " " + esc(when(a.last_seen)),
           esc([a.asset_tag, a.owner, a.location].filter(Boolean).join(" · ") || "—"),
@@ -64,8 +67,12 @@
       if (!b) return;
       if (b.hasAttribute("data-code")) {
         UI.modal("Enrollment code", '<form class="form" onsubmit="return false"><label>Address the PCs use to reach this server<input name="host" value="' + esc(App.state.info.hostname) + '"></label>' +
-          '<label>Groups for the new PCs (comma separated)<input name="tags"></label></form>', [{ label: "Cancel", cls: "btn-ghost" }, { label: "Create", cls: "btn-primary", value: function (w) {
-          var f = w.querySelector("form"); return { host: f.host.value.trim(), tags: f.tags.value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) }; } }])
+          '<label>Groups for the new PCs (comma separated)<input name="tags"></label>' +
+          (c.tenants.length ? '<label>Client of the new PCs<select name="tenant">' + (c.limited ? "" : '<option value="">No client</option>') + c.tenants.map(function (t) {
+            return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("") + "</select></label>" : "") +
+          "</form>", [{ label: "Cancel", cls: "btn-ghost" }, { label: "Create", cls: "btn-primary", value: function (w) {
+          var f = w.querySelector("form"); return { host: f.host.value.trim(), tags: f.tags.value.split(",").map(function (x) { return x.trim(); }).filter(Boolean),
+            tenant: f.tenant ? f.tenant.value : "" }; } }])
           .then(function (d) {
             if (!d) return null;
             return API.post("/central/enroll-code", d).then(function (r) {
@@ -81,6 +88,108 @@
     box.onchange = function (e) {
       if (e.target.hasAttribute("data-srv-on")) API.put("/central/server", { enabled: e.target.checked, port: Number(box.querySelector("[data-srv-port]").value) })
         .then(function () { App.render(); }, fail);
+      if (e.target.hasAttribute("data-tenant-filter")) {
+        var scelto = e.target.value;
+        API.get("/central" + (scelto ? "?tenant=" + encodeURIComponent(scelto) : "")).then(function (d) { d.tenantFilter = scelto; pcs(box, App, d); }, fail);
+      }
+    };
+  }
+
+  // 2.11: the clients of a provider that manages the PCs of several companies
+  function clients(box, App, c) {
+    var gestisce = can("central.manage") && !c.limited;
+    box.innerHTML = '<p class="muted" style="margin-top:0">For a provider that looks after several companies: every PC belongs to one client, and a technician can be ' +
+      "limited to the clients they look after (they see and manage only those PCs). People with no client see every client.</p>" +
+      (gestisce ? '<form class="toolbar tn-form" onsubmit="return false"><label>New client<input name="name" maxlength="60" placeholder="Rossi S.r.l."></label>' +
+        UI.button("Add", "data-tn-add", "btn-sm btn-primary", "check") + "</form>" : "") +
+      UI.table([{ title: "Client" }, { title: "PCs" }, { title: "People limited to it" }, { title: "" }], c.tenants.map(function (t) {
+        return ["<strong>" + esc(t.name) + "</strong>" + (t.notes ? '<div class="cell-sub">' + esc(t.notes) + "</div>" : ""), Components.num(t.agents),
+          esc(t.users.join(", ") || "—"),
+          gestisce ? '<button class="btn btn-sm" data-tn-move="' + esc(t.id) + '">Add PCs</button> <button class="btn btn-sm btn-ghost" data-tn-del="' + esc(t.id) + '">Delete</button>' : ""];
+      }), "No client yet: every PC belongs to this company.") +
+      (gestisce && c.tenants.length ? "<h3>Who sees which clients</h3>" +
+        '<form class="form tn-access" onsubmit="return false"><label>User name<input name="username" maxlength="64"></label><div class="check-list">' +
+        c.tenants.map(function (t) { return '<label class="check"><input type="checkbox" value="' + esc(t.id) + '"> ' + esc(t.name) + "</label>"; }).join("") + "</div>" +
+        UI.button("Save access", "data-tn-access", "btn-sm btn-primary", "check") + "</form>" : "");
+    box.onclick = function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-tn-add")) API.post("/central/tenants", { name: box.querySelector(".tn-form").name.value.trim() }).then(function () { App.render(); }, fail);
+      if (b.getAttribute("data-tn-del")) UI.confirm("Delete the client", "Only a client without PCs can be deleted.", { ok: "Delete" })
+        .then(function (ok) { if (ok) return API.del("/central/tenants/" + b.getAttribute("data-tn-del")).then(function () { App.render(); }); }).catch(fail);
+      if (b.getAttribute("data-tn-move")) {
+        var id = b.getAttribute("data-tn-move");
+        UI.modal("Add PCs to the client", '<select multiple size="10" class="tn-pcs" style="width:100%">' + c.agents.map(function (a) {
+          return '<option value="' + esc(a.id) + '">' + esc(a.hostname + (a.tenant_name ? " (" + a.tenant_name + ")" : "")) + "</option>"; }).join("") + "</select>",
+        [{ label: "Cancel", cls: "btn-ghost" }, { label: "Move", cls: "btn-primary", value: function (w) {
+          return Array.prototype.map.call(w.querySelector(".tn-pcs").selectedOptions, function (o) { return o.value; }); } }])
+          .then(function (ids) { if (ids && ids.length) return API.post("/central/tenants/move", { agents: ids, tenant: id }).then(function (r) { UI.toast(r.moved + " PCs moved.", "ok"); App.render(); }); })
+          .catch(fail);
+      }
+      if (b.hasAttribute("data-tn-access")) {
+        var f = box.querySelector(".tn-access");
+        var scelti = Array.prototype.filter.call(f.querySelectorAll("input[type=checkbox]"), function (x) { return x.checked; }).map(function (x) { return x.value; });
+        API.put("/central/tenants/access", { username: f.username.value.trim(), tenants: scelti }).then(function (r) {
+          UI.toast(r.tenants.length ? r.username + " now sees " + r.tenants.length + " clients." : r.username + " sees every client.", "ok"); App.render(); }, fail);
+      }
+    };
+  }
+
+  // 2.11: back up the central server, restore it on another PC, and move the PCs to the new address
+  function move(box, App, c) {
+    if (c.limited || !can("central.manage")) { box.innerHTML = '<div class="callout callout-info">' + UI.icon("shield") + "<div>Only the provider's staff: backups and moving the server concern every client.</div></div>"; return; }
+    box.innerHTML = '<p class="muted" style="margin-top:0">The backup holds the PCs, jobs, groups, assets, catalog, rings, clients and the certificate of the server: ' +
+      "restored on another PC, the PCs keep trusting it and do not need to enroll again. It is encrypted with the password: without it nobody can read it, not even you.</p>" +
+      "<h3>1. Tell the PCs the new address</h3>" +
+      '<p class="muted">Before switching off this server: the PCs will call the new PC from their next contact (only a server with this certificate is accepted there).</p>' +
+      '<form class="toolbar mv-reloc" onsubmit="return false"><label>New address (name or IP)<input name="host" maxlength="253"></label>' +
+      '<label>Port<input name="port" type="number" min="1024" max="65535" value="' + c.server.port + '" style="max-width:110px"></label>' +
+      UI.button("Send to every PC", "data-mv-reloc", "btn-sm", "play") + "</form>" +
+      "<h3>2. Back up</h3>" +
+      '<form class="toolbar mv-bk" onsubmit="return false"><label>Password (at least 12 characters)<input name="p1" type="password" autocomplete="new-password"></label>' +
+      '<label>Repeat it<input name="p2" type="password" autocomplete="new-password"></label>' + UI.button("Download the backup", "data-mv-bk", "btn-sm btn-primary", "download") + "</form>" +
+      "<h3>3. Restore on this PC</h3>" +
+      '<p class="muted">Replaces the central server of this PC. What it replaces is kept in dati\\db-backups and dati\\tls.</p>' +
+      '<form class="toolbar mv-rs" onsubmit="return false"><label>Backup file<input name="file" type="file" accept=".wmmcentral"></label>' +
+      '<label>Password<input name="p" type="password" autocomplete="off"></label>' + UI.button("Check and restore", "data-mv-rs", "btn-sm", "refresh") + "</form>";
+    function leggi(file) {
+      return new Promise(function (ok, ko) {
+        var r = new FileReader();
+        r.onload = function () { ok(String(r.result).split(",")[1] || ""); };
+        r.onerror = function () { ko(new Error("The file cannot be read.")); };
+        r.readAsDataURL(file);
+      });
+    }
+    box.onclick = function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-mv-reloc")) {
+        var f = box.querySelector(".mv-reloc");
+        var dati = { kind: "relocate", payload: { host: f.host.value.trim(), port: Number(f.port.value) }, agents: c.agents.map(function (a) { return a.id; }) };
+        UI.confirm("Move the PCs", "Every PC will call " + dati.payload.host + ":" + dati.payload.port + " from its next contact. Restore the backup there before switching this server off.", { ok: "Send" })
+          .then(function (ok) { if (ok) return API.post("/central/jobs", dati).then(function (r) { UI.toast(r.queued + " PCs will move at their next contact.", "ok"); watchBatch(App, r.batch); }); })
+          .catch(fail);
+      }
+      if (b.hasAttribute("data-mv-bk")) {
+        var k = box.querySelector(".mv-bk");
+        if (k.p1.value !== k.p2.value) { UI.toast("The two passwords are different.", "error"); return; }
+        b.disabled = true;
+        API.download("/central/backup", "wmm-central.wmmcentral", { password: k.p1.value }).then(function () { b.disabled = false; UI.toast("Backup downloaded: keep it with the password in a safe place.", "ok"); },
+          function (er) { b.disabled = false; fail(er); });
+      }
+      if (b.hasAttribute("data-mv-rs")) {
+        var r = box.querySelector(".mv-rs");
+        if (!r.file.files[0]) { UI.toast("Choose the backup file.", "error"); return; }
+        b.disabled = true;
+        leggi(r.file.files[0]).then(function (bundle) {
+          return API.post("/central/backup/inspect", { bundle: bundle, password: r.p.value }).then(function (info) {
+            return UI.confirm("Restore the central server", "Backup of " + info.source + " (" + when(info.created) + "): " + info.agents + " PCs, " + info.tenants +
+              " clients, certificate " + info.fingerprint.slice(0, 23) + "…. The central server of this PC is replaced.", { ok: "Restore" }).then(function (ok) {
+              if (ok) return API.post("/central/restore", { bundle: bundle, password: r.p.value, confirm: true }).then(function (x) { UI.toast("Restored: " + x.agents + " PCs.", "ok"); App.render(); });
+            });
+          });
+        }).then(function () { b.disabled = false; }, function (er) { b.disabled = false; fail(er); });
+      }
     };
   }
   function sendJob(App, c) {
@@ -286,8 +395,8 @@
     render: function (el, App) {
       return API.get("/central").then(function (c) {
         App.setSubtitle(c.overview.agents + " managed PCs · " + c.overview.online + " online");
-        var tabs = [["pcs", "Managed PCs", "network"], ["inventory", "Inventory", "storage"], ["software", "Software", "download"], ["updates", "Updates", "updates"],
-          ["compliance", "Compliance", "shield"], ["approvals", "Approvals", "check"], ["incidents", "Incidents", "alert"], ["report", "Executive report", "reports"], ["thispc", "This PC", "cpu"]];
+        var tabs = [["pcs", "Managed PCs", "network"], ["clients", "Clients", "users"], ["inventory", "Inventory", "storage"], ["software", "Software", "download"], ["updates", "Updates", "updates"],
+          ["compliance", "Compliance", "shield"], ["approvals", "Approvals", "check"], ["incidents", "Incidents", "alert"], ["report", "Executive report", "reports"], ["move", "Backup and move", "storage"], ["thispc", "This PC", "cpu"]];
         var attiva = (/[?&]tab=(\w+)/.exec(location.hash) || [])[1] || Components.store("entTab") || "pcs";
         if (!tabs.some(function (t) { return t[0] === attiva; })) attiva = "pcs";
         el.innerHTML = UI.pageHeader("Company centre", "Every PC of the company from one place: central server, inventory, software, updates, compliance and incidents", "") +
@@ -299,7 +408,7 @@
           var vecchio = el.querySelector("#ent-body"), nuovo = document.createElement("div");
           nuovo.id = "ent-body"; nuovo.className = "card-body";
           vecchio.parentNode.replaceChild(nuovo, vecchio);
-          ({ pcs: pcs, inventory: inventory, software: software, updates: updates, compliance: compliance, approvals: approvals, incidents: incidentsTab, report: report, thispc: thisPc })[id](nuovo, App, c);
+          ({ pcs: pcs, clients: clients, move: move, inventory: inventory, software: software, updates: updates, compliance: compliance, approvals: approvals, incidents: incidentsTab, report: report, thispc: thisPc })[id](nuovo, App, c);
         }
         el.querySelector(".tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-etab]"); if (b) show(b.getAttribute("data-etab")); });
         show(attiva);

@@ -5,9 +5,8 @@ and the compliance report says which updates are pending and how old the last on
 from __future__ import annotations
 
 import re
-import subprocess
 from datetime import date, datetime
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
 from .crashes import as_list, run_json
 
@@ -40,7 +39,7 @@ def clean_ring(dati: dict) -> dict:
 def values(anello: dict) -> dict:
     """The registry values (name -> (type, value)) of a ring."""
     inizio, fine = (int(x) for x in anello.get("active_hours", "8-18").split("-"))
-    v = {"DeferQualityUpdates": ("dword", 1 if anello.get("quality_days") else 0), "DeferQualityUpdatesPeriodInDays": ("dword", int(anello.get("quality_days") or 0)),
+    v: Dict[str, tuple] = {"DeferQualityUpdates": ("dword", 1 if anello.get("quality_days") else 0), "DeferQualityUpdatesPeriodInDays": ("dword", int(anello.get("quality_days") or 0)),
          "DeferFeatureUpdates": ("dword", 1 if anello.get("feature_days") else 0), "DeferFeatureUpdatesPeriodInDays": ("dword", int(anello.get("feature_days") or 0)),
          "SetActiveHours": ("dword", 1), "ActiveHoursStart": ("dword", inizio), "ActiveHoursEnd": ("dword", fine)}
     if anello.get("target_version"):

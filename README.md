@@ -16,6 +16,8 @@ produces customer-ready reports.
 
 ## Contents
 
+Manuals (Italian): [administrator manual](docs/manuale-amministratore.md) · [user guide](docs/guida-utente.md) · [API and OpenAPI](docs/api.md)
+
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [The console](#the-console)
@@ -187,7 +189,8 @@ repository.
 ## Local API
 
 The console uses a JSON API that a future central console can call on each agent. Every payload carries
-the `machine_id`. Requests that change something need the `X-WMM-Token` header.
+the `machine_id`. Requests that change something need the `X-WMM-Token` header. The full list, with the permissions of
+every route, is in [docs/openapi.json](docs/openapi.json) (also served at `/api/v1/openapi.json`); see [docs/api.md](docs/api.md).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -229,14 +232,17 @@ wmm/
   server/api.py         HTTP server and JSON API
   web/                  console: HTML, CSS, vanilla JS, SVG charts
 tests/                  unittest suite
-docs/superpowers/       design document and implementation plan
+docs/                   manuals, OpenAPI (tools/build_docs.py), design documents (docs/superpowers)
 ```
 
 ## Development
 
 ```
-python -m unittest discover      run the test suite (213 tests)
-python wmm.py --preview          try the console without changing the PC
+python -m unittest discover -s tests -t .   run the test suite
+python -m ruff check .                     lint (CI)
+python tools/typecheck.py                  type check: no file may get more errors than tools/mypy_baseline.json
+python tools/build_docs.py                 rebuild docs/openapi.json after changing a route
+python wmm.py --preview                    try the console without changing the PC
 ```
 
 The tests use temporary folders and mocked PowerShell, Task Scheduler and registry calls; they do not

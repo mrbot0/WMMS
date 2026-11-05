@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
+from . import migrations
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS scans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +61,11 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+# Versioned steps (2.11): never edit or reorder, only append. 1.7: minutes after startup or sign-in; 2.6: the before/after
+# check of a fix and the registry values it changed, for a precise undo.
+MIGRATIONS = [migrations.add_column("schedules", "delay", "INTEGER NOT NULL DEFAULT 0")] + [migrations.add_column("runs", n, t) for n, t in RUN_COLUMNS_2_6]
+
+
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -70,15 +77,7 @@ class Store:
                 db.execute("PRAGMA journal_mode=WAL")
             except sqlite3.DatabaseError:
                 pass  # a read-only or network folder keeps the default journal
-            db.executescript(SCHEMA)
-            colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(schedules)")}
-            if "delay" not in colonne:  # added in 1.7: minutes after startup or sign-in
-                db.execute("ALTER TABLE schedules ADD COLUMN delay INTEGER NOT NULL DEFAULT 0")
-            # Added in 2.6: the before/after check of a fix and the registry values it changed, for a precise undo.
-            colonne = {riga["name"] for riga in db.execute("PRAGMA table_info(runs)")}
-            for nome, tipo in RUN_COLUMNS_2_6:
-                if nome not in colonne:
-                    db.execute(f"ALTER TABLE runs ADD COLUMN {nome} {tipo}")
+        self.migration = migrations.upgrade(self.path, "wmm", SCHEMA, MIGRATIONS)
 
     @contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:

@@ -1,6 +1,5 @@
 """Tests for the SQLite history store."""
 import tempfile
-import time
 import unittest
 from pathlib import Path
 

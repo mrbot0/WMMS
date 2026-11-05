@@ -5,7 +5,6 @@ error stops the start-up: without it the console cannot work at all."""
 from __future__ import annotations
 
 import ctypes
-import os
 import shutil
 import socket
 import sqlite3

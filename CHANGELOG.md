@@ -3,6 +3,37 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.11.0 — 2026-11-05
+
+**Several clients, server backup and move, and a sturdier project.** Ten improvements:
+
+1. **Reliable tests, protected main**: the race that made a job test fail now and then is fixed (the agent is released before the job
+   is marked finished); the main branch accepts only changes whose `tests` check is green.
+2. **Browser tests of the critical flows** (`tests/e2e/flows_check.js`): a viewer signs in and sees only what the role allows, a help-desk
+   user gets an approval request instead of a run, the administrator approves it and finds users and clients. They run on GitHub too.
+3. **Permission matrix** (`tests/test_v211.py`): every route is called without a session, with a role without permissions and with a role
+   that has every permission but the ones the route needs; all must be refused before the route runs.
+4. **Cleaner code**: `features.py` split in its agent half and its routes (`routes_features.py`); ruff (errors, undefined names, unused
+   imports) and mypy with a ratchet (`tools/typecheck.py`: no file may get more type errors) run on GitHub.
+5. **The MSI from GitHub**: every release builds `WindowsMaintenanceManager-<version>.msi` with WiX, signs it with the same certificate as
+   the setup when the secrets are set, and lists it in `SHA256SUMS.txt`; every change builds it once as a check. A copy installed with the
+   MSI updates itself with the MSI (checksum, and signature when present).
+6. **Versioned database migrations** (`wmm/agent/migrations.py`): `wmm.db`, `accounts.db` and `central.db` carry their version; before an
+   upgrade a copy goes to `dati\db-backups` (last 5 kept), the steps run in one transaction, a database from a newer version is left alone.
+   Versions and copies in Settings › Data.
+7. **Complete Italian**: a browser check reads every page and tab in Italian and fails on English sentences written by the app (Windows data
+   such as service descriptions stays as it is); more than 100 phrases and 25 rules for text with numbers added.
+8. **Documentation**: `docs/manuale-amministratore.md` (enterprise installation, MSI, roles, Entra ID step by step, central server, clients,
+   move, migrations), `docs/guida-utente.md`, `docs/api.md` and `docs/openapi.json` generated from the routes (`tools/build_docs.py`, also at
+   `/api/v1/openapi.json`; the tests fail when it is out of date).
+9. **Clients on the central server** (MSP): every PC and enrollment code belongs to a client; a technician limited to some clients sees and
+   manages only their PCs, jobs, inventory and exports; what all clients share (server settings, groups, catalog, rings, backup) stays with the
+   provider's staff. Company centre › Clients.
+10. **Backup and move of the central server** (`wmm/agent/centralmove.py`): one `.wmmcentral` file encrypted with a password (PBKDF2-SHA256
+    300 000 rounds, HMAC-SHA256 keystream and seal) with the database and the server certificate; the secrets of the PCs are encrypted again
+    for the new PC. A "move to a new address" job sends the PCs to the new server, which they accept because the certificate is the same: no
+    PC enrolls again. Company centre › Backup and move.
+
 ## 2.10.0 — 2026-11-05
 
 **Company centre: central server, company sign-in, approvals and compliance.** Twenty features:

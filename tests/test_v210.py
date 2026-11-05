@@ -2,7 +2,6 @@
 automatic undo, central server (a real HTTPS round trip), deployment, update rings, baselines, tickets, incidents and
 the executive PDF. Nothing changes the PC."""
 import base64
-import hashlib
 import json
 import tempfile
 import time

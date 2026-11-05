@@ -99,10 +99,18 @@
     hasToken: function () { return !!TOKEN; },
     setSession: setSession,
     // A file from the agent, with the session (a plain link would not carry it).
-    download: function (path, name) {
+    // With a body it is a POST (2.11: the backup of the central server needs its password).
+    download: function (path, name, body) {
       var headers = { "Accept": "*/*" };
       if (SESSION) headers["X-WMM-Session"] = SESSION;
-      return fetch(BASE + path, { headers: headers, credentials: "same-origin" }).then(function (r) {
+      var options = { headers: headers, credentials: "same-origin" };
+      if (body !== undefined) {
+        options.method = "POST";
+        headers["X-WMM-Token"] = TOKEN;
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      return fetch(BASE + path, options).then(function (r) {
         if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || ("Download failed (" + r.status + ")")); });
         return r.blob();
       }).then(function (blob) {
