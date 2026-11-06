@@ -61,7 +61,8 @@
     }).join("") + "</span>";
   }
   function check(id, on, label, hint) {
-    return '<label class="check"><input type="checkbox" id="' + id + '"' + (on ? " checked" : "") + "> " + label + "</label>" + (hint ? '<span class="hint">' + hint + "</span>" : "");
+    return '<label class="check"><input type="checkbox" role="switch" id="' + id + '"' + (on ? " checked" : "") + '><span class="check-text">' + label + "</span>" +
+      (hint ? '<span class="hint">' + hint + "</span>" : "") + "</label>";
   }
 
   window.Pages.settings = {
@@ -96,7 +97,7 @@
             field("report_footer", "Footer", "Contact details printed at the end of every report.", true) +
             '<div class="page-actions"><button class="btn btn-primary" type="submit">' + UI.icon("check") + "Save</button></div></form>"),
 
-          appearance: UI.card("Appearance", '<div class="form">' +
+          appearance: UI.card("Language and theme", '<div class="form">' +
             "<label>Language" + group("lang", [["auto", "Automatic"], ["en", "English"], ["it", "Italiano"]], window.I18N ? I18N.choice() : "auto") +
             '<span class="hint">Automatic follows the browser language. Data, paths and program names stay as Windows writes them.</span></label>' +
             "<label>Theme" + group("theme", [["system", "System"], ["light", "Light"], ["dark", "Dark"]], theme) + "</label>" +
@@ -106,7 +107,8 @@
             "Off: nothing moves except spinners and progress bars.</span></label>" +
             '<label>Accent color<span style="display:flex;gap:8px">' + [["blue", "#0F6CBD"], ["teal", "#0E8A7B"], ["violet", "#6D4AD6"], ["orange", "#C2570C"], ["graphite", "#3E4C5E"]].map(function (c) {
               return '<button type="button" class="swatch-pick' + ((store("accent") || "blue") === c[0] ? " active" : "") + '" data-accent="' + c[0] + '" title="' + c[0] + '" style="background:' + c[1] + '"></button>';
-            }).join("") + "</span></label>" +
+            }).join("") + "</span></label>" + "</div>") +
+            UI.card("Text and layout", '<div class="form">' +
             "<label>Text size" + group("fontSize", [["small", "Small"], ["normal", "Normal"], ["large", "Large"]], store("fontSize") || "normal") + "</label>" +
             "<label>Density" + group("density", [["comfortable", "Comfortable"], ["compact", "Compact"]], Components.density.get()) + "</label>" +
             "<label>Corners" + group("corners", [["rounded", "Rounded"], ["square", "Square"]], store("corners") || "rounded") + "</label>" +
@@ -114,19 +116,21 @@
             "<label>Shadows" + group("shadows", [["none", "None"], ["soft", "Soft"], ["strong", "Strong"]], store("shadows") || "soft") + "</label>" +
             "<label>Typeface" + group("typeface", [["system", "Segoe UI"], ["readable", "Verdana (more legible)"], ["rounded", "Rounded"]], store("typeface") || "system") + "</label>" +
             "<label>Page width" + group("pageWidth", [["full", "Full screen"], ["centered", "Centered (1400 px)"]], store("pageWidth") || "full") +
-            '<span class="hint">Centered keeps lines short on very wide monitors.</span></label>' +
-            check("hide-statusbar", store("hideStatusbar"), "Hide the status bar at the bottom") +
-            check("no-tips", store("noTips"), "Turn off hover tooltips", "Titles of buttons and values stay available to screen readers.") +
+            '<span class="hint">Centered keeps lines short on very wide monitors.</span></label>' + "</div>") +
+            UI.card("Accessibility", '<div class="form">' +
             check("contrast", store("contrast"), "High contrast", "Stronger borders and text for bright rooms and low vision.") +
             check("cb-safe", store("cbSafe"), "Color-blind friendly status colors", "Blue for good and orange for problems instead of green and red; icons stay the same.") +
             check("no-blur", store("noBlur"), "Reduce transparency", "Solid top bar, menus and dialogs: easier to read and lighter on old graphics cards.") +
             check("wide-text", store("wideText"), "Wider letter and line spacing", "Helps reading long descriptions, also with dyslexia.") +
             check("underline-links", store("underlineLinks"), "Always underline links") +
+            check("no-tips", store("noTips"), "Turn off hover tooltips", "Titles of buttons and values stay available to screen readers.") + "</div>") +
+            UI.card("Top bar and menu", '<div class="form">' +
+            check("hide-statusbar", store("hideStatusbar"), "Hide the status bar at the bottom") +
             check("live-mini", !store("hideLiveMini"), "Show live CPU and memory in the top bar") +
             check("compact", document.body.classList.contains("sidebar-collapsed"), "Compact sidebar (icons only)") +
-            '<button class="btn btn-sm" type="button" id="expand-cards" style="align-self:flex-start">' + UI.icon("refresh") + "Expand all collapsed cards</button></div>"),
+            '<button class="btn btn-sm" type="button" id="expand-cards" style="align-self:flex-start">' + UI.icon("refresh") + "Expand all collapsed cards</button>" + "</div>"),
 
-          behaviour: UI.card("Behaviour", '<div class="form">' +
+          behaviour: UI.card("Start and refresh", '<div class="form">' +
             '<label>Start page<select id="start-page"><option value="last">The page used last</option>' + pages.map(function (g) {
               return '<optgroup label="' + esc(g[0]) + '">' + g[1].map(function (p) {
                 return '<option value="' + p[0] + '"' + (store("startPage") === p[0] ? " selected" : "") + ">" + esc(p[1]) + "</option>";
@@ -134,19 +138,21 @@
             }).join("") + '</select><span class="hint">The page the console opens on.</span></label>' +
             "<label>Dashboard refresh" + group("dashInterval", [[30, "30 s"], [60, "1 min"], [300, "5 min"], [900, "15 min"]], store("dashInterval") || 60) +
             '<span class="hint">How often the dashboard reloads by itself (when its auto-refresh switch is on).</span></label>' +
-            "<label>Rows per table" + group("pageSize", [[10, "10"], [25, "25"], [50, "50"], [100, "100"]], store("pageSize") || 10) + "</label>" +
+            "<label>Scan at start when the last scan is older than" + group("autoScanDays", [[0, "Never"], [1, "1 day"], [3, "3 days"], [7, "1 week"]], store("autoScanDays") || 0) +
+            '<span class="hint">Only when the console runs as administrator; the scan changes nothing on the PC.</span></label>' +
+            "<label>Live CPU and memory in the top bar" + group("liveInterval", [[3, "Every 3 s"], [10, "Every 10 s"], [30, "Every 30 s"], [0, "Off"]], store("liveInterval") != null ? store("liveInterval") : 3) + "</label>" + "</div>") +
+            UI.card("Messages and confirmations", '<div class="form">' +
             "<label>Message duration" + group("toastSpeed", [["short", "Short"], ["normal", "Normal"], ["long", "Long"]], store("toastSpeed") || "normal") +
             '<span class="hint">How long notifications stay on screen. Hovering one always pauses it.</span></label>' +
+            "<label>Messages shown" + group("toastLevel", [["all", "All"], ["problems", "Only warnings and errors"]], store("toastLevel") || "all") + "</label>" +
             check("confirm-safe", store("confirmSafe"), "Ask before running safe actions too", "Every run shows its steps and asks for confirmation first.") +
-            check("warn-close", store("warnOnClose") !== false, "Ask before closing the tab while a run is in progress", "The run goes on in the agent anyway; this only avoids closing the view by mistake.") +
-            check("no-keys", store("noKeyShortcuts"), "Turn off single-key shortcuts", "G then a letter, /, ? and Shift shortcuts stop working; Ctrl K still opens search. Useful with screen readers or speech input.") +
+            check("warn-close", store("warnOnClose") !== false, "Ask before closing the tab while a run is in progress", "The run goes on in the agent anyway; this only avoids closing the view by mistake.") + "</div>") +
+            UI.card("Navigation and tables", '<div class="form">' +
+            "<label>Rows per table" + group("pageSize", [[10, "10"], [25, "25"], [50, "50"], [100, "100"]], store("pageSize") || 10) + "</label>" +
             check("page-tabs", store("pageTabs") !== false, "Split long pages into tabs", "Dashboard, area pages, Hardware and Schedules show one group at a time: overview first, details after.") +
             check("simple-mode", store("simpleMode"), "Simple mode", "The menu shows only the everyday pages; the pages for experts still open from the search (Ctrl K).") +
             check("palette-actions", store("paletteActions") !== false, "List actions in the search (Ctrl K)", "Off: the search shows pages, commands and settings only, without the 200+ tools.") +
-            "<label>Scan at start when the last scan is older than" + group("autoScanDays", [[0, "Never"], [1, "1 day"], [3, "3 days"], [7, "1 week"]], store("autoScanDays") || 0) +
-            '<span class="hint">Only when the console runs as administrator; the scan changes nothing on the PC.</span></label>' +
-            "<label>Live CPU and memory in the top bar" + group("liveInterval", [[3, "Every 3 s"], [10, "Every 10 s"], [30, "Every 30 s"], [0, "Off"]], store("liveInterval") != null ? store("liveInterval") : 3) + "</label>" +
-            "<label>Messages shown" + group("toastLevel", [["all", "All"], ["problems", "Only warnings and errors"]], store("toastLevel") || "all") + "</label></div>") +
+            check("no-keys", store("noKeyShortcuts"), "Turn off single-key shortcuts", "G then a letter, /, ? and Shift shortcuts stop working; Ctrl K still opens search. Useful with screen readers or speech input.") + "</div>") +
             UI.card("Formats", '<div class="form">' +
               "<label>Time" + group("timeFormat", [["system", "Like Windows"], ["24", "24-hour"], ["12", "12-hour"]], store("timeFormat") || "system") + "</label>" +
               "<label>Dates" + group("dateStyle", [["short", "02 Nov 2026"], ["numeric", "02/11/2026"], ["iso", "2026-11-02"]], store("dateStyle") || "short") + "</label>" +
@@ -249,13 +255,14 @@
           '<label class="dt-search settings-search">' + UI.icon("search") + '<span class="sr-only">Search settings</span><input type="search" id="settings-q" placeholder="Search settings…"></label>' +
           '<p class="muted small settings-noresult" hidden>No setting matches.</p>' + gruppi.map(function (g) {
             return (g.group ? '<div class="settings-group">' + esc(g.group) + "</div>" : "") + g.items.map(function (x) {
-              return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
+              return '<button type="button" class="settings-link' + (x[0] === active ? " active" : "") + '" data-sect="' + x[0] + '" title="' + esc(x[3]) + '"' + (x[0] === active ? ' aria-current="true"' : "") + ">" +
                 UI.icon(x[2]) + '<span><strong>' + esc(x[1]) + '</strong><span class="cell-sub">' + esc(x[3]) + "</span></span></button>";
             }).join("");
           }).join("") + "</nav>" + '<div class="settings-panels">' + sezioni.map(function (x) {
             var reset = SECTION_KEYS[x[0]] ? '<div class="section-reset"><button type="button" class="btn btn-sm btn-ghost" data-reset-section="' + x[0] + '" data-title="' + esc(x[1]) + '">' +
               UI.icon("refresh") + "Reset this section</button></div>" : "";
-            return '<section class="settings-panel stack" data-panel="' + x[0] + '"' + (x[0] === active ? "" : " hidden") + ">" + body[x[0]] + reset + "</section>";
+            var head = '<header class="settings-head">' + UI.icon(x[2]) + "<div><h2>" + esc(x[1]) + "</h2><p>" + esc(x[3]) + "</p></div></header>";
+            return '<section class="settings-panel stack" data-panel="' + x[0] + '"' + (x[0] === active ? "" : " hidden") + ">" + head + body[x[0]] + reset + "</section>";
           }).join("") + "</div></div>";
 
         /* ---------- side menu ---------- */

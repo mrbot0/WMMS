@@ -3,6 +3,13 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.12.1 — 2026-11-06
+
+**A clearer Settings page.** Every setting is now a row, with its name and explanation on the left and the control on the right, and
+switches replace the checkboxes. Appearance is split into Language and theme, Text and layout, Accessibility, Top bar and menu; Behaviour
+into Start and refresh, Messages and confirmations, Navigation and tables. Every section opens with its title and description. The side
+menu shows one line per section and scrolls by itself. Missing Italian for some section names added.
+
 ## 2.12.0 — 2026-11-05
 
 **Settings reorganized, a refreshed console and thirty everyday features.**

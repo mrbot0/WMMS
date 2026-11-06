@@ -2,6 +2,16 @@
 
 CHANGELOG = [
     {
+        "version": "2.12.1",
+        "date": "2026-11-06",
+        "title": "A clearer Settings page",
+        "highlights": [
+            "Every setting is a row: its name and explanation on the left, the control on the right; switches instead of checkboxes.",
+            "Appearance and Behaviour split by topic; every section opens with its title and description; a compact side menu that scrolls by itself.",
+        ],
+        "changes": [],
+    },
+    {
         "version": "2.12.0",
         "date": "2026-11-05",
         "title": "Settings reorganized, a refreshed console and thirty everyday features",

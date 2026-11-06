@@ -2520,5 +2520,19 @@ window.I18N_PAGES = {
 "Drive C: is encrypted, but has no recovery key": "L'unità C: è cifrata, ma non ha una chiave di ripristino",
 "If Windows asks for the key (after a BIOS update or a new motherboard) the data is lost. Add a recovery password and save it.": "Se Windows chiede la chiave (dopo un aggiornamento del BIOS o una nuova scheda madre) i dati sono persi. Aggiungi una password di ripristino e salvala.",
 "Drive C: is encrypted and has a recovery key": "L'unità C: è cifrata e ha una chiave di ripristino",
-"Make sure the key is saved: in the Microsoft account (account.microsoft.com/devices/recoverykey), in Entra ID or Active Directory, or printed and kept away from the PC.": "Assicurati che la chiave sia salvata: nell'account Microsoft (account.microsoft.com/devices/recoverykey), in Entra ID o Active Directory, oppure stampata e conservata lontano dal PC."
+"Make sure the key is saved: in the Microsoft account (account.microsoft.com/devices/recoverykey), in Entra ID or Active Directory, or printed and kept away from the PC.": "Assicurati che la chiave sia salvata: nell'account Microsoft (account.microsoft.com/devices/recoverykey), in Entra ID o Active Directory, oppure stampata e conservata lontano dal PC.",
+"Language and theme": "Lingua e tema",
+"Text and layout": "Testo e disposizione",
+"Accessibility": "Accessibilità",
+"Top bar and menu": "Barra in alto e menu",
+"Start and refresh": "Avvio e aggiornamento",
+"Messages and confirmations": "Messaggi e conferme",
+"Navigation and tables": "Navigazione e tabelle",
+"Color-blind friendly status colors": "Colori di stato adatti ai daltonici",
+"Theme, colors, text, animations": "Tema, colori, testo, animazioni",
+"Start page, formats, tables, keyboard": "Pagina iniziale, formati, tabelle, tastiera",
+"Tips, tour, keyboard": "Suggerimenti, tour, tastiera",
+"A clearer Settings page": "Una pagina Impostazioni più chiara",
+"Every setting is a row: its name and explanation on the left, the control on the right; switches instead of checkboxes.": "Ogni impostazione è una riga: nome e spiegazione a sinistra, il controllo a destra; interruttori al posto delle caselle.",
+"Appearance and Behaviour split by topic; every section opens with its title and description; a compact side menu that scrolls by itself.": "Aspetto e Comportamento divisi per argomento; ogni sezione si apre con titolo e descrizione; un menu laterale compatto che scorre da solo."
 };

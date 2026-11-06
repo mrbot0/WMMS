@@ -102,8 +102,92 @@ div.check-list > .check { margin-top: 4px; }
 .why-list dd { margin: 0; line-height: 1.5; }
 @media (max-width: 640px) { .why-list { grid-template-columns: 1fr; } .why-list dt { margin-top: 6px; } }
 
+/* ---------- 2.13: Settings layout ----------
+   Every setting is a row: name and explanation on the left, the control on the right, a thin line between rows.
+   Switches instead of checkboxes, a compact side menu that scrolls by itself, a header on each section, a readable width. */
+.settings-layout { grid-template-columns: 240px minmax(0, 1fr); gap: 28px; }
+.settings-panels { min-width: 0; max-width: 920px; }
+.settings-nav { gap: 1px; padding: 10px 8px; max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.settings-link { align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; }
+.settings-link .icon { margin-top: 0; width: 16px; height: 16px; flex: none; }
+.settings-link .cell-sub { display: none; }
+.settings-link strong { font-size: 13.5px; font-weight: 550; line-height: 1.3; }
+.settings-link span { min-width: 0; }
+.settings-link.active strong { font-weight: 650; }
+.settings-group { margin: 16px 10px 6px; }
+.settings-search { margin: 0 2px 6px; }
+
+.settings-head { display: flex; align-items: center; gap: 14px; padding: 2px 2px 6px; }
+.settings-head > .icon { width: 22px; height: 22px; padding: 9px; box-sizing: content-box; border-radius: 12px; background: var(--accent-soft); color: var(--accent); flex: none; }
+.settings-head h2 { font: 650 20px/1.2 var(--font-display); letter-spacing: -.2px; margin: 0; }
+.settings-head p { margin: 3px 0 0; color: var(--text-3); font-size: 13px; }
+.settings-panel { gap: 16px; }
+.settings-panel .card-head { padding-bottom: 2px; }
+.settings-panel .card-head h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-3); font-weight: 700; }
+.settings-panel .card-head h2 .icon { display: none; }
+
+/* rows */
+.settings-panel .form { gap: 0; }
+.settings-panel .form > label:not(.check) {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, auto); column-gap: 28px; row-gap: 3px; align-items: center;
+  padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; color: var(--text);
+}
+.settings-panel .form > label:not(.check) > :not(.hint) { grid-column: 2; justify-self: end; max-width: 100%; }
+.settings-panel .form > label:not(.check) > select,
+.settings-panel .form > label:not(.check) > input:not([type="checkbox"]):not([type="color"]) { justify-self: stretch; min-width: 220px; max-width: 360px; }
+.settings-panel .form > label:not(.check) > .hint { grid-column: 1; font-size: 12.5px; font-weight: 400; color: var(--text-3); line-height: 1.45; }
+.settings-panel .form > label:has(> textarea) { grid-template-columns: minmax(0, 1fr); }
+.settings-panel .form > label:has(> textarea) > textarea { grid-column: 1; justify-self: stretch; }
+.settings-panel .form > label:not(.check) > .btn-group { flex-wrap: wrap; justify-content: flex-end; }
+
+/* switch rows */
+.settings-panel .form > label.check {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 28px; row-gap: 3px; align-items: center;
+  margin: 0; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer;
+}
+.settings-panel .form > label.check > input { grid-column: 2; grid-row: 1 / span 2; }
+.settings-panel .form > label.check > .check-text { grid-column: 1; }
+.settings-panel .form > label.check > .hint { grid-column: 1; font-size: 12.5px; font-weight: 400; color: var(--text-3); line-height: 1.45; }
+.settings-panel .form > :last-child { border-bottom: 0; }
+.settings-panel .form > .btn, .settings-panel .form > button { justify-self: start; align-self: flex-start; margin-top: 12px; }
+
+/* switch */
+.settings-panel .form > label.check > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; width: 40px; height: 22px; margin: 0; border-radius: 999px; position: relative; cursor: pointer;
+  background: var(--border-strong); border: 0; transition: background-color .18s var(--ease); flex: none;
+}
+.settings-panel .form > label.check > input[type="checkbox"]::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .18s var(--ease);
+}
+.settings-panel .form > label.check > input[type="checkbox"]:checked { background: var(--accent); }
+.settings-panel .form > label.check > input[type="checkbox"]:checked::after { transform: translateX(18px); }
+.settings-panel .form > label.check > input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-panel .form > label.check > input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
+
+/* rows written by the older modules keep the hint after the label: it joins its row */
+.settings-panel .form > label.check:has(+ .hint) { border-bottom: 0; padding-bottom: 2px; }
+.settings-panel .form > label.check + .hint { display: block; padding: 0 70px 14px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+.settings-panel .form > .form-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.settings-panel .form > .form-row label { font-size: 12.5px; }
+
+/* the search dims rows, not whole cards */
+.settings-panel .search-dim { opacity: .3; }
+.section-reset { padding-top: 4px; }
+
+@media (max-width: 1100px) {
+  .settings-layout { grid-template-columns: 210px minmax(0, 1fr); gap: 18px; }
+}
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-nav { max-height: none; }
+  .settings-panel .form > label:not(.check) { grid-template-columns: 1fr; }
+  .settings-panel .form > label:not(.check) > :not(.hint) { grid-column: 1; justify-self: start; }
+}
+
 /* ---------- motion preferences ---------- */
 @media (prefers-reduced-motion: reduce) {
   .kpi, .btn, .table tbody tr, .tm-box { transition: none !important; }
   .kpi:hover { transform: none; }
+  .settings-panel .form > label.check > input[type="checkbox"], .settings-panel .form > label.check > input[type="checkbox"]::after { transition: none; }
 }

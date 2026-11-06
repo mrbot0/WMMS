@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "Windows Maintenance Manager API",
-  "version": "2.12.0",
+  "version": "2.12.1",
   "description": "The API of the console. Every write needs the X-WMM-Token header of the console or, with accounts on, an API token (Settings › API tokens) sent as Authorization: Bearer wmm_…. With accounts on, x-permissions lists what the role of the user (or the scopes of the token) must include. Runs of tools are also checked tool by tool."
  },
  "servers": [
