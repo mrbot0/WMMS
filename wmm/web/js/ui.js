@@ -625,8 +625,9 @@
     { id: "history", label: "History", icon: "history", match: function (n) { return hasCard("Score trend")(n) || hasCard("Recent activity")(n); } }
   ];
 
-  function bindArea(el, area, rerender) {
-    if (pref("pageTabs") !== false) pageTabs(el, "area", AREA_TABS);
+  /* extra: more tabs of one page, filled by blocks marked data-tab-group (Storage: Space analysis and Backup). */
+  function bindArea(el, area, rerender, extra) {
+    if (pref("pageTabs") !== false) pageTabs(el, "area", AREA_TABS.concat(extra || []));
     el.querySelectorAll("[data-scan-area]").forEach(function (scan) {
       scan.addEventListener("click", function () {
         scan.disabled = true;

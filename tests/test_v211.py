@@ -17,7 +17,7 @@ from tests import test_v29
 PW = test_v29.PW
 CANDIDATI = ["cleanup", "run", "save", "ack", "approve", "wifi", "end", "json", "start", "email", "set", "uninstall",
              "1", "a" + "0" * 16, "c" + "0" * 10, "r" + "0" * 10, "t" + "0" * 12, "u" + "0" * 12,
-             "k" + "0" * 10, "0" * 8, "0" * 12, "0" * 16, "0" * 32, "abc"]
+             "k" + "0" * 10, "b" + "0" * 10, "0" * 8, "0" * 12, "0" * 16, "0" * 32, "abc"]
 
 
 def sample_path(schema: re.Pattern) -> tuple:

@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import baselines, boot, canary, crashes, digest, drift, early_warning, kev, plus212, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
+from . import backups, baselines, boot, canary, crashes, digest, drift, early_warning, kev, plus212, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -1136,6 +1136,12 @@ _ACTIONS += (
     Action("storage.user_backup", "storage", "Copy your files to a disk or NAS",
            "Copies Documents, Desktop and Pictures (or the folders chosen in Settings › Backup of your files) to another disk or a NAS. Only new and "
            "changed files are copied; nothing is deleted at the destination. Schedule it every day.", "safe", 10, plus212.user_backup),
+)
+# ---------- 2.13 ----------
+_ACTIONS += (
+    Action("storage.backup_profiles", "storage", "Run the backups that are due",
+           "Runs every backup of Storage › Backup whose daily or weekly turn has come (copy, mirror or dated archive). Schedule it every hour "
+           "or when the PC is idle: backups that are not due are skipped.", "safe", 10, backups.run_due),
 )
 WATCH_210 = ("security.canary_watch", "security.compliance_report", "updates.update_compliance")
 WATCH_28 = ("integrity.bsod_explained", "startup.slow_boot", "integrity.early_warning", "security.suspicious_programs", "integrity.periodic_report")

@@ -43,6 +43,8 @@
   function zoneOf(content, top) {
     var z = document.createElement("div");
     z.className = "stack plus-zone";
+    var host = content.querySelector("[data-plus-host]");
+    if (host) { host.appendChild(z); return z; }
     var head = top && content.querySelector(".page-header");
     if (head) head.insertAdjacentElement("afterend", z); else content.appendChild(z);
     return z;

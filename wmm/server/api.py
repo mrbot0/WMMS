@@ -45,6 +45,7 @@ from .routes_features import FEATURE_ROUTES, HandlerFeatures
 from .accounts_api import ACCOUNT_ROUTES, AccountsHandler
 from .enterprise_api import ENTERPRISE_ROUTES, AgentEnterprise, HandlerEnterprise
 from .routes212 import PLUS_ROUTES, AgentPlus, HandlerPlus
+from .routes213 import BACKUP_ROUTES, HandlerBackups
 
 WEB = Path(wmm.__file__).resolve().parent / "web"
 STATIC_FILES: Dict[str, Path] = {p.relative_to(WEB).as_posix(): p for p in WEB.rglob("*") if p.is_file() and p.name != "index.html"}
@@ -842,7 +843,7 @@ class Agent(AgentPlus, AgentEnterprise, AgentFeatures):
 Route = Tuple[str, "re.Pattern[str]", Callable]
 
 
-class Handler(HandlerPlus, HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
+class Handler(HandlerBackups, HandlerPlus, HandlerEnterprise, AccountsHandler, HandlerFeatures, BaseHTTPRequestHandler):
     agent: Agent
     server_version = "WMM/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -1442,7 +1443,7 @@ ROUTES: List[Route] = [
     _route("DELETE", r"/schedules/(\d+)", Handler.delete_schedule),
     _route("POST", r"/schedules/(\d+)/resync", Handler.resync_schedule),
     _route("POST", r"/schedules/(\d+)/test", Handler.test_schedule),
-] + [_route(m, s, f) for m, s, f in PLUS_ROUTES] + [_route(m, s, f) for m, s, f in ENTERPRISE_ROUTES] + [_route(m, s, f) for m, s, f in ACCOUNT_ROUTES] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
+] + [_route(m, s, f) for m, s, f in BACKUP_ROUTES] + [_route(m, s, f) for m, s, f in PLUS_ROUTES] + [_route(m, s, f) for m, s, f in ENTERPRISE_ROUTES] + [_route(m, s, f) for m, s, f in ACCOUNT_ROUTES] + [_route(m, s, f) for m, s, f in FEATURE_ROUTES]
 
 
 DISCONNECTED = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, TimeoutError)

@@ -87,7 +87,9 @@
           UI.button("Run all diagnostics", 'id="disk-diagnose"', "btn-sm", "search") + "</div></header>" +
           '<div class="card-body">' + diskTools(App, v) + "</div></section>" +
           '<div class="grid grid-3">' + UI.card("Restore point storage", shadowTable, "", "card-flush") + parts.trend + UI.card("Score", parts.score) + "</div>" +
-          '<div class="grid">' + parts.runs + "</div>";
+          '<div class="grid">' + parts.runs + "</div>" +
+          '<div data-tab-group="analysis" data-plus-host></div>' +
+          '<div data-tab-group="backup" id="backup-tab"></div>';
         Components.dataTable(el.querySelector("#big-files"), {
           rows: d.files || [], exportName: "wmm-largest-files", placeholder: "Search files…", pageSize: 10, sort: "bytes", desc: true,
           columns: [
@@ -102,7 +104,11 @@
           App.runActions(["storage.disk_health", "storage.smart_prediction", "storage.volume_report", "storage.partition_report", "storage.dirty_check",
             "storage.shadow_report"]);
         });
-        UI.bindArea(el, "storage", function () { self.render(el, App); });
+        if (window.BackupTab) BackupTab.render(el.querySelector("#backup-tab"), App);
+        UI.bindArea(el, "storage", function () { self.render(el, App); }, [
+          { id: "analysis", label: "Space analysis", icon: "search" },
+          { id: "backup", label: "Backup", icon: "download" }
+        ]);
       });
     }
   };

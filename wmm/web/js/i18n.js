@@ -296,6 +296,25 @@
   // Dynamic text: [pattern, replacement or function]. Applied when the exact phrase is not in the dictionary.
   var MONTHS = { Jan: "gen", Feb: "feb", Mar: "mar", Apr: "apr", May: "mag", Jun: "giu", Jul: "lug", Aug: "ago", Sep: "set", Oct: "ott", Nov: "nov", Dec: "dic" };
   var RULES = [
+    // 2.13: the Backup tab
+    [/^Windows, the programs and the data of this app cannot be saved nor used as destination: (.+)$/, "Windows, i programmi e i dati di questa app non si possono salvare né usare come destinazione: $1"],
+    [/^(\d+) on a schedule$/, "$1 pianificati"],
+    [/^(\d+) due now$/, "$1 in scadenza ora"],
+    [/^(.+) at the destinations$/, "$1 nelle destinazioni"],
+    [/^· (\d+) files, (.+)$/, "· $1 file, $2"],
+    [/^(\d+) of (\d+) kept · (.+)$/, "$1 di $2 conservate · $3"],
+    [/^(\d+) \/ (\d+) files$/, "$1 / $2 file"],
+    [/^Restores (\d+) chosen files\.$/, "Ripristina $1 file scelti."],
+    [/^Restores every file\.$/, "Ripristina tutti i file."],
+    [/^(\S+) files, (.+)\. Select the files to bring back, then choose where\.$/, "$1 file, $2. Seleziona i file da riportare, poi scegli dove."],
+    [/^(\d+) files read back without errors\.$/, "$1 file riletti senza errori."],
+    [/^(\d+) files found at the destination\.$/, "$1 file trovati nella destinazione."],
+    [/^(\d+) files missing and (\d+) different: run the backup again\.$/, "$1 file mancanti e $2 diversi: esegui di nuovo il backup."],
+    [/^(\d+) files expected, (\d+) found\.$/, "$1 file attesi, $2 trovati."],
+    [/^Damaged file: (.+)$/, "File danneggiato: $1"],
+    [/^This folder does not exist: (.+)$/, "Questa cartella non esiste: $1"],
+    [/^Up to (\d+) backups\.$/, "Al massimo $1 backup."],
+    [/^(.+) \(at least\)$/, "$1 (almeno)"],
     // 2.12
     [/^(\d+) of (\d+) in good shape\. Each line opens its section\.$/, "$1 su $2 in buono stato. Ogni riga apre la sua sezione."],
     [/^(\d+) selected$/, "$1 selezionate"],

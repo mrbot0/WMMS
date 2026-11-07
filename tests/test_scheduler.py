@@ -1,5 +1,6 @@
 """Tests for Task Scheduler integration (pure XML and run logic, schtasks mocked)."""
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -163,9 +164,13 @@ class RunSchedule(unittest.TestCase):
     def test_waits_while_another_run_is_active(self):
         sid = self.store.create_schedule("cleanup.temp", "daily", "2026-11-05T03:00", "", False)
         jobs = FakeJobs(busy=2)
-        with mock.patch.object(scheduler.time, "sleep") as dorme:
+        # time.sleep is patched for the whole process: count only the waits of this thread, not those of threads
+        # left running by other tests.
+        qui = threading.get_ident()
+        attese = []
+        with mock.patch.object(scheduler.time, "sleep", side_effect=lambda s: attese.append(s) if threading.get_ident() == qui else None):
             self.assertEqual(scheduler.run_schedule(sid, self.store, jobs), 0)
-        self.assertEqual(dorme.call_count, 2)
+        self.assertEqual(len(attese), 2)
         self.assertEqual(len(jobs.calls), 1)
 
 
