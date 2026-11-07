@@ -170,7 +170,25 @@ Un database scritto da una versione più recente dell'app non viene modificato. 
   - i PC che richiedono attenzione per primi.
 - **Pianificazioni quando il PC è inattivo**: si avviano dopo 10 minuti senza uso, o dopo l'attesa scelta.
 
-## 11. Dove sono i dati
+## 11. Novità 2.13: backup in Archiviazione
+
+Archiviazione ha la scheda **Backup**. Ogni backup salva le cartelle scelte (con i nomi da saltare) su un altro disco o una condivisione NAS,
+nella cartella `<destinazione>\<nome del PC>\<nome del backup>`:
+
+| Tipo | Cosa fa |
+|---|---|
+| Copia | copia i file nuovi e modificati; nella destinazione non cancella nulla (robocopy /E) |
+| Mirror | la destinazione diventa una copia esatta, cancellazioni comprese (robocopy /MIR) |
+| Archivi datati | uno zip per esecuzione con il manifest; tiene le ultime N versioni; cifratura facoltativa con password |
+
+- La password degli archivi è protetta con DPAPI per la macchina, così le esecuzioni pianificate (SYSTEM) possono usarla. **Senza la password un archivio cifrato non si apre.**
+- Le versioni si sfogliano, si verificano (ogni file riletto e controllato) e si ripristinano: tutte o solo i file scelti, in una nuova cartella o al loro posto, mantenendo o sostituendo i file presenti. *Prova* mostra cosa succederebbe senza scrivere nulla.
+- I backup giornalieri e settimanali partono con lo strumento *Esegui i backup in scadenza*: pianificalo ogni ora o quando il PC è inattivo.
+- Permessi: leggere richiede `view.storage`; eseguire ed eliminare un backup `run.storage.safe`; crearlo o modificarlo, ripristinare in una nuova cartella ed eliminare una versione `run.storage.moderate`; sostituire file o ripristinarli al loro posto `run.storage.high`.
+- Windows, i programmi, ProgramData e i dati di WMM sono rifiutati come sorgente, destinazione e cartella di ripristino: l'agente ha più diritti di chi usa la console.
+- Dati: `dati\backups.json` (profili) e `dati\backup_history.json` (ultime 500 esecuzioni).
+
+## 12. Dove sono i dati
 
 | Cosa | Dove |
 |---|---|

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "Windows Maintenance Manager API",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "description": "The API of the console. Every write needs the X-WMM-Token header of the console or, with accounts on, an API token (Settings › API tokens) sent as Authorization: Bearer wmm_…. With accounts on, x-permissions lists what the role of the user (or the scopes of the token) must include. Runs of tools are also checked tool by tool."
  },
  "servers": [
@@ -1960,6 +1960,488 @@
      }
     },
     "security": []
+   }
+  },
+  "/api/v1/backups": {
+   "get": {
+    "operationId": "backups_list",
+    "summary": "Backups list",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   },
+   "post": {
+    "operationId": "backups_create",
+    "summary": "Backups create",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.moderate"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/backups/{name}": {
+   "put": {
+    "operationId": "backups_update",
+    "summary": "Backups update",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.moderate"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "backups_delete",
+    "summary": "Backups delete",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.safe"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/backups/{name}/estimate": {
+   "get": {
+    "operationId": "backups_estimate",
+    "summary": "Backups estimate",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/backups/{name}/files": {
+   "post": {
+    "operationId": "backups_files",
+    "summary": "Backups files",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/backups/{name}/history": {
+   "get": {
+    "operationId": "backups_history",
+    "summary": "Backups history",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ]
+   }
+  },
+  "/api/v1/backups/{name}/restore": {
+   "post": {
+    "operationId": "backups_restore",
+    "summary": "Backups restore",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.moderate"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/backups/{name}/run": {
+   "post": {
+    "operationId": "backups_run",
+    "summary": "Backups run",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.safe"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/backups/{name}/verify": {
+   "post": {
+    "operationId": "backups_verify",
+    "summary": "Backups verify",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/backups/{name}/versions": {
+   "get": {
+    "operationId": "backups_versions",
+    "summary": "Backups versions",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "operationId": "backups_version_delete",
+    "summary": "Backups version delete",
+    "tags": [
+     "backups"
+    ],
+    "x-permissions": [
+     "view.storage",
+     "run.storage.moderate"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^b[0-9a-f]{10}$"
+      }
+     }
+    ]
    }
   },
   "/api/v1/baselines": {

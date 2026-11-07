@@ -191,3 +191,19 @@ div.check-list > .check { margin-top: 4px; }
   .kpi:hover { transform: none; }
   .settings-panel .form > label.check > input[type="checkbox"], .settings-panel .form > label.check > input[type="checkbox"]::after { transition: none; }
 }
+
+/* ---------- 2.13: the Backup tab of Storage ---------- */
+.backup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+.backup-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg, 10px);
+  background: var(--surface-2, var(--surface)); }
+.backup-card.off { opacity: .72; }
+.backup-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.backup-top .cell-title { font-size: 15px; }
+.backup-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.backup-facts dt { color: var(--text-3, var(--text-2)); }
+.backup-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.backup-facts .text-error { color: var(--danger, #C42B1C); }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); }
+.backup-versions .table td { vertical-align: middle; }
+.backup-form textarea { font: 12px var(--mono); }
+.backup-form [hidden] { display: none !important; }

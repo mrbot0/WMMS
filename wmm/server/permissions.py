@@ -111,4 +111,9 @@ RULES.update(_ENTERPRISE_RULES)
 from .routes212 import RULES as _PLUS_RULES  # noqa: E402
 
 RULES.update(_PLUS_RULES)
+
+# 2.13: the routes of wmm/server/routes213.py (the Backup tab of Storage)
+from .routes213 import RULES as _BACKUP_RULES  # noqa: E402
+
+RULES.update(_BACKUP_RULES)
 PUBLIC |= _ENTERPRISE_PUBLIC

@@ -2,6 +2,20 @@
 
 CHANGELOG = [
     {
+        "version": "2.13.0",
+        "date": "2026-11-07",
+        "title": "Backups in Storage",
+        "highlights": [
+            "Storage has a Backup tab: backups of the folders you choose to another disk or a NAS, as a copy, a mirror or dated archives, run by hand, every day or every week.",
+            "Dated archives keep the versions you choose, can be encrypted with a password and can be browsed: restore every file or only the chosen ones, into a new folder or back to their place.",
+            "Check a backup (every file read back), measure it against the free space at the destination, try it without writing anything; the history of every run.",
+        ],
+        "changes": [
+            "New tool Run the backups that are due: schedule it every hour or when the PC is idle.",
+            "The space analysis cards of Storage (folder map, duplicates, forgotten files, disk-full forecast) have their own tab.",
+        ],
+    },
+    {
         "version": "2.12.1",
         "date": "2026-11-06",
         "title": "A clearer Settings page",

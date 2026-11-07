@@ -59,7 +59,7 @@ The console speaks English and Italian. The administrator manual and the user gu
 - **What changed since yesterday** on the dashboard: scores up or down, new and solved problems, failed runs.
 - **Goals** (for example "free space on C: at least 20%"), with an alert when the PC drifts outside them.
 
-### 369 tools
+### 370 tools
 
 There are **209 fixes**, which change something, and **160 reports**, which only read. Each tool is rated *safe*, *moderate* or *high risk*.
 
@@ -69,7 +69,7 @@ There are **209 fixes**, which change something, and **160 reports**, which only
 | Integrity | SFC, DISM, CHKDSK, blue screens explained, signs of a coming failure, Windows Update reset |
 | Services | unnecessary services, telemetry, Xbox, putting back the original state |
 | Performance | power plans, visual effects, page file, heaviest processes, "Why is the PC slow right now?" |
-| Storage | SMART health, TRIM, largest folders, folder map, duplicate and forgotten files, disk-full forecast, copy of your files to a disk or NAS |
+| Storage | SMART health, TRIM, largest folders, folder map, duplicate and forgotten files, disk-full forecast, backups to a disk or NAS (copy, mirror, encrypted dated archives with restore) |
 | Network | DNS, proxy, Winsock, Wi-Fi, speed test, step-by-step internet check, devices on the network, ports the router opened |
 | Startup & Apps | startup programs, what slows the boot, unsafe or unused applications, recently installed programs, uninstall with leftover cleanup |
 | Security | Defender, firewall, BitLocker and the recovery key, TPM and Secure Boot, what browser extensions can do, listening ports explained, suspicious programs, ransomware decoy files |
@@ -233,6 +233,7 @@ Everything stays on the PC, in the `dati` folder next to the program:
 | `dati/accounts.db` | Users, roles, sessions, audit log, tokens, approvals |
 | `dati/central.db` | Central server (only on the PC that hosts it) |
 | `dati/db-backups/` | Copies of the databases made before every schema upgrade |
+| `dati/backups.json`, `dati/backup_history.json` | Backup profiles of Storage › Backup (passwords protected with DPAPI) and the last 500 runs |
 | `dati/app_settings.json`, `dati/integrations.json` | Settings |
 | `dati/*.json` | Network, Wi-Fi and alert history, snapshots; can be encrypted with DPAPI |
 
@@ -274,7 +275,7 @@ wmm.py                   entry point (console, installation, schedules, backgrou
 ottimizza_pc.py          original maintenance engine, reused by the suite
 wmm/
   agent/                 the work on the PC
-    actions.py           catalog of the 369 tools, playbooks
+    actions.py           catalog of the 370 tools, playbooks
     collectors.py, inventory.py   data of the areas; advisor.py scores and recommendations
     tools*.py            the fixes and the reports
     jobs.py              one job at a time, automatic undo

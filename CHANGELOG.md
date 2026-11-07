@@ -3,6 +3,28 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.13.0 — 2026-11-07
+
+**Backups in Storage.** Storage has a new **Backup** tab. A backup saves the folders you choose (with names to skip, such as `*.tmp`
+or `node_modules`) to another disk or a NAS share, in a folder named after the PC, in one of three ways:
+
+- **Copy**: new and changed files are copied; nothing is ever deleted at the destination.
+- **Mirror**: the destination becomes an exact copy, deletions included.
+- **Dated archives**: every run makes a zip with a manifest; the oldest beyond the number to keep are removed. Archives can be encrypted
+  with a password (PBKDF2-SHA256, a keystream per block and an HMAC-SHA256 seal checked before anything is read). The password is kept
+  with DPAPI for the machine, so scheduled runs can use it.
+
+Every backup can run now, be tried without writing anything, be checked (archives are read back and their CRC verified; copies are
+compared file by file) and be measured against the free space at the destination. Versions of an archive can be browsed, checked,
+deleted and restored: every file or the selected ones, into a new folder or back to their place, keeping or replacing the files that are
+there. The tool **Run the backups that are due** runs the daily and weekly ones: schedule it every hour or when the PC is idle. The space
+analysis cards of 2.12 now have their own **Space analysis** tab.
+
+API: `/api/v1/backups` (list, create, change, delete, run, history, estimate, versions, files, restore, verify). Reading needs
+`view.storage`; running and deleting a backup `run.storage.safe`; creating and changing one, restoring into a new folder and deleting a
+version `run.storage.moderate`; replacing files or restoring them in their place `run.storage.high`. Windows, the programs, ProgramData
+and the data of this app are refused as source, destination and restore folder, because the agent has more rights than the console user.
+
 ## 2.12.1 — 2026-11-06
 
 **A clearer Settings page.** Every setting is now a row, with its name and explanation on the left and the control on the right, and
