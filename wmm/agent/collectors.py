@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Tuple
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
+from . import service_audit
+
 GB = 1024 ** 3
 
 CLEANUP_CATEGORIES = {
@@ -260,6 +262,11 @@ def collect_services(ctx) -> dict:
     raw = _powershell(ctx, SCRIPT_SERVICES, errori, "Services", timeout=120)
     raw = raw if isinstance(raw, dict) else {}
     dati = summarize_services(op.come_lista(raw.get("services")), [str(s) for s in op.come_lista(raw.get("startup"))])
+    try:
+        dati["audit"] = service_audit.analyze(ctx.powershell_json(service_audit.SCRIPT, 180))
+    except (subprocess.TimeoutExpired, ValueError, OSError) as errore:
+        dati["audit"] = service_audit.analyze(None)
+        errori.append(f"Service analysis: {errore}")
     try:
         dati["backup_count"] = len(op.leggi_backup())
     except (OSError, json.JSONDecodeError) as errore:

@@ -2,6 +2,27 @@
 
 CHANGELOG = [
     {
+        "version": "2.14.0",
+        "date": "2026-11-09",
+        "title": "Services: an analysis of this PC instead of a fixed list",
+        "highlights": [
+            "Disable unnecessary services now analyses the services of the PC it runs on: what each one is, who makes it, where its program lives, "
+            "how much memory it takes, and what the PC has (printers, Bluetooth, fingerprint reader, smart card reader, scanner, Xbox app, Phone Link, SSD).",
+            "It turns off telemetry, updaters of other programs left running all day (set to Manual: the programs still update themselves), "
+            "risky services such as Remote Registry, Telnet and SNMP, and services for hardware or apps the PC does not have.",
+            "Services shows the analysis: why each service is proposed, its memory, the start type now and after; the safe ones are ticked, "
+            "remote-control tools, programs in unusual folders and heavy services are there to review.",
+        ],
+        "changes": [
+            "Never proposed: protected services, antivirus and security software, drivers and hardware tools, backup and sync, licences, VPNs, "
+            "virtual machines, databases and anti-cheat.",
+            "On company PCs (domain or MDM) updaters and remote management are left for IT to decide.",
+            "Every change goes through the service backup and Restore modified services puts it back; Apply selected makes a restore point first.",
+            "The three services of one particular PC (Aorus, Asus, Razer) are gone from the fixed list: vendor tools are judged by the analysis.",
+            "New routes: GET /services/audit and POST /services/audit/apply (only services the analysis proposes).",
+        ],
+    },
+    {
         "version": "2.13.0",
         "date": "2026-11-07",
         "title": "Backups in Storage",

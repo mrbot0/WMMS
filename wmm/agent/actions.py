@@ -7,7 +7,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import wmm  # noqa: F401
 import ottimizza_pc as op
 
-from . import backups, baselines, boot, canary, crashes, digest, drift, early_warning, kev, plus212, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
+from . import backups, baselines, boot, canary, crashes, digest, drift, early_warning, kev, plus212, service_audit, suspicious, tools, tools_extra, tools_extra2, tools_extra3, trends, updatepolicy, watch
 
 AREAS = ("cleanup", "integrity", "services", "performance", "storage", "network", "startup", "security", "updates")
 RISKS = ("safe", "moderate", "high")
@@ -73,9 +73,10 @@ _ACTIONS: Tuple[Action, ...] = (
            "high", 0.5, op.ripara_disco,
            "The next boot will take longer while the disk is repaired."),
     Action("services.safe", "services", "Disable unnecessary services",
-           "Disables telemetry, maps, retail demo, fax and other services not needed on business PCs. The original state is backed up.",
-           "moderate", 1, op.servizi_sicuri,
-           "Selected services are stopped and disabled. They can be restored from the backup."),
+           "Analyses the services of this PC and turns off telemetry, updaters always running, risky services and those for hardware "
+           "or apps this PC does not have. Security, drivers, backup and licences are never touched. The original state is backed up.",
+           "moderate", 1, lambda ctx: service_audit.apply_recommended(ctx),
+           "The services found are stopped and disabled or set to Manual. They can be restored from the backup."),
     Action("services.xbox", "services", "Disable Xbox and Game Pass services",
            "Disables Xbox Live and Gaming Services.",
            "high", 1, op.servizi_xbox,

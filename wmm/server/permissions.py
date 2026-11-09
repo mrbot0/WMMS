@@ -29,7 +29,7 @@ RULES: Dict[str, Rule] = {
     "event_list": "view.events", "event_meta": "view.events",
     "hardware_inventory": "view.hardware", "hardware_sensors": "view.hardware", "trends_get": "view.hardware", "trends_post": "view.hardware",
     "hardware_monitor_tool": "view.hardware",
-    "process_list": "view.processes", "service_list": "view.processes",
+    "process_list": "view.processes", "service_list": "view.processes", "services_audit_get": "view.processes",
     "registry_key": "view.registry", "registry_search": "view.registry", "registry_export": ("view.registry", "export.data"), "registry_backups": "view.registry",
     "script_list": "view.scripts", "script_get": "view.scripts",
     "history": "view.history", "run_log": "view.history", "export": "export.data",
@@ -49,6 +49,7 @@ RULES: Dict[str, Rule] = {
     # things a role may do
     "elevate": "agent.control", "stop_all": "agent.control", "protect": "agent.control", "update_install": "agent.control", "put_autostart": "agent.control",
     "process_operation": "processes.control", "process_start": "processes.control", "service_control": "services.control",
+    "services_audit_apply_post": "services.control",  # changes start types, but only those the analysis proposes
     "script_create": "scripts.manage", "script_operation": _script, "timer_start": "scripts.run", "timer_cancel": "scripts.run",
     "registry_change": "registry.edit", "scan_all": "scan.run", "scan_area": "scan.run",
     "start_run": (), "start_safe": (),  # checked tool by tool

@@ -43,7 +43,9 @@ SERVIZI_SICURI = (
     "DiagTrack", "dmwappushservice", "MapsBroker", "lfsvc", "RetailDemo",
     "WMPNetworkSvc", "Fax", "TrkWks", "SysMain", "WalletService", "PhoneSvc",
 )
-SERVIZI_MANUALI = ("AorusLcdService", "AsusCertService", "Razer Game Manager Service 3")
+# Erano tre servizi di un solo PC (Aorus, Asus, Razer): ora i programmi dei produttori li valuta l'analisi dei servizi
+# della console (wmm/agent/service_audit.py), che funziona su qualsiasi PC.
+SERVIZI_MANUALI: tuple = ()
 SERVIZI_XBOX = (
     "XblAuthManager", "XblGameSave", "XboxNetApiSvc", "XboxService",
     "GamingServices", "GamingServicesNet",

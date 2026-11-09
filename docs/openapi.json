@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "Windows Maintenance Manager API",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "description": "The API of the console. Every write needs the X-WMM-Token header of the console or, with accounts on, an API token (Settings › API tokens) sent as Authorization: Bearer wmm_…. With accounts on, x-permissions lists what the role of the user (or the scopes of the token) must include. Runs of tools are also checked tool by tool."
  },
  "servers": [
@@ -9162,6 +9162,68 @@
     ],
     "x-permissions": [
      "integrations.manage"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/services/audit": {
+   "get": {
+    "operationId": "services_audit_get",
+    "summary": "Services audit get",
+    "tags": [
+     "services"
+    ],
+    "x-permissions": [
+     "view.processes"
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {}
+      }
+     },
+     "401": {
+      "description": "Sign in (accounts on) or a valid token is needed"
+     },
+     "403": {
+      "description": "The role lacks a permission listed in x-permissions"
+     }
+    }
+   }
+  },
+  "/api/v1/services/audit/apply": {
+   "post": {
+    "operationId": "services_audit_apply_post",
+    "summary": "Services audit apply post",
+    "tags": [
+     "services"
+    ],
+    "x-permissions": [
+     "services.control"
     ],
     "responses": {
      "200": {
