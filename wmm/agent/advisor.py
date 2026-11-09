@@ -188,11 +188,18 @@ def assess_integrity(data: dict) -> Assessment:
 def assess_services(data: dict) -> Assessment:
     punteggio = 100.0
     racc: List[Recommendation] = []
-    attivi = [s["name"] for s in data.get("managed") or [] if s.get("group") == "safe" and s.get("start") not in ("disabled", None)]
+    audit = data.get("audit")
+    if isinstance(audit, dict):
+        # The analysis of this PC: only what "Disable unnecessary services" would really change counts.
+        attivi = [f.get("display") or f.get("name") for f in audit.get("findings") or [] if f.get("selected")]
+        testo = f"{len(attivi)} services can be turned off or set to Manual without losing anything: "
+    else:
+        attivi = [s["name"] for s in data.get("managed") or [] if s.get("group") == "safe" and s.get("start") not in ("disabled", None)]
+        testo = f"{len(attivi)} non-essential services are enabled: "
     if attivi:
         punteggio -= min(30, 3 * len(attivi))
         racc.append(Recommendation("services.safe", "services", "Disable unnecessary services",
-                                   f"{len(attivi)} non-essential services are enabled: {', '.join(attivi[:5])}{'...' if len(attivi) > 5 else ''}.",
+                                   f"{testo}{', '.join(attivi[:5])}{'...' if len(attivi) > 5 else ''}.",
                                    "medium", "moderate", "services.safe"))
     avvio = len(data.get("startup") or [])
     if avvio > 15:

@@ -167,6 +167,12 @@ class HandlerFeatures:
     def network_scan(self, query):
         self._json(200, self.agent.network_scan(self._body().get("interface")))
 
+    def services_audit_get(self, query):
+        self._json(200, self.agent.services_audit())
+
+    def services_audit_apply_post(self, query):
+        self._json(200, self.agent.services_audit_apply(self._body()))
+
     def fleet_get(self, query):
         self._json(200, self.agent.fleet_view())
 
@@ -243,6 +249,8 @@ class HandlerFeatures:
 
 # (method, path pattern under /api/v1, handler)
 FEATURE_ROUTES = [
+    ("GET", "/services/audit", HandlerFeatures.services_audit_get),
+    ("POST", "/services/audit/apply", HandlerFeatures.services_audit_apply_post),
     ("GET", "/integrity/crashes", HandlerFeatures.crashes_get),
     ("GET", "/startup/boot", HandlerFeatures.boot_get),
     ("GET", "/integrity/early-warning", HandlerFeatures.early_warning_get),

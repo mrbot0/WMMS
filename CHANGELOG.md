@@ -3,6 +3,33 @@
 All notable changes to Windows Maintenance Manager. The console shows the same notes under **What's new**
 (sidebar version, status bar or command palette); they come from `wmm/changelog.py`.
 
+## 2.14.0 — 2026-11-09
+
+**Services: an analysis of this PC instead of a fixed list** (`wmm/agent/service_audit.py`).
+
+- **Disable unnecessary services** used to switch off a list of names written on one PC (three of them existed only
+  there: Aorus, Asus, Razer). It now reads every service of the PC it runs on, with its maker (from its program file),
+  its folder, its start type, its state and its memory, and what the PC has: real printers, Bluetooth adapter,
+  fingerprint or face reader, smart card reader, scanner, the Xbox app, Phone Link, company management (domain or MDM),
+  SSD.
+- **Turned off** (ticked in the page, applied by the action):
+  - Microsoft telemetry and features nobody uses (DiagTrack, retail demo, offline maps, fax, media sharing, wallet);
+  - updaters of other programs left running all day (Google, Adobe, Edge...): set to **Manual**, the programs still
+    update through their scheduled tasks;
+  - risky services: Remote Registry, Telnet, SNMP, Routing and Remote Access, WinRM always listening on a home PC;
+  - services for hardware or apps the PC does not have (Bluetooth, fingerprint reader, smart cards, scanner, Xbox app,
+    Phone Link);
+  - telemetry and crash reporters of other makers, hardware makers included.
+- **To review** (shown, not ticked): remote-control tools always on (TeamViewer, AnyDesk...), programs that run from
+  folders anyone can write to, services taking 150 MB or more from the start, the print spooler without printers,
+  SysMain on an SSD.
+- **Never proposed**: the protected services, antivirus and security software, drivers and hardware tools, backup and
+  sync, licences, VPNs, virtual machines, databases, anti-cheat. On company PCs updaters and remote management are left
+  to IT.
+- Services shows the analysis with the reason for each service, its memory and the start type now and after, with
+  **Analyse again** and **Apply selected** (restore point first). Every change goes through the service backup.
+- API: `GET /services/audit`, `POST /services/audit/apply` (only names the analysis proposes, 400 otherwise).
+
 ## 2.13.0 — 2026-11-07
 
 **Backups in Storage.** Storage has a new **Backup** tab. A backup saves the folders you choose (with names to skip, such as `*.tmp`
