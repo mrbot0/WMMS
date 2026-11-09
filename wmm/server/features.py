@@ -18,6 +18,7 @@ import wmm
 from ..agent import (accounts, actions, advisor, apps, appsettings, assistant, boot, crashes, custom_tools, diagnose, digest, drift, early_warning, fleet, goodconfig,
                      kev, netscan, notify, phone, radio, registry, restore, service_audit, suspicious, symptoms, trends, updater, upnp, watch)
 import ottimizza_pc as op  # noqa: E402  (after wmm, which puts the suite folder on the path)
+from typing import Any  # noqa: E402
 from ..agent.jobs import RunInProgress
 from .errors import ApiError
 
@@ -68,7 +69,8 @@ class AgentFeatures:
 
     def services_audit(self) -> dict:
         """A fresh analysis of the services of this PC (read-only, so it also runs in preview mode)."""
-        return service_audit.collect(self._context())
+        agente: Any = self  # a mixin of Agent, which has _context and _logged_change
+        return service_audit.collect(agente._context())
 
     def services_audit_apply(self, corpo: dict) -> dict:
         """Applies the chosen findings. Only services the analysis proposes right now can be changed, each to its own
@@ -76,7 +78,8 @@ class AgentFeatures:
         nomi = corpo.get("services")
         if not isinstance(nomi, list) or not nomi or len(nomi) > 200 or not all(isinstance(n, str) and 0 < len(n) <= 256 for n in nomi):
             raise ApiError(400, "Choose the services to change.")
-        analisi = service_audit.collect(self._context())
+        agente: Any = self  # a mixin of Agent, which has _context and _logged_change
+        analisi = service_audit.collect(agente._context())
         proposti = {f["name"]: f for f in analisi["findings"]}
         estranei = [n for n in nomi if n not in proposti]
         if estranei:
@@ -87,7 +90,7 @@ class AgentFeatures:
             esito = service_audit.apply(op.Contesto(anteprima=False), scelti)
             return {"status": esito.stato.value, "note": esito.nota, "changed": [f["name"] for f in scelti]}
         descrizione = f"Services: {len(scelti)} changed after the analysis ({', '.join(f['display'] for f in scelti[:4])}{'...' if len(scelti) > 4 else ''})"
-        return self._logged_change("services.audit", descrizione, cambia, punto=True, senza_punto=corpo.get("no_restore_point") is True)
+        return agente._logged_change("services.audit", descrizione, cambia, punto=True, senza_punto=corpo.get("no_restore_point") is True)
 
     def network_scan(self, alias=None) -> dict:
         """Scans the local network of one adapter (the active one by default); read-only, so it also runs in preview mode."""

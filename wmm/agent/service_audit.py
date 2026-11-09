@@ -213,8 +213,10 @@ def _third_party(servizio: dict, gestito: bool) -> Optional[dict]:
 
 def analyze(raw: object) -> dict:
     """Findings for the services of this PC: the selected ones are safe to apply, the others are for review."""
-    raw = raw if isinstance(raw, dict) else {}
-    ctx = raw.get("context") if isinstance(raw.get("context"), dict) else {}
+    dati: dict = raw if isinstance(raw, dict) else {}
+    contesto = dati.get("context")
+    ctx: dict = contesto if isinstance(contesto, dict) else {}
+    raw = dati
     gestito = bool(ctx.get("domain") or ctx.get("mdm"))
     servizi = [s for s in op.come_lista(raw.get("services")) if isinstance(s, dict) and s.get("name")]
     protetti = {n.lower() for n in op.SERVIZI_PROTETTI}
@@ -247,8 +249,8 @@ def apply(ctx, findings: Iterable[dict], names: Optional[Iterable[str]] = None) 
         return op.Esito(op.Stato.OK, "no service to change")
     riusciti = falliti = 0
     for obiettivo, nomi in per_obiettivo.items():
-        r, f = op.imposta_servizi(ctx, nomi, obiettivo)
-        riusciti, falliti = riusciti + r, falliti + f
+        fatti, errori = op.imposta_servizi(ctx, nomi, obiettivo)
+        riusciti, falliti = riusciti + fatti, falliti + errori
     return op.esito_servizi(ctx, riusciti, falliti)
 
 
